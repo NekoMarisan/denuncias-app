@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { FaHome, FaBell, FaUsers, FaCog, FaSignOutAlt, FaPhone, FaEye, FaEdit } from "react-icons/fa";
 
 const Dashboard = () => {
@@ -20,9 +21,9 @@ const Dashboard = () => {
           <a href="#" className="flex items-center gap-2 hover:bg-green-700 p-2 rounded">
             <FaBell /> Denuncias
           </a>
-          <a href="#" className="flex items-center gap-2 hover:bg-green-700 p-2 rounded">
+          <Link to="/admin" className="flex items-center gap-2 hover:bg-green-700 p-2 rounded">
             <FaBell /> Alertas de Pánico
-          </a>
+          </Link>
           <a href="#" className="flex items-center gap-2 hover:bg-green-700 p-2 rounded">
             <FaUsers /> Usuarios
           </a>
@@ -128,6 +129,17 @@ const Dashboard = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Perfil superior derecho */}
+      <div className="absolute right-6 top-6 bg-white shadow-md px-4 py-2 rounded-md flex items-center gap-3">
+        <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-gray-700 font-bold">
+          A
+        </div>
+        <div>
+          <p className="font-semibold text-gray-800">Administrador</p>
+          <p className="text-sm text-gray-500">admin@denuncias.com</p>
+        </div>
+      </div>
       </div>
     </div>
   );
