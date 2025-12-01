@@ -15,7 +15,6 @@ export default function AdminDashboard() {
           />
           <h1 className="text-xl font-bold text-center">ADMINISTRADOR</h1>
         </div>
-
         <nav className="flex flex-col gap-2">
           <Link to="/dashboard" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaHome /> Inicio

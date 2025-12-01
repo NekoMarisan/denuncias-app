@@ -1,3 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.card-proceso {
+  border-left-width: 8px !important; /* El !important asegura que sobrescriba Tailwind */
+}

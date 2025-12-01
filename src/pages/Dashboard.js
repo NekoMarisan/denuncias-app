@@ -40,25 +40,67 @@ const Dashboard = () => {
 
       {/* Main content */}
       <div className="flex-1 p-6">
-        <h1 className="text-3xl font-bold mb-6">ADMINISTRADOR</h1>
+        <h1 className="text-3xl font-bold mb-8">ADMINISTRADOR</h1>
 
-        {/* Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-yellow-100 border-l-4 border-yellow-500 p-4 rounded shadow">
-            <p className="font-bold text-yellow-800">EN PROCESO</p>
-            <p className="text-3xl font-bold">24</p>
+        {/* Perfil superior derecho */}
+        <div className="absolute right-6 top-6 bg-white shadow-md px-4 py-2 rounded-md flex items-center gap-3">
+          <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-gray-700 font-bold">
+            A
           </div>
-          <div className="bg-blue-100 border-l-4 border-blue-500 p-4 rounded shadow">
-            <p className="font-bold text-blue-800">PENDIENTE</p>
-            <p className="text-3xl font-bold">18</p>
+          <div>
+            <p className="font-semibold text-gray-800">Administrador</p>
+            <p className="text-sm text-gray-500">admin@denuncias.com</p>
           </div>
-          <div className="bg-green-100 border-l-4 border-green-500 p-4 rounded shadow">
-            <p className="font-bold text-green-800">RESUELTOS</p>
-            <p className="text-3xl font-bold">42</p>
+        </div>
+
+        {/* Cards - CON BORDES DE COLORES a la izquierda */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {/* EN PROCESO - Borde amarillo */}
+          <div className="card-proceso bg-white p-6 rounded-lg shadow-md border-l-4 border-yellow-500">
+            <div className="flex items-start mb-4">
+              <span className="text-2x2 mr-3 text-yellow-500">│</span>
+              <div>
+                <p className="font-bold text-yellow-500">EN PROCESO</p>
+                <p className="text-4xl font-bold mt-2 text-gray-800">24</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 border-t pt-3">+3 con respecto a ayer</p>
           </div>
-          <div className="bg-red-100 border-l-4 border-red-500 p-4 rounded shadow">
-            <p className="font-bold text-red-800">ALERTA DE PÁNICO</p>
-            <p className="text-3xl font-bold">42</p>
+          
+          {/* PENDIENTE - Borde azul */}
+          <div className="card-proceso bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500">
+            <div className="flex items-start mb-4">
+              <span className="text-2x2 mr-3 text-blue-500">│</span>
+              <div>
+                <p className="font-bold text-blue-600">PENDIENTE</p>
+                <p className="text-4xl font-bold mt-2 text-gray-800">18</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 border-t pt-3">+3 con respecto a ayer</p>
+          </div>
+          
+          {/* RESUELTOS - Borde verde */}
+          <div className="card-proceso bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
+            <div className="flex items-start mb-4">
+              <span className="text-2x2 mr-3 text-green-500">│</span>
+              <div>
+                <p className="font-bold text-green-600">RESUELTOS</p>
+                <p className="text-4xl font-bold mt-2 text-gray-800">42</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 border-t pt-3">Esta semana</p>
+          </div>
+          
+          {/* ALERTA DE PÁNICO - Borde rojo */}
+          <div className="card-proceso bg-white p-6 rounded-lg shadow-md border-l-4 border-red-500">
+            <div className="flex items-start mb-4">
+              <span className="text-2x2 mr-3 text-red-500">│</span>
+              <div>
+                <p className="font-bold text-red-600">ALERTA DE PÁNICO</p>
+                <p className="text-4xl font-bold mt-2 text-gray-800">42</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 border-t pt-3">Esta semana</p>
           </div>
         </div>
 
@@ -85,6 +127,7 @@ const Dashboard = () => {
                 <td className="p-2">
                   <span className="bg-red-500 text-white px-2 py-1 rounded text-xs">Emergencia</span>
                 </td>
+                {/**/}
                 <td className="p-2 flex gap-2">
                   <button className="bg-green-500 p-2 text-white rounded"><FaPhone /></button>
                   <button className="bg-blue-500 p-2 text-white rounded"><FaEye /></button>
@@ -129,17 +172,6 @@ const Dashboard = () => {
             </tbody>
           </table>
         </div>
-
-        {/* Perfil superior derecho */}
-      <div className="absolute right-6 top-6 bg-white shadow-md px-4 py-2 rounded-md flex items-center gap-3">
-        <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-gray-700 font-bold">
-          A
-        </div>
-        <div>
-          <p className="font-semibold text-gray-800">Administrador</p>
-          <p className="text-sm text-gray-500">admin@denuncias.com</p>
-        </div>
-      </div>
       </div>
     </div>
   );
