@@ -1,45 +1,58 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { FaHome, FaBell, FaUsers, FaCog, FaSignOutAlt, FaPhone, FaEye, FaEdit } from "react-icons/fa";
+import { Link, useNavigate } from "react-router-dom";
+import { FaHome, FaBell, FaUsers, FaCog, FaSignOutAlt, FaExclamationCircle, FaPhone, FaEye, FaEdit, FaClock, FaCheckCircle } from "react-icons/fa";
 
-const Dashboard = () => {
+function Dashboard() {
+  const navigate = useNavigate();
+
   return (
     <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className="w-64 bg-green-800 text-white flex flex-col">
-        <div className="flex items-center justify-center h-24 border-b border-green-600">
-          <img
-            src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/Escudo_de_Bolivia.svg/1200px-Escudo_de_Bolivia.svg.png"
-            alt="Logo"
-            className="w-16 h-16 rounded-full"
-          />
-        </div>
-        <nav className="flex-1 p-4 space-y-3">
-          <a href="#" className="flex items-center gap-2 hover:bg-green-700 p-2 rounded">
+      <aside className="w-64 bg-green-900 text-white flex flex-col p-4">
+<div className="flex flex-col items-center mb-8">
+  {/* Contenedor circular */}
+  <div className="w-28 h-28 mb-3 rounded-full overflow-hidden border-0 border-white shadow-md">
+    <img
+      src="logo_of.png"
+      alt="Logo"
+      className="w-full h-full object-cover"
+    />
+  </div>
+  
+  {/* Línea divisora */}
+  <hr className="w-60 border-t-2 border-gray-300 my-3" />
+  
+  <h1 className="text-xl font-bold mt-2">ADMINISTRADOR</h1>
+</div>
+
+        <nav className="flex flex-col gap-2">
+          <Link to="/dashboard" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaHome /> Inicio
+          </Link>
+          <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
+            <FaExclamationCircle /> Denuncias
           </a>
-          <a href="#" className="flex items-center gap-2 hover:bg-green-700 p-2 rounded">
-            <FaBell /> Denuncias
-          </a>
-          <Link to="/admin" className="flex items-center gap-2 hover:bg-green-700 p-2 rounded">
+          
+          <Link to="/alertas-panico" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaBell /> Alertas de Pánico
           </Link>
-          <a href="#" className="flex items-center gap-2 hover:bg-green-700 p-2 rounded">
+          <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaUsers /> Usuarios
           </a>
-          <a href="#" className="flex items-center gap-2 hover:bg-green-700 p-2 rounded">
+          <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaCog /> Configuración
           </a>
         </nav>
-        <div className="p-4 border-t border-green-600">
-          <a href="#" className="flex items-center gap-2 hover:bg-green-700 p-2 rounded">
+
+        <div className="mt-auto">
+          <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaSignOutAlt /> Cerrar Sesión
           </a>
         </div>
-      </div>
+      </aside>
 
       {/* Main content */}
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 mt-4">
         <h1 className="text-3xl font-bold mb-8">ADMINISTRADOR</h1>
 
         {/* Perfil superior derecho */}
@@ -53,69 +66,81 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Cards - CON BORDES DE COLORES a la izquierda */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* EN PROCESO - Borde amarillo */}
-          <div className="card-proceso bg-white p-6 rounded-lg shadow-md border-l-4 border-yellow-500">
-            <div className="flex items-start mb-4">
-              <span className="text-2x2 mr-3 text-yellow-500">│</span>
+        {/* Cards de Estadísticas */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div 
+            className="bg-white p-4 rounded-xl shadow border-l-4 border-red-600 cursor-pointer hover:shadow-xl transition-shadow" 
+            onClick={() => navigate("/alertas-panico")}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-bold text-red-600">ALERTAS ACTIVAS</p>
+                <p className="text-4xl font-bold mt-2 text-gray-800">42</p>
+              </div>
+              <FaBell className="text-red-600 text-2xl ml-auto" />
+            </div>
+          </div>
+          
+          {/* METRICA: EN PROCESO - amarillo */}
+          <div 
+            className="bg-white p-4 rounded-xl shadow border-l-4 border-yellow-500 cursor-pointer hover:shadow-xl transition-shadow"
+          >
+            <div className="flex items-center justify-between">
               <div>
                 <p className="font-bold text-yellow-500">EN PROCESO</p>
                 <p className="text-4xl font-bold mt-2 text-gray-800">24</p>
               </div>
+              <FaClock className="text-yellow-500 text-2xl ml-auto" />
             </div>
-            <p className="text-sm text-gray-500 border-t pt-3">+3 con respecto a ayer</p>
           </div>
           
-          {/* PENDIENTE - Borde azul */}
-          <div className="card-proceso bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500">
-            <div className="flex items-start mb-4">
-              <span className="text-2x2 mr-3 text-blue-500">│</span>
-              <div>
-                <p className="font-bold text-blue-600">PENDIENTE</p>
-                <p className="text-4xl font-bold mt-2 text-gray-800">18</p>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 border-t pt-3">+3 con respecto a ayer</p>
-          </div>
-          
-          {/* RESUELTOS - Borde verde */}
-          <div className="card-proceso bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
-            <div className="flex items-start mb-4">
-              <span className="text-2x2 mr-3 text-green-500">│</span>
+          {/* METRICA: RESUELTOS - verde */}
+          <div 
+            className="bg-white p-4 rounded-xl shadow border-l-4 border-green-600 cursor-pointer hover:shadow-xl transition-shadow"
+          >
+            <div className="flex items-center justify-between">
               <div>
                 <p className="font-bold text-green-600">RESUELTOS</p>
                 <p className="text-4xl font-bold mt-2 text-gray-800">42</p>
               </div>
+              <FaCheckCircle className="text-green-600 text-2xl ml-auto" />
             </div>
-            <p className="text-sm text-gray-500 border-t pt-3">Esta semana</p>
           </div>
-          
-          {/* ALERTA DE PÁNICO - Borde rojo */}
-          <div className="card-proceso bg-white p-6 rounded-lg shadow-md border-l-4 border-red-500">
-            <div className="flex items-start mb-4">
-              <span className="text-2x2 mr-3 text-red-500">│</span>
+
+          {/* METRICA: PENDIENTE - azul */}
+          <div 
+            className="bg-white p-4 rounded-xl shadow border-l-4 border-blue-600 cursor-pointer hover:shadow-xl transition-shadow"
+          >
+            <div className="flex items-center justify-between">
               <div>
-                <p className="font-bold text-red-600">ALERTA DE PÁNICO</p>
-                <p className="text-4xl font-bold mt-2 text-gray-800">42</p>
+                <p className="font-bold text-blue-600">PENDIENTE</p>
+                <p className="text-4xl font-bold mt-2 text-gray-800">18</p>
               </div>
+              <FaClock className="text-blue-600 text-2xl ml-auto" />
             </div>
-            <p className="text-sm text-gray-500 border-t pt-3">Esta semana</p>
           </div>
         </div>
 
-        {/* Alertas de pánico */}
-        <div className="bg-white rounded shadow p-4 mb-6">
-          <h2 className="text-xl font-bold mb-4">Alertas de Pánico Recientes</h2>
+        {/* LISTA REGISTRO: Alertas de pánico */}
+        <div className="bg-white rounded shadow-md p-4 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 
+              className="text-xl font-bold cursor-pointer hover:text-blue-600"
+              onClick={() => navigate("/alertas-panico")}
+            >
+              Alertas de Pánico Recientes
+            </h2>
+          </div>
+          
           <table className="w-full text-left border-collapse">
             <thead>
               <tr>
-                <th className="border-b p-2">ID</th>
-                <th className="border-b p-2">Usuario</th>
-                <th className="border-b p-2">Activación</th>
-                <th className="border-b p-2">Ubicación</th>
-                <th className="border-b p-2">Estado</th>
-                <th className="border-b p-2">Acciones</th>
+                <th className="border-b p-3 font-bold">ID</th>
+                <th className="border-b p-3 font-bold">Usuario</th>
+                <th className="border-b p-3 font-bold">Activación</th>
+                <th className="border-b p-3 font-bold">Ubicación</th>
+                <th className="border-b p-3 font-bold">Estado</th>
+                <th className="border-b p-3 font-bold">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -127,19 +152,18 @@ const Dashboard = () => {
                 <td className="p-2">
                   <span className="bg-red-500 text-white px-2 py-1 rounded text-xs">Emergencia</span>
                 </td>
-                {/**/}
                 <td className="p-2 flex gap-2">
-                  <button className="bg-green-500 p-2 text-white rounded"><FaPhone /></button>
-                  <button className="bg-blue-500 p-2 text-white rounded"><FaEye /></button>
-                  <button className="bg-yellow-500 p-2 text-white rounded"><FaEdit /></button>
+                  <button className="bg-green-500 p-2 hover:bg-green-600 text-white rounded"><FaPhone /></button>
+                  <button className="bg-blue-500 p-2 hover:bg-blue-600 text-white rounded"><FaEye /></button>
+                  <button className="bg-yellow-500 p-2 hover:bg-yellow-600 text-white rounded"><FaEdit /></button>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        {/* Denuncias recientes */}
-        <div className="bg-white rounded shadow p-4">
+        {/* LISTA REGISTRO: Denuncias recientes */}
+        <div className="bg-white rounded shadow-md p-4">
           <h2 className="text-xl font-bold mb-4">Denuncias Recientes</h2>
           <table className="w-full text-left border-collapse">
             <thead>
@@ -164,9 +188,9 @@ const Dashboard = () => {
                   <span className="bg-blue-500 text-white px-2 py-1 rounded text-xs">Pendiente</span>
                 </td>
                 <td className="p-2 flex gap-2">
-                  <button className="bg-green-500 p-2 text-white rounded"><FaPhone /></button>
-                  <button className="bg-blue-500 p-2 text-white rounded"><FaEye /></button>
-                  <button className="bg-yellow-500 p-2 text-white rounded"><FaEdit /></button>
+                  <button className="bg-green-500 p-2 hover:bg-green-600 text-white rounded"><FaPhone /></button>
+                  <button className="bg-blue-500 p-2 hover:bg-blue-600 text-white rounded"><FaEye /></button>
+                  <button className="bg-yellow-500 p-2 hover:bg-yellow-600 text-white rounded"><FaEdit /></button>
                 </td>
               </tr>
             </tbody>
@@ -175,6 +199,6 @@ const Dashboard = () => {
       </div>
     </div>
   );
-};
+}
 
 export default Dashboard;
