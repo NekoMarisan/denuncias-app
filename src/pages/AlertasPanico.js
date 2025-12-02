@@ -10,18 +10,18 @@ const AlertasPanico = () => {
       {/* Sidebar */}
       <aside className="w-64 bg-green-900 text-white flex flex-col p-4">
 <div className="flex flex-col items-center mb-8">
+  <h1 className=" text-lg font-semibold mt-2">SISTEMA POLICIAL</h1>
   {/* Contenedor circular */}
-  <div className="w-28 h-28 mb-3 rounded-full overflow-hidden border-0 border-white shadow-md">
+  <div className="mt-6 w-28 h-28 mb-3 rounded-full overflow-hidden border-0 border-white shadow-md">
     <img
       src="logo_of.png"
       alt="Logo"
       className="w-full h-full object-cover"
     />
   </div>
-      {/* Línea divisora */}
-  <hr className="w-60 border-t-2 border-gray-300 my-3" />
-  
-  <h1 className="text-xl font-bold mt-2">ADMINISTRADOR</h1>
+
+  {/*linea divisora */}
+<hr className="w-full border-t-2 border-green-700 my-4 mt-4" />
 </div>
         {/* Perfil superior derecho */}
         <div className="absolute right-6 top-6 bg-white shadow-md px-4 py-2 rounded-md flex items-center gap-3">
@@ -33,7 +33,7 @@ const AlertasPanico = () => {
             <p className="text-sm text-gray-500">admin@denuncias.com</p>
           </div>
         </div>
-        <nav className="flex flex-col gap-2">
+        <nav className="flex flex-col gap-4">
           <Link to="/dashboard" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaHome /> Inicio
           </Link>
@@ -58,6 +58,7 @@ const AlertasPanico = () => {
           </a>
         </div>
       </aside>
+
       {/* Contenido Principal */}
       <div className="flex-1 p-6">
         {/* Botón para volver al Dashboard */}
