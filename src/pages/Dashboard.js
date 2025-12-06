@@ -7,7 +7,7 @@ function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
+{/* Sidebar */}
       <aside className="w-64 bg-green-900 text-white flex flex-col p-4">
 <div className="flex flex-col items-center mb-8">
   <h1 className=" text-lg font-semibold mt-2">SISTEMA POLICIAL</h1>
@@ -44,9 +44,9 @@ function Dashboard() {
           <Link to="/alertas-panico" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaBell /> Alertas de Pánico
           </Link>
-          <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
+          <Link to="/usuarios" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaUsers /> Usuarios
-          </a>
+          </Link>
           <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaCog /> Configuración
           </a>
@@ -74,10 +74,11 @@ function Dashboard() {
           </div>
         </div>
 
+
         {/* Cards de Estadísticas */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div 
-            className="bg-white p-4 rounded-xl shadow border-l-4 border-red-600 cursor-pointer hover:shadow-xl transition-shadow" 
+            className="bg-white p-4 rounded-xl shadow border-l-8 border-red-600 cursor-pointer hover:shadow-xl transition-shadow" 
             onClick={() => navigate("/alertas-panico")}
           >
             <div className="flex items-center justify-between">
@@ -89,10 +90,7 @@ function Dashboard() {
             </div>
           </div>
           
-          {/* METRICA: EN PROCESO - amarillo */}
-          <div 
-            className="bg-white p-4 rounded-xl shadow border-l-4 border-yellow-500 cursor-pointer hover:shadow-xl transition-shadow"
-          >
+          <div className="bg-white p-4 rounded-xl shadow border-l-8 border-yellow-500 cursor-pointer hover:shadow-xl transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-bold text-yellow-500">EN PROCESO</p>
@@ -102,10 +100,7 @@ function Dashboard() {
             </div>
           </div>
           
-          {/* METRICA: RESUELTOS - verde */}
-          <div 
-            className="bg-white p-4 rounded-xl shadow border-l-4 border-green-600 cursor-pointer hover:shadow-xl transition-shadow"
-          >
+          <div className="bg-white p-4 rounded-xl shadow border-l-8 border-green-600 cursor-pointer hover:shadow-xl transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-bold text-green-600">RESUELTOS</p>
@@ -115,10 +110,7 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* METRICA: PENDIENTE - azul */}
-          <div 
-            className="bg-white p-4 rounded-xl shadow border-l-4 border-blue-600 cursor-pointer hover:shadow-xl transition-shadow"
-          >
+          <div className="bg-white p-4 rounded-xl shadow border-l-8 border-blue-600 cursor-pointer hover:shadow-xl transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-bold text-blue-600">PENDIENTE</p>
@@ -130,7 +122,7 @@ function Dashboard() {
         </div>
 
         {/* LISTA REGISTRO: Alertas de pánico */}
-        <div className="bg-white rounded shadow-md p-4 mb-6">
+        <div className="bg-white mt-8 rounded shadow-md p-4 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 
               className="text-xl font-bold cursor-pointer hover:text-blue-600"
@@ -153,12 +145,12 @@ function Dashboard() {
             </thead>
             <tbody>
               <tr className="hover:bg-gray-50">
-                <td className="p-2">#21</td>
+                <td className="p-2">#1</td>
                 <td className="p-2">Alex Velarde Diaz</td>
                 <td className="p-2">02/01/2024 13:25</td>
                 <td className="p-2">Av. Principal #123</td>
                 <td className="p-2">
-                  <span className="bg-red-500 text-white px-2 py-1 rounded text-xs">Emergencia</span>
+                  <span className="bg-red-500 text-white px-2 py-1.5 rounded text-xs">Emergencia</span>
                 </td>
                 <td className="p-2 flex gap-2">
                   <button className="bg-green-500 p-2 hover:bg-green-600 text-white rounded"><FaPhone /></button>
@@ -186,14 +178,14 @@ function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              <tr className="hover:bg-gray-50">
-                <td className="p-2">#21</td>
+              <tr className="border-b hover:bg-gray-50">
+                <td className="p-2">#1</td>
                 <td className="p-2">02/01/2024 13:25</td>
                 <td className="p-2">Alex Velarde Diaz</td>
                 <td className="p-2">Robo</td>
                 <td className="p-2">Av. Principal #123</td>
                 <td className="p-2">
-                  <span className="bg-blue-500 text-white px-2 py-1 rounded text-xs">Pendiente</span>
+                  <span className="bg-blue-500 text-white px-2.5 py-1.5 rounded text-xs">Pendiente</span>
                 </td>
                 <td className="p-2 flex gap-2">
                   <button className="bg-green-500 p-2 hover:bg-green-600 text-white rounded"><FaPhone /></button>
@@ -202,6 +194,23 @@ function Dashboard() {
                 </td>
               </tr>
             </tbody>
+            <tbody>
+              <tr className="hover:bg-gray-50">
+                <td className="p-2">#1</td>
+                <td className="p-2">02/01/2024 13:25</td>
+                <td className="p-2">Alex Velarde Diaz</td>
+                <td className="p-2">Robo</td>
+                <td className="p-2">Av. Principal #123</td>
+                <td className="p-2">
+                  <span className="bg-orange-500 text-white px-2.5 py-1.5 rounded text-xs">En proceso</span>
+                </td>
+                <td className="p-2 flex gap-2">
+                  <button className="bg-green-500 p-2 hover:bg-green-600 text-white rounded"><FaPhone /></button>
+                  <button className="bg-blue-500 p-2 hover:bg-blue-600 text-white rounded"><FaEye /></button>
+                  <button className="bg-yellow-500 p-2 hover:bg-yellow-600 text-white rounded"><FaEdit /></button>
+                </td>
+              </tr>
+            </tbody>            
           </table>
         </div>
       </div>

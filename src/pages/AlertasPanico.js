@@ -7,7 +7,7 @@ const AlertasPanico = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
+{/* Sidebar */}
       <aside className="w-64 bg-green-900 text-white flex flex-col p-4">
 <div className="flex flex-col items-center mb-8">
   <h1 className=" text-lg font-semibold mt-2">SISTEMA POLICIAL</h1>
@@ -44,9 +44,9 @@ const AlertasPanico = () => {
           <Link to="/alertas-panico" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaBell /> Alertas de Pánico
           </Link>
-          <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
+          <Link to="/usuarios" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaUsers /> Usuarios
-          </a>
+          </Link>
           <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaCog /> Configuración
           </a>
@@ -59,7 +59,7 @@ const AlertasPanico = () => {
         </div>
       </aside>
 
-      {/* Contenido Principal */}
+      {/* Contenido principal*/}
       <div className="flex-1 p-6">
         {/* Botón para volver al Dashboard */}
         <div className="mb-6">
@@ -70,14 +70,19 @@ const AlertasPanico = () => {
             <FaArrowLeft /> Volver al Dashboard
           </button>
         </div>
+        <h1 className="text-3xl font-bold mb-8">ALERTAS ACTIVAS</h1>
 
-        <div className="flex justify-between items-center mb-8">
+        {/* Perfil superior derecho */}
+        <div className="absolute right-6 top-6 bg-white shadow-md px-4 py-2 rounded-md flex items-center gap-3">
+          <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-gray-700 font-bold">
+            A
+          </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900"> ALERTAS DE PÁNICOS</h1>
-            <p className="text-gray-600 mt-1 flex items-center gap-2">
-            </p>
+            <p className="font-semibold text-gray-800">Administrador</p>
+            <p className="text-sm text-gray-500">admin@denuncias.com</p>
           </div>
         </div>
+
         {/* Barra de Búsqueda */}
         <div className="bg-white p-4 rounded-xl shadow mb-6">
           <div className="flex flex-col md:flex-row gap-4">
@@ -87,7 +92,8 @@ const AlertasPanico = () => {
                 <input
                   type="text"
                   placeholder="Buscar por usuario, ubicación o ID..."
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 
+                  focus:ring-green-700 focus:border-transparent"
                 />
               </div>
             </div>
@@ -95,10 +101,11 @@ const AlertasPanico = () => {
               <button className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50">
                 <FaFilter /> Filtrar
               </button>
-              <select className="border rounded-lg px-4 py-2">
-                <option>Estado: Todos</option>
-                <option>Activo</option>
-                <option>En Proceso</option>
+              <select className="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 
+              focus:ring-green-700">
+                <option>Rol: Todos</option>
+                <option>activo</option>
+                <option>En proceso</option>
                 <option>Resuelto</option>
               </select>
             </div>
@@ -165,7 +172,7 @@ const AlertasPanico = () => {
                           'bg-green-100 text-green-800'
                         }`}>
                           {alert.status === 'active' ? 'Activo' : 
-                           alert.status === 'process' ? 'En Proceso' : 'Resuelto'}
+                          alert.status === 'process' ? 'En Proceso' : 'Resuelto'}
                         </span>
                       </div>
                       <p className="text-sm text-gray-500 mt-1">ID: #{alert.id}</p>
