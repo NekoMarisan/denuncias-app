@@ -1,28 +1,101 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaHome, FaBell, FaUsers, FaCog, FaSignOutAlt, FaExclamationCircle, FaPhone, FaEye, FaEdit, FaClock, FaCheckCircle } from "react-icons/fa";
+import { FaHome, FaBell, FaUsers, FaCog, FaSignOutAlt, FaExclamationCircle, FaPhone, FaEye, FaEdit, FaClock, FaCheckCircle, FaMapMarkerAlt, FaUser, FaArrowLeft} 
+from "react-icons/fa";
 
 function Dashboard() {
   const navigate = useNavigate();
+  
+  // Datos de ejemplo (podrían venir de una API real)
+  const [stats, setStats] = useState({
+    totalAlertas: 42,
+    activas: 24,
+    enProceso: 12,
+    resueltas: 6,
+    pendientes: 18
+  });
+
+  // Datos de alertas de pánico recientes
+  const [alertasRecientes] = useState([
+    { 
+      id: 1, 
+      usuario: "Alex Velarde Diaz", 
+      activacion: "02/01/2024 13:25", 
+      ubicacion: "Av. Heroínas #456", 
+      estado: "Emergencia",
+      zona: "Centro",
+      telefono: "+591 78765432"
+    },
+    { 
+      id: 2, 
+      usuario: "María González", 
+      activacion: "Hace 5 min", 
+      ubicacion: "Calle Bolívar #123", 
+      estado: "Emergencia",
+      zona: "Calacoto",
+      telefono: "+591 68765433"
+    },
+    { 
+      id: 3, 
+      usuario: "Carlos Ruiz", 
+      activacion: "Hace 12 min", 
+      ubicacion: "Plaza 14 de Septiembre", 
+      estado: "En Proceso",
+      zona: "Centro",
+      telefono: "+591 77712345"
+    },
+  ]);
+
+  // Datos de denuncias recientes
+  const [denunciasRecientes] = useState([
+    { 
+      id: 1, 
+      fecha: "02/01/2024 13:25", 
+      usuario: "Alex Velarde Diaz", 
+      tipo: "Robo", 
+      ubicacion: "Av. Principal #123", 
+      estado: "Pendiente" 
+    },
+    { 
+      id: 2, 
+      fecha: "02/01/2024 10:15", 
+      usuario: "Ana Torres", 
+      tipo: "Agresión", 
+      ubicacion: "Mercado La Cancha", 
+      estado: "En proceso" 
+    },
+    { 
+      id: 3, 
+      fecha: "01/01/2024 20:45", 
+      usuario: "Luis Mendoza", 
+      tipo: "Vandalismo", 
+      ubicacion: "Parque Central", 
+      estado: "Resuelta" 
+    },
+  ]);
+
+  const handleCall = (telefono, usuario) => {
+    if (window.confirm(`¿Llamar a ${usuario} al ${telefono}?`)) {
+      window.location.href = `tel:${telefono}`;
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-{/* Sidebar */}
+      {/* Sidebar */}
       <aside className="w-64 bg-green-900 text-white flex flex-col p-4">
-<div className="flex flex-col items-center mb-8">
-  <h1 className=" text-lg font-semibold mt-2">SISTEMA POLICIAL</h1>
-  {/* Contenedor circular */}
-  <div className="mt-6 w-28 h-28 mb-3 rounded-full overflow-hidden border-0 border-white shadow-md">
-    <img
-      src="logo_of.png"
-      alt="Logo"
-      className="w-full h-full object-cover"
-    />
-  </div>
-
-  {/*linea divisora */}
-<hr className="w-full border-t-2 border-green-700 my-4 mt-4" />
-</div>
+        <div className="flex flex-col items-center mb-8">
+          <h1 className="text-lg font-semibold mt-2">RADIO PATRULLAS 110</h1>
+          <div className="mt-6 w-28 h-28 mb-3 rounded-full overflow-hidden border-0 border-white shadow-md">
+            <img
+              src="logo_of.png"
+              alt="Logo"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <hr className="w-full border-t-2 border-green-700 my-4 mt-4" />
+        </div>
+        
         {/* Perfil superior derecho */}
         <div className="absolute right-6 top-6 bg-white shadow-md px-4 py-2 rounded-md flex items-center gap-3">
           <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-gray-700 font-bold">
@@ -30,17 +103,17 @@ function Dashboard() {
           </div>
           <div>
             <p className="font-semibold text-gray-800">Administrador</p>
-            <p className="text-sm text-gray-500">admin@denuncias.com</p>
+            <p className="text-sm text-gray-500">admin@policiacbba.bo</p>
           </div>
         </div>
+        
         <nav className="flex flex-col gap-4">
-          <Link to="/dashboard" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
+          <Link to="/dashboard" className="flex items-center gap-3 bg-green-700 p-2 rounded">
             <FaHome /> Inicio
           </Link>
           <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaExclamationCircle /> Denuncias
           </a>
-          
           <Link to="/alertas-panico" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaBell /> Alertas de Pánico
           </Link>
@@ -59,11 +132,20 @@ function Dashboard() {
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 p-6 mt-4">
-        <h1 className="text-3xl font-bold mb-8">ADMINISTRADOR</h1>
+      {/* Contenido principal*/}
+      <div className="flex-1 p-6">
+        {/* Botón para volver al Dashboard */}
+        <div className="mb-6">
+          <button 
+            onClick={() => navigate("/dashboard")}
+            className="inline-flex items-center gap-2 bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-lg font-medium transition"
+          >
+            <FaArrowLeft /> Volver al Dashboard
+          </button>
+        </div>
+        <h1 className="text-3xl font-bold mb-8">USUARIO</h1>
 
-        {/* Perfil superior derecho */}
+                {/* Perfil superior derecho */}
         <div className="absolute right-6 top-6 bg-white shadow-md px-4 py-2 rounded-md flex items-center gap-3">
           <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-gray-700 font-bold">
             A
@@ -73,145 +155,227 @@ function Dashboard() {
             <p className="text-sm text-gray-500">admin@denuncias.com</p>
           </div>
         </div>
-
-
+        
         {/* Cards de Estadísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          {/* Alerta activas */}
           <div 
-            className="bg-white p-4 rounded-xl shadow border-l-8 border-red-600 cursor-pointer hover:shadow-xl transition-shadow" 
+            className="bg-white p-6 rounded-xl shadow-lg border-l-8 border-red-600 cursor-pointer hover:shadow-xl transition-all hover:scale-[1.02]"
             onClick={() => navigate("/alertas-panico")}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-bold text-red-600">ALERTAS ACTIVAS</p>
-                <p className="text-4xl font-bold mt-2 text-gray-800">42</p>
+                <p className="text-red-600 mt-1 font-bold">ALERTAS ACTIVAS</p>
+                <p className="text-4xl font-bold mt-3 text-gray-800">{stats.totalAlertas}</p>
+                <p className="text-sm text-gray-500 mt-5">Alertas de emergencia</p>
               </div>
-              <FaBell className="text-red-600 text-2xl ml-auto" />
+              <div className="bg-red-100 p-3 rounded-full">
+                <FaBell className="text-red-600 text-3xl" />
+              </div>
             </div>
           </div>
           
-          <div className="bg-white p-4 rounded-xl shadow border-l-8 border-yellow-500 cursor-pointer hover:shadow-xl transition-shadow">
+          {/* pendiente */}
+          <div 
+            className="bg-white p-6 rounded-xl shadow-lg border-l-8 border-blue-600 cursor-pointer hover:shadow-xl transition-all hover:scale-[1.02]"
+            onClick={() => navigate("/alertas-panico")}
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-bold text-yellow-500">EN PROCESO</p>
-                <p className="text-4xl font-bold mt-2 text-gray-800">24</p>
+                <p className="text-blue-600 mt-1 font-bold">PENDIENTE</p>
+                <p className="text-4xl font-bold mt-3 text-gray-800">{stats.activas}</p>
+                <p className="text-sm text-gray-500 mt-5">Necesitan atención inmediata</p>
               </div>
-              <FaClock className="text-yellow-500 text-2xl ml-auto" />
+              <div className="bg-blue-100 p-3 rounded-full">
+                <FaExclamationCircle className="text-blue-600 text-3xl" />
+              </div>
             </div>
           </div>
           
-          <div className="bg-white p-4 rounded-xl shadow border-l-8 border-green-600 cursor-pointer hover:shadow-xl transition-shadow">
+          {/* En Proceso */}
+          <div 
+            className="bg-white p-6 rounded-xl shadow-lg border-l-8 border-yellow-500 cursor-pointer hover:shadow-xl transition-all hover:scale-[1.02]"
+            onClick={() => navigate("/alertas-panico")}
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-bold text-green-600">RESUELTOS</p>
-                <p className="text-4xl font-bold mt-2 text-gray-800">42</p>
+                <p className="text-yellow-500 mt-1 font-bold">EN PROCESO</p>
+                <p className="text-4xl font-bold mt-3 text-gray-800">{stats.enProceso}</p>
+                <p className="text-sm text-gray-600 mt-5">En atención actualmente</p>
               </div>
-              <FaCheckCircle className="text-green-600 text-2xl ml-auto" />
+              <div className="bg-yellow-100 p-3 rounded-full">
+                <FaClock className="text-yellow-500 text-3xl" />
+              </div>
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl shadow border-l-8 border-blue-600 cursor-pointer hover:shadow-xl transition-shadow">
+          {/* Resueltas */}
+          <div 
+            className="bg-white p-6 rounded-xl shadow-lg border-l-8 border-green-600 cursor-pointer hover:shadow-xl transition-all hover:scale-[1.02]"
+            onClick={() => navigate("/alertas-panico")}
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-bold text-blue-600">PENDIENTE</p>
-                <p className="text-4xl font-bold mt-2 text-gray-800">18</p>
+                <p className="text-green-600 mt-1 font-bold">RESUELTAS</p>
+                <p className="text-4xl font-bold mt-3 text-gray-800">{stats.resueltas}</p>
+                <p className="text-sm text-gray-500 mt-5">Resuelto satisfactoriamente</p>
               </div>
-              <FaClock className="text-blue-600 text-2xl ml-auto" />
+              <div className="bg-green-100 p-3 rounded-full">
+                <FaCheckCircle className="text-green-600 text-3xl" />
+              </div>
             </div>
           </div>
         </div>
 
+
+
         {/* LISTA REGISTRO: Alertas de pánico */}
-        <div className="bg-white mt-8 rounded shadow-md p-4 mb-6">
+        <div className="bg-white rounded-xl shadow-md p-4 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 
-              className="text-xl font-bold cursor-pointer hover:text-blue-600"
-              onClick={() => navigate("/alertas-panico")}
-            >
-              Alertas de Pánico Recientes
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <h2 className="" /> Alertas de Pánico Recientes
             </h2>
+            <button 
+              onClick={() => navigate("/alertas-panico")}
+              className="text-green-600 hover:text-green-800 font-medium"
+            >
+              Ver todas →
+            </button>
           </div>
           
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr>
-                <th className="border-b p-3 font-bold">ID</th>
-                <th className="border-b p-3 font-bold">Usuario</th>
-                <th className="border-b p-3 font-bold">Activación</th>
-                <th className="border-b p-3 font-bold">Ubicación</th>
-                <th className="border-b p-3 font-bold">Estado</th>
-                <th className="border-b p-3 font-bold">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="hover:bg-gray-50">
-                <td className="p-2">#1</td>
-                <td className="p-2">Alex Velarde Diaz</td>
-                <td className="p-2">02/01/2024 13:25</td>
-                <td className="p-2">Av. Principal #123</td>
-                <td className="p-2">
-                  <span className="bg-red-500 text-white px-2 py-1.5 rounded text-xs">Emergencia</span>
-                </td>
-                <td className="p-2 flex gap-2">
-                  <button className="bg-green-500 p-2 hover:bg-green-600 text-white rounded"><FaPhone /></button>
-                  <button className="bg-blue-500 p-2 hover:bg-blue-600 text-white rounded"><FaEye /></button>
-                  <button className="bg-yellow-500 p-2 hover:bg-yellow-600 text-white rounded"><FaEdit /></button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b">
+                  <th className="p-3 font-bold">ID</th>
+                  <th className="p-3 font-bold">Usuario</th>
+                  <th className="p-3 font-bold">Activación</th>
+                  <th className="p-3 font-bold">Ubicación</th>
+                  <th className="p-3 font-bold">Estado</th>
+                  <th className="p-3 font-bold">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alertasRecientes.map((alerta) => (
+                  <tr key={alerta.id} className="border-b hover:bg-gray-50">
+                    <td className="p-3 font-medium">#{alerta.id}</td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <FaUser className="text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{alerta.usuario}</p>
+                          <p className="text-xs text-gray-500">{alerta.zona}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-3">{alerta.activacion}</td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1">
+                        <FaMapMarkerAlt className="text-red-500" />
+                        <span>{alerta.ubicacion}</span>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        alerta.estado === 'Emergencia' ? 'bg-red-500 text-white px-2 py-1.5 rounded-md text-xs font-semibold' :
+                        alerta.estado === 'En Proceso' ? 'bg-yellow-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold' :
+                        'bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold'
+                      }`}>
+                        {alerta.estado}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleCall(alerta.telefono, alerta.usuario)}
+                          className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg transition"
+                          title="Llamar"
+                        >
+                          <FaPhone />
+                        </button>
+                        <button 
+                          className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg transition"
+                          title="Ver detalles"
+                        >
+                          <FaEye />
+                        </button>
+                        <button 
+                          className="bg-yellow-500 hover:bg-yellow-600 text-white p-2 rounded-lg transition"
+                          title="Editar"
+                        >
+                          <FaEdit />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* LISTA REGISTRO: Denuncias recientes */}
-        <div className="bg-white rounded shadow-md p-4">
+        <div className="bg-white rounded-xl shadow-md p-4">
           <h2 className="text-xl font-bold mb-4">Denuncias Recientes</h2>
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr>
-                <th className="border-b p-2">ID</th>
-                <th className="border-b p-2">Fecha</th>
-                <th className="border-b p-2">Usuario</th>
-                <th className="border-b p-2">Tipo</th>
-                <th className="border-b p-2">Ubicación</th>
-                <th className="border-b p-2">Estado</th>
-                <th className="border-b p-2">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b hover:bg-gray-50">
-                <td className="p-2">#1</td>
-                <td className="p-2">02/01/2024 13:25</td>
-                <td className="p-2">Alex Velarde Diaz</td>
-                <td className="p-2">Robo</td>
-                <td className="p-2">Av. Principal #123</td>
-                <td className="p-2">
-                  <span className="bg-blue-500 text-white px-2.5 py-1.5 rounded text-xs">Pendiente</span>
-                </td>
-                <td className="p-2 flex gap-2">
-                  <button className="bg-green-500 p-2 hover:bg-green-600 text-white rounded"><FaPhone /></button>
-                  <button className="bg-blue-500 p-2 hover:bg-blue-600 text-white rounded"><FaEye /></button>
-                  <button className="bg-yellow-500 p-2 hover:bg-yellow-600 text-white rounded"><FaEdit /></button>
-                </td>
-              </tr>
-            </tbody>
-            <tbody>
-              <tr className="hover:bg-gray-50">
-                <td className="p-2">#1</td>
-                <td className="p-2">02/01/2024 13:25</td>
-                <td className="p-2">Alex Velarde Diaz</td>
-                <td className="p-2">Robo</td>
-                <td className="p-2">Av. Principal #123</td>
-                <td className="p-2">
-                  <span className="bg-orange-500 text-white px-2.5 py-1.5 rounded text-xs">En proceso</span>
-                </td>
-                <td className="p-2 flex gap-2">
-                  <button className="bg-green-500 p-2 hover:bg-green-600 text-white rounded"><FaPhone /></button>
-                  <button className="bg-blue-500 p-2 hover:bg-blue-600 text-white rounded"><FaEye /></button>
-                  <button className="bg-yellow-500 p-2 hover:bg-yellow-600 text-white rounded"><FaEdit /></button>
-                </td>
-              </tr>
-            </tbody>            
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b">
+                  <th className="p-3 font-bold">ID</th>
+                  <th className="p-3 font-bold">Fecha</th>
+                  <th className="p-3 font-bold">Usuario</th>
+                  <th className="p-3 font-bold">Tipo</th>
+                  <th className="p-3 font-bold">Ubicación</th>
+                  <th className="p-3 font-bold">Estado</th>
+                  <th className="p-3 font-bold">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {denunciasRecientes.map((denuncia) => (
+                  <tr key={denuncia.id} className="border-b hover:bg-gray-50">
+                    <td className="p-3 font-medium">#{denuncia.id}</td>
+                    <td className="p-3">{denuncia.fecha}</td>
+                    <td className="p-3">{denuncia.usuario}</td>
+                    <td className="p-3">
+                      <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-md text-xs font-medium">
+                        {denuncia.tipo}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1">
+                        <FaMapMarkerAlt className="text-red-500" />
+                        <span>{denuncia.ubicacion}</span>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        denuncia.estado === 'Pendiente' ? 'bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold' :
+                        denuncia.estado === 'En proceso' ? 'bg-yellow-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold' :
+                        'bg-green-600 text-white px-4 py-1.5 rounded-md text-xs font-semibold'
+                      }`}>
+                        {denuncia.estado}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <button className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg transition">
+                          <FaPhone />
+                        </button>
+                        <button className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg transition">
+                          <FaEye />
+                        </button>
+                        <button className="bg-yellow-500 hover:bg-yellow-600 text-white p-2 rounded-lg transition">
+                          <FaEdit />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

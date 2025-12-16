@@ -85,7 +85,7 @@ return (
             <FaArrowLeft /> Volver al Dashboard
           </button>
         </div>
-        <h1 className="text-3xl font-bold mb-8">ALERTAS ACTIVAS</h1>
+        <h1 className="text-3xl font-bold mb-8">USUARIO</h1>
 
         {/* Perfil superior derecho */}
         <div className="absolute right-6 top-6 bg-white shadow-md px-4 py-2 rounded-md flex items-center gap-3">
