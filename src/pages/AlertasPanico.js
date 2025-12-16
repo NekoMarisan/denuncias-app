@@ -20,6 +20,9 @@ L.Icon.Default.mergeOptions({
 const AlertasPanico = () => {
   const navigate = useNavigate();
   
+  // Estado para la búsqueda
+  const [busqueda, setBusqueda] = useState("");
+  
   // Coordenadas de Cochabamba, Bolivia
   const [mapCenter] = useState([-17.3895, -66.1568]);
   const [zoomLevel] = useState(13);
@@ -122,7 +125,20 @@ const AlertasPanico = () => {
 
   // Filtrar alertas que NO estén completadas
   const alertasActivas = alertas.filter(alerta => alerta.status !== "completed");
-
+  
+  // Filtrar alertas activas basadas en la búsqueda
+  const alertasFiltradas = alertasActivas.filter(alerta => {
+    const searchTerm = busqueda.toLowerCase();
+    return (
+      alerta.user.toLowerCase().includes(searchTerm) ||
+      alerta.location.toLowerCase().includes(searchTerm) ||
+      alerta.area.toLowerCase().includes(searchTerm) ||
+      alerta.phone.toLowerCase().includes(searchTerm) ||
+      alerta.detalles.toLowerCase().includes(searchTerm) ||
+      alerta.id.toString().includes(searchTerm) ||
+      (alerta.patrulleroAsignado && alerta.patrulleroAsignado.toLowerCase().includes(searchTerm))
+    );
+  });
 
   const handleCall = (phoneNumber, userName) => {
     if (window.confirm(`¿Llamar a ${userName} al ${phoneNumber}?`)) {
@@ -221,10 +237,9 @@ const AlertasPanico = () => {
     }
   };
 
-
   return (
     <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar (Sin cambios relevantes) */}
+      {/* Sidebar */}
       <aside className="w-64 bg-green-900 text-white flex flex-col p-4">
         <div className="flex flex-col items-center mb-8">
           <h1 className="text-lg font-semibold mt-2">SISTEMA POLICIAL 110</h1>
@@ -237,14 +252,13 @@ const AlertasPanico = () => {
           </div>
           <hr className="w-full border-t-2 border-green-700 my-4 mt-4" />
         </div>
-        
         <nav className="flex flex-col gap-4">
           <Link to="/dashboard" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaHome /> Inicio
           </Link>
-          <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
+          <Link to="/denuncias" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaExclamationCircle /> Denuncias
-          </a>
+          </Link>
           <Link to="/alertas-panico" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaBell /> Alertas de Pánico
           </Link>
@@ -296,15 +310,19 @@ const AlertasPanico = () => {
                 <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Buscar por usuario, ubicación o ID..."
+                  placeholder="Buscar por nombre, teléfono o ID..."
+                  // Uso correcto de busqueda y setBusqueda
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 
                   focus:ring-green-700 focus:border-transparent"
                 />
               </div>
             </div>
             <div className="flex gap-2">
-              <div className="bg-red-100 text-red-800 px-10 py-2 rounded-lg font-bold">
-                {alertasActivas.length} Alertas Activas
+              <div className="flex items-center gap-2 bg-red-100 px-3 py-1 rounded">
+                <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
+                <span className="text-lg font-semibold text-red-800"> {alertasActivas.length} Alertas activas</span>
               </div>
             </div>
           </div>
@@ -318,10 +336,11 @@ const AlertasPanico = () => {
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <FaMapMarkerAlt className="text-red-500" /> Mapa de Emergencias
               </h2>
-              <div className="flex items-center gap-2 bg-red-50 px-3 py-1 rounded">
-                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-red-700">Alertas Activas: {alertasActivas.length}</span>
-              </div>
+              {busqueda && (
+                <span className="text-sm text-gray-600">
+                  Mostrando {alertasFiltradas.length} alertas filtradas
+                </span>
+              )}
             </div>
             
             {/* Mapa Leaflet */}
@@ -337,8 +356,8 @@ const AlertasPanico = () => {
                   attribution='&copy; OpenStreetMap'
                 />
                 
-                {/* Marcadores de alertas activas */}
-                {alertasActivas.map((alerta) => (
+                {/* Marcadores de alertas filtradas */}
+                {alertasFiltradas.map((alerta) => (
                   <Marker 
                     key={alerta.id} 
                     position={[alerta.lat, alerta.lng]}
@@ -371,12 +390,31 @@ const AlertasPanico = () => {
               <h1 className="text-lg font-bold flex items-center gap-2">
                 <FaBell className="text-red-500" /> Notificar Patrulleros
               </h1>
+              {busqueda && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Filtradas: {alertasFiltradas.length} de {alertasActivas.length}
+                </p>
+              )}
             </div>
             <div className="overflow-y-auto max-h-[500px] p-4">
-              {alertasActivas.length === 0 ? (
-                <p className="text-center text-gray-500 py-10">🎉 No hay alertas de pánico activas.</p>
+              {alertasFiltradas.length === 0 ? (
+                <div className="text-center text-gray-500 py-10">
+                  {busqueda ? (
+                    <div>
+                      <p>🔍 No se encontraron alertas para "{busqueda}"</p>
+                      <button 
+                        onClick={() => setBusqueda("")}
+                        className="mt-2 text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Limpiar búsqueda
+                      </button>
+                    </div>
+                  ) : (
+                    <p>🎉 No hay alertas de pánico activas.</p>
+                  )}
+                </div>
               ) : (
-                alertasActivas.map((alerta) => (
+                alertasFiltradas.map((alerta) => (
                   <div key={alerta.id} className="mb-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-100 transition-all">
                     <div className="flex justify-between items-start mb-3">
                       <div>
