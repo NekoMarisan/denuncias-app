@@ -256,8 +256,8 @@ const AlertasPanico = () => {
           <Link to="/dashboard" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaHome /> Inicio
           </Link>
-          <Link to="/denuncias" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
-            <FaExclamationCircle /> Denuncias
+          <Link to="/alertas-ciudadanas" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
+            <FaExclamationCircle /> Alertas
           </Link>
           <Link to="/alertas-panico" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
             <FaBell /> Alertas de Pánico
@@ -266,7 +266,7 @@ const AlertasPanico = () => {
             <FaUsers /> Usuarios
           </Link>
           <a href="#" className="flex items-center gap-3 hover:bg-green-700 p-2 rounded">
-            <FaCog /> Configuración
+            <FaCog/> Configuración
           </a>
         </nav>
 
