@@ -13,7 +13,6 @@ import Usuarios from "./pages/Usuarios";
 import GestionAlertas from "./pages/GestionAlertas";
 import CentroDespacho from "./pages/CentroDespacho";
 import Tabulacion from "./pages/Tabulacion";
-import DetalleAlerta from "./components/modals/DetalleAlertaModal";
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user } = useAuth();
@@ -29,7 +28,6 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Login />} />
 
-      {/* DASHBOARD */}
       <Route
         path="/dashboard"
         element={
@@ -41,7 +39,6 @@ function AppRoutes() {
         }
       />
 
-      {/* GESTION DE ALERTAS */}
       <Route
         path="/gestion-alertas"
         element={
@@ -52,8 +49,6 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
-<Route path="/detalle-alerta" element={<DetalleAlerta />} />
 
       <Route
         path="/centro-despacho"

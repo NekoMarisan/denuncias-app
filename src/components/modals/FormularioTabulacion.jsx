@@ -9,7 +9,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
   const [contravencionValue, setContravencionValue] = useState('');
   const [delitoValue, setDelitoValue] = useState('');
 
-  // Resetear selecciones cuando cambia la alerta (nueva tabulación)
   useEffect(() => {
     setTipoSeleccion(null);
     setContravencionValue('');
@@ -54,33 +53,33 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
     onConfirm(alerta?.id);
   };
 
-  const cardStyle = "bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-xl hover:scale-[1.01] flex flex-col h-full";
+  const cardStyle = "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md hover:scale-[1.005] flex flex-col h-full";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
-      <form onSubmit={handleSubmit} className="bg-white w-full max-w-[1500px] h-[95vh] rounded-[3rem] shadow-2xl flex flex-col overflow-hidden border border-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-2">
+      <form onSubmit={handleSubmit} className="bg-white w-full max-w-[1400px] h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white">
         
-        {/* HEADER */}
-        <div className="bg-[#1a5336] p-6 flex justify-between items-center text-white shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/20">
-              <FaShieldAlt size={20} />
+        {/* HEADER - reducido */}
+        <div className="bg-[#1a5336] p-4 flex justify-between items-center text-white shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 bg-white/10 rounded-lg flex items-center justify-center border border-white/20">
+              <FaShieldAlt size={14} />
             </div>
-            <h1 className="text-2xl font-black uppercase tracking-widest">Tabulacion de alertas</h1>
+            <h1 className="text-lg font-black uppercase tracking-wider">Tabulacion de alertas</h1>
           </div>
-          <button type="button" onClick={onClose} className="hover:bg-white/10 p-3 rounded-full transition-colors">
-            <FaTimes size={24} />
+          <button type="button" onClick={onClose} className="hover:bg-white/10 p-2 rounded-full transition-colors">
+            <FaTimes size={18} />
           </button>
         </div>
 
-        {/* CUERPO */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/30">
+        {/* CUERPO - reducido */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50/30">
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* 1. DATOS DE LA ALERTA */}
             <section className={cardStyle}>
-              <HeaderSection icon={<FaFileAlt className="text-blue-600"/>} title="Datos de la Alerta" bgColor="bg-blue-50" />
-              <div className="grid grid-cols-2 gap-4 flex-1">
+              <HeaderSection icon={<FaFileAlt className="text-blue-600 text-sm"/>} title="Datos de la Alerta" bgColor="bg-blue-50" />
+              <div className="grid grid-cols-2 gap-3 flex-1">
                 <div className="col-span-2">
                   <Field label="Nombre del Ciudadano" value={alerta?.ciudadano} auto required />
                 </div>
@@ -88,16 +87,16 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
                 <Field label="Número de Celular" value="70712345" auto required />
                 <Field label="Categoría" value={alerta?.categoria || "No especificada"} auto required />
                 <div className="col-span-2">
-                  <label className="text-base font-medium text-slate-500 ml-2">Descripción Transcrita</label>
-                  <textarea readOnly value={alerta?.incidente} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-base font-medium italic text-slate-400 outline-none mt-1 h-24 resize-none" />
+                  <label className="text-xs font-medium text-slate-500 ml-2">Descripción Transcrita</label>
+                  <textarea readOnly value={alerta?.incidente} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-medium italic text-slate-400 outline-none mt-1 h-20 resize-none" />
                 </div>
               </div>
             </section>
 
-            {/* 3. DIRECCIÓN Y DESCRIPCIÓN */}
+            {/* 2. DIRECCIÓN Y DESCRIPCIÓN */}
             <section className={cardStyle}>
-              <HeaderSection icon={<FaMapMarkerAlt className="text-green-600"/>} title="Dirección y Descripción" bgColor="bg-green-50" />
-              <div className="grid grid-cols-2 gap-4 flex-1">
+              <HeaderSection icon={<FaMapMarkerAlt className="text-green-600 text-sm"/>} title="Dirección y Descripción" bgColor="bg-green-50" />
+              <div className="grid grid-cols-2 gap-3 flex-1">
                 <InputLabel label="Área Urbana" placeholder="Zona de área urbana" required />
                 <InputLabel label="Área Rural" placeholder="Zona de área rural" required />
                 <InputLabel label="Comuna" placeholder="Comuna" required />
@@ -110,10 +109,10 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
               </div>
             </section>
 
-            {/* 2. CLASIFICACIÓN DEL HECHO (SELECCIÓN ÚNICA) */}
+            {/* 3. CLASIFICACIÓN DEL HECHO */}
             <section className={cardStyle}>
-              <HeaderSection icon={<FaShieldAlt className="text-red-500"/>} title="Clasificación del Hecho" bgColor="bg-red-50" />
-              <div className="space-y-6 flex-1 justify-center flex flex-col">
+              <HeaderSection icon={<FaShieldAlt className="text-red-500 text-sm"/>} title="Clasificación del Hecho" bgColor="bg-red-50" />
+              <div className="space-y-4 flex-1 justify-center flex flex-col">
                 <SelectField 
                   label="Contravención (RP)" 
                   options={contravenciones} 
@@ -121,7 +120,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
                   onChange={handleContravencionChange}
                   disabled={tipoSeleccion === 'delito'}
                 />
-
                 <SelectField 
                   label="Delitos (DH)" 
                   options={delitos} 
@@ -134,14 +132,14 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
 
             {/* 4. INFORME POLICIAL */}
             <section className={`${cardStyle} !bg-amber-50/30 !border-amber-100`}>
-              <HeaderSection icon={<FaShieldAlt className="text-amber-600"/>} title="Informe Policial" bgColor="bg-amber-100" />
-              <div className="grid grid-cols-2 gap-4 flex-1">
+              <HeaderSection icon={<FaShieldAlt className="text-amber-600 text-sm"/>} title="Informe Policial" bgColor="bg-amber-100" />
+              <div className="grid grid-cols-2 gap-3 flex-1">
                 <Field label="Unidad Asignada" value={alerta?.patrulla || "PAT-4"} auto required />
                 <Field label="EPI" value="EPI CENTRAL" auto required />
                 <div className="col-span-2">
-                  <label className="text-base font-medium text-slate-500 ml-2">Reporte Patrullero</label>
-                  <div className="mt-1 p-6 bg-white border border-amber-100 rounded-2xl text-base italic text-slate-400 shadow-inner h-32 overflow-y-auto">
-                       "El caso fue atendido positivamente en el lugar del incidente..."
+                  <label className="text-xs font-medium text-slate-500 ml-2">Reporte Patrullero</label>
+                  <div className="mt-1 p-3 bg-white border border-amber-100 rounded-xl text-xs italic text-slate-400 shadow-inner h-24 overflow-y-auto">
+                    "El caso fue atendido positivamente en el lugar del incidente..."
                   </div>
                 </div>
               </div>
@@ -149,27 +147,27 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
           </div>
 
           {/* 5. SECRETARIA */}
-          <section className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-xl hover:scale-[1.005]">
-            <HeaderSection icon={<FaBriefcase className="text-purple-600"/>} title="Tabulación para Secretaría" bgColor="bg-purple-50" />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
+          <section className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md hover:scale-[1.002]">
+            <HeaderSection icon={<FaBriefcase className="text-purple-600 text-sm"/>} title="Tabulación para Secretaría" bgColor="bg-purple-50" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-3">
                 <InputLabel label="Protagonistas" placeholder="Nombres..." required />
                 <Field label="Remisión del Caso" value="Ministerio Público / Conciliación" auto required />
               </div>
               <div className="flex flex-col">
-                <label className="text-base font-medium text-slate-500 ml-2 mb-1">Resumen Administrativo</label>
-                <textarea required placeholder="Resumen administrativo obligatorio..." className="w-full bg-slate-50 border border-purple-100 rounded-3xl p-5 text-base font-medium text-slate-400 outline-none focus:ring-2 focus:ring-slate-400 focus:bg-white transition-all shadow-sm flex-1 min-h-[140px]" />
+                <label className="text-xs font-medium text-slate-500 ml-2 mb-1">Resumen Administrativo</label>
+                <textarea required placeholder="Resumen administrativo obligatorio..." className="w-full bg-slate-50 border border-purple-100 rounded-xl p-3 text-xs font-medium text-slate-400 outline-none focus:ring-1 focus:ring-slate-400 focus:bg-white transition-all shadow-sm flex-1 min-h-[100px]" />
               </div>
             </div>
           </section>
 
           {/* HISTORIAL */}
-          <div className="pt-4 px-4">
-            <h2 className="flex items-center gap-2 font-black text-slate-500 uppercase text-xs tracking-widest mb-8">
-              <FaHistory className="text-[#1a5336]" /> Historial de proceso
+          <div className="pt-3 px-2">
+            <h2 className="flex items-center gap-1.5 font-black text-slate-500 uppercase text-[9px] tracking-wider mb-5">
+              <FaHistory className="text-[#1a5336] text-xs" /> Historial de proceso
             </h2>
-            <div className="relative flex justify-between items-start max-w-5xl mx-auto">
-              <div className="absolute top-4 left-0 w-full h-[2px] bg-slate-200 -z-10"></div>
+            <div className="relative flex justify-between items-start max-w-4xl mx-auto">
+              <div className="absolute top-2 left-0 w-full h-[1px] bg-slate-200 -z-10"></div>
               <HistoryItem role="Operador Receptor" name="Sof. 2do Juan Perez" />
               <HistoryItem role="Despachador" name="Sgto. Marina Lopez" />
               <HistoryItem role="Patrullero" name={alerta?.patrulla || "Unidad 4"} />
@@ -177,9 +175,9 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
             </div>
           </div>
 
-          <div className="flex justify-end gap-6 pt-6 border-t border-slate-100">
-            <button type="button" onClick={onClose} className="px-12 py-5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-400 font-black rounded-2xl uppercase text-xs tracking-[0.2em] transition-all">Descartar</button>
-            <button type="submit" className="px-12 py-5 bg-[#1a5336] hover:bg-[#133d28] text-white font-black rounded-2xl uppercase text-xs tracking-[0.2em] transition-all shadow-xl">Finalizar Tabulación</button>
+          <div className="flex justify-end gap-4 pt-4 border-t border-slate-100">
+            <button type="button" onClick={onClose} className="px-6 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-400 font-black rounded-xl uppercase text-[9px] tracking-[0.15em] transition-all">Descartar</button>
+            <button type="submit" className="px-6 py-2.5 bg-[#1a5336] hover:bg-[#133d28] text-white font-black rounded-xl uppercase text-[9px] tracking-[0.15em] transition-all shadow">Finalizar Tabulación</button>
           </div>
         </div>
       </form>
@@ -188,26 +186,26 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
 };
 
 const HeaderSection = ({ icon, title, bgColor }) => (
-  <div className="flex items-center gap-3 border-b border-slate-50 pb-4 mb-6 shrink-0">
-    <div className={`w-10 h-10 ${bgColor} rounded-xl flex items-center justify-center`}>{icon}</div>
-    <h2 className="text-base font-black text-slate-400 uppercase tracking-[0.2em]">{title}</h2>
+  <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-4 shrink-0">
+    <div className={`w-7 h-7 ${bgColor} rounded-lg flex items-center justify-center`}>{icon}</div>
+    <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">{title}</h2>
   </div>
 );
 
 const InputLabel = ({ label, placeholder, required }) => (
-  <div className="space-y-1">
-    <label className="text-base font-medium text-slate-500 ml-2">{label}</label>
-    <input required={required} placeholder={placeholder} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-base font-semibold text-slate-400 outline-none focus:ring-2 focus:ring-green-600 transition-all" />
+  <div className="space-y-0.5">
+    <label className="text-xs font-medium text-slate-500 ml-1.5">{label}</label>
+    <input required={required} placeholder={placeholder} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs font-semibold text-slate-500 outline-none focus:ring-1 focus:ring-green-600 transition-all" />
   </div>
 );
 
 const SelectField = ({ label, options, value, onChange, disabled }) => (
   <div className={`flex flex-col transition-opacity ${disabled ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-    <label className="text-base font-medium text-slate-500 ml-2 mb-1">{label}</label>
+    <label className="text-xs font-medium text-slate-500 ml-2 mb-1">{label}</label>
     <select 
       value={value}
       onChange={onChange}
-      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-base font-bold text-slate-400 outline-none focus:ring-2 focus:ring-[#1a5336] transition-all"
+      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-500 outline-none focus:ring-1 focus:ring-[#1a5336] transition-all"
     >
       <option value="">Seleccione...</option>
       {options.map((item, i) => <option key={i} value={item}>{item}</option>)}
@@ -216,20 +214,20 @@ const SelectField = ({ label, options, value, onChange, disabled }) => (
 );
 
 const Field = ({ label, value, auto, required }) => (
-  <div className="space-y-1">
-    <label className="text-base font-medium text-slate-500 ml-2 tracking-tight">{label}</label>
-    <input required={required} type="text" readOnly={auto} defaultValue={value} className="w-full rounded-2xl p-4 text-base font-bold outline-none border bg-slate-100/40 border-slate-100 text-slate-400" />
+  <div className="space-y-0.5">
+    <label className="text-xs font-medium text-slate-500 ml-1.5 tracking-tight">{label}</label>
+    <input required={required} type="text" readOnly={auto} defaultValue={value} className="w-full rounded-xl p-2.5 text-xs font-bold outline-none border bg-slate-100/40 border-slate-100 text-slate-500" />
   </div>
 );
 
 const HistoryItem = ({ role, name, highlight }) => (
-  <div className="flex flex-col items-center bg-transparent z-10 px-4">
-    <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 mb-2 transition-all shadow-sm ${highlight ? 'bg-green-600 border-green-600 text-white scale-110' : 'bg-white border-slate-200 text-slate-400'}`}>
-      <FaUser size={16} />
+  <div className="flex flex-col items-center bg-transparent z-10 px-2">
+    <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 mb-1 transition-all shadow-sm ${highlight ? 'bg-green-600 border-green-600 text-white scale-105' : 'bg-white border-slate-200 text-slate-400'}`}>
+      <FaUser size={11} />
     </div>
-    <div className="text-center bg-white px-2">
-      <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">{role}</p>
-      <p className={`text-[11px] font-black uppercase ${highlight ? 'text-green-700' : 'text-slate-600'}`}>{name}</p>
+    <div className="text-center bg-white px-1">
+      <p className="text-[8px] font-black text-slate-400 uppercase leading-none mb-0.5">{role}</p>
+      <p className={`text-[9px] font-black uppercase ${highlight ? 'text-green-700' : 'text-slate-600'}`}>{name}</p>
     </div>
   </div>
 );
