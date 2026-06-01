@@ -4,6 +4,7 @@ import {
   FaFileExcel, FaDownload, FaFileDownload,
   FaCheckCircle, FaTimesCircle, FaClipboardCheck, FaBan
 } from 'react-icons/fa';
+import { supabase } from '../services/supabase'
 
 const ArchivoHistorico = ({ alertas, onBack }) => {
   const [busqueda, setBusqueda] = useState("");

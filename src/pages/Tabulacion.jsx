@@ -4,6 +4,7 @@ import {
 } from "react-icons/fa";
 import FormularioTabulacion from "../components/modals/FormularioTabulacion";
 import ArchivoHistorico from "./ArchivoHistorico";
+import { supabase } from '../services/supabase'
 
 function Tabulacion() {
   const [renderKey] = useState(Date.now());

@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { LuZoomIn } from "react-icons/lu";
 import DetalleAlertaModal from "../components/modals/DetalleAlerta";
 import DetalleEmergencia from "../components/modals/DetalleEmergencia";
+import { supabase } from '../services/supabase'
 
 function GestionAlertas() {
   const location = useLocation();

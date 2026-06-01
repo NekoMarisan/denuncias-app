@@ -15,6 +15,7 @@ import {
 } from "react-icons/fa";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { supabase } from '../services/supabase'
 
 function Usuarios() {
   const [tabActiva, setTabActiva] = useState("oficiales");

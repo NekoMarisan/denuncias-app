@@ -19,6 +19,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+import { supabase } from '../services/supabase'
+
 function Dashboard() {
   const navigate = useNavigate();
 

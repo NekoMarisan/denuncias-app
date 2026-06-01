@@ -13,6 +13,7 @@ import Usuarios from "./pages/Usuarios";
 import GestionAlertas from "./pages/GestionAlertas";
 import CentroDespacho from "./pages/CentroDespacho";
 import Tabulacion from "./pages/Tabulacion";
+import { supabase } from './services/supabase'
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user } = useAuth();

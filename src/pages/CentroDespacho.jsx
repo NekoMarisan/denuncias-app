@@ -19,6 +19,7 @@ import {
   FaTimesCircle,
   FaCircle,
 } from "react-icons/fa";
+import { supabase } from '../services/supabase'
 
 const CentroDespacho = () => {
   const [tabActiva, setTabActiva] = useState("nuevas");
