@@ -39,7 +39,7 @@ const Layout = ({ children }) => {
           <span className="text-[12px] font-bold tracking-wider uppercase opacity-90 text-center leading-tight">
             Sistema Policial
           </span>
-          <img src="/logo_of.png" alt="Logo" className="mt-6 w-20 h-20 mb-1" />
+          <img src="/logo_of.png" alt="Logo" className="mt-6 w-24 h-24 mb-1" />
         </div>
 
         <div className="border-b border-white/10 my-4 mx-4"></div>
@@ -69,7 +69,7 @@ const Layout = ({ children }) => {
               className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${location.pathname === "/centro-despacho" ? "bg-white/20" : "hover:bg-white/10"}`}
             >
               <FaCarSide className="text-base" size={12} />{" "}
-              <span className="font-semibold">Centro de Despacho</span>
+              <span className="font-semibold">Despacho</span>
             </Link>
           )}
           {["admin", "tabulador"].includes(user?.rol) && (

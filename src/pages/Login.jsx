@@ -13,6 +13,8 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [showUserWarning, setShowUserWarning] = useState(false);
   const [showPassWarning, setShowPassWarning] = useState(false);
+  const [userWarningMessage, setUserWarningMessage] = useState("");
+  const [passWarningMessage, setPassWarningMessage] = useState("");
 
   const userWarningTimeout = useRef(null);
   const passWarningTimeout = useRef(null);
@@ -23,8 +25,6 @@ function Login() {
       if (errorTimeout.current) clearTimeout(errorTimeout.current);
       errorTimeout.current = setTimeout(() => {
         setError("");
-        setUsername("");
-        setPassword("");
       }, 2000);
       return () => clearTimeout(errorTimeout.current);
     }
@@ -38,17 +38,15 @@ function Login() {
     };
   }, []);
 
-  // Usuario: solo letras (mayúsc/minúsc), números y espacios
+  // Usuario: solo letras (mayúsc/minúsc) y números (SIN ESPACIOS)
   const validateAndCleanUsername = (value) => {
-    const cleaned = value.replace(/[^a-zA-Z0-9 ]/g, "");
+    const cleaned = value.replace(/[^a-zA-Z0-9]/g, "");
     const hasInvalid = value !== cleaned;
     return { cleaned, hasInvalid };
   };
 
-  // Contraseña: solo minúsculas y números. Las mayúsculas se eliminan (no se permiten)
+  // Contraseña: solo minúsculas y números (sin mayúsculas, espacios, símbolos)
   const validateAndCleanPassword = (value) => {
-    // Elimina cualquier carácter que NO sea minúscula (a-z) o número (0-9)
-    // Las mayúsculas desaparecen sin convertirse
     const cleaned = value.replace(/[^a-z0-9]/g, "");
     const hasInvalid = value !== cleaned;
     return { cleaned, hasInvalid };
@@ -58,13 +56,23 @@ function Login() {
     const rawValue = e.target.value;
     const { cleaned, hasInvalid } = validateAndCleanUsername(rawValue);
 
-    if (hasInvalid && rawValue.trim() !== "") {
+    if (hasInvalid) {
+      // Determinar el mensaje según lo que se eliminó
+      let msg = "";
+      // Detectar espacios
+      if (rawValue.includes(" ")) {
+        msg = "* No se permiten espacios.";
+      } else {
+        // Si no hay espacios, son símbolos
+        msg = "* No se permiten símbolos.";
+      }
+      setUserWarningMessage(msg);
       setShowUserWarning(true);
       if (userWarningTimeout.current) clearTimeout(userWarningTimeout.current);
-      userWarningTimeout.current = setTimeout(
-        () => setShowUserWarning(false),
-        1500,
-      );
+      userWarningTimeout.current = setTimeout(() => {
+        setShowUserWarning(false);
+        setUserWarningMessage("");
+      }, 1500);
     }
 
     setUsername(cleaned);
@@ -75,13 +83,22 @@ function Login() {
     const rawValue = e.target.value;
     const { cleaned, hasInvalid } = validateAndCleanPassword(rawValue);
 
-    if (hasInvalid && rawValue.trim() !== "") {
+    if (hasInvalid) {
+      let msg = "";
+      // Detectar espacios
+      if (rawValue.includes(" ")) {
+        msg = "* No se permiten espacios.";
+      } else {
+        // Si no hay espacios, son mayúsculas o símbolos
+        msg = "* No se permiten mayúsculas ni símbolos.";
+      }
+      setPassWarningMessage(msg);
       setShowPassWarning(true);
       if (passWarningTimeout.current) clearTimeout(passWarningTimeout.current);
-      passWarningTimeout.current = setTimeout(
-        () => setShowPassWarning(false),
-        1500,
-      );
+      passWarningTimeout.current = setTimeout(() => {
+        setShowPassWarning(false);
+        setPassWarningMessage("");
+      }, 1500);
     }
 
     setPassword(cleaned);
@@ -94,7 +111,7 @@ function Login() {
     setLoading(true);
 
     const normalizedUser = username.toLowerCase();
-    const normalizedPass = password; // ya está limpia y solo minúsculas
+    const normalizedPass = password;
 
     setTimeout(() => {
       const result = login(normalizedUser, normalizedPass);
@@ -109,13 +126,12 @@ function Login() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-2 bg-cover bg-center bg-fixed transition-opacity duration-700"
+      className="min-h-screen flex items-center justify-center p-2 sm:p-4 bg-cover bg-center bg-fixed transition-opacity duration-700"
       style={{ backgroundImage: "url('/fondolog.jpg')" }}
     >
       <div className="absolute inset-0 bg-black/40"></div>
-      <div className="relative z-10 flex w-full max-w-4xl h-[540px] shadow-xl rounded-3xl overflow-hidden bg-white border-2 border-gray-200">
-        {/* Columna izquierda */}
-        <div className="hidden lg:flex flex-col justify-between w-1/2 p-6 relative text-white">
+      <div className="relative z-10 flex w-full max-w-4xl h-auto min-h-[540px] sm:h-[540px] shadow-xl rounded-3xl overflow-hidden bg-white border-2 border-gray-200 flex-col lg:flex-row">
+        <div className="hidden lg:flex flex-col justify-between w-full lg:w-1/2 p-6 relative text-white">
           <div
             className="absolute inset-0 bg-cover bg-center"
             style={{
@@ -144,10 +160,8 @@ function Login() {
             <p>© {new Date().getFullYear()} Comando Dptal. de Policía</p>
           </div>
         </div>
-
-        {/* Apartado derecho */}
-        <div className="mt-6 w-full lg:w-1/2 p-5 px-10 md:p-8 md:px-12 flex flex-col justify-center">
-          <h2 className="text-[23px] font-bold text-green-900 mb-6 text-center uppercase tracking-wider">
+        <div className="w-full lg:w-1/2 p-5 px-6 sm:px-10 md:p-8 md:px-12 flex flex-col justify-center">
+          <h2 className="text-[20px] sm:text-[23px] font-bold text-green-900 mb-6 text-center uppercase tracking-wider">
             Ingreso al Sistema
           </h2>
 
@@ -173,7 +187,7 @@ function Login() {
                 }`}
               >
                 <p className="text-[9px] text-gray-400 font-medium mt-1 tracking-wide">
-                  * No se permiten símbolos.
+                  {userWarningMessage}
                 </p>
               </div>
             </div>
@@ -206,7 +220,7 @@ function Login() {
                 }`}
               >
                 <p className="text-[9px] text-gray-400 font-medium mt-1 tracking-wide">
-                  * No se permiten mayúsculas ni símbolos.
+                  {passWarningMessage}
                 </p>
               </div>
             </div>
