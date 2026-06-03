@@ -3,6 +3,7 @@ import {
   FaUser, FaFileAlt, FaMapMarkerAlt,  
   FaShieldAlt, FaBriefcase, FaTimes, FaHistory 
 } from 'react-icons/fa';
+import { supabase } from "../../services/supabase";
 
 const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
   const [tipoSeleccion, setTipoSeleccion] = useState(null);

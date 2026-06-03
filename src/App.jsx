@@ -13,7 +13,8 @@ import Usuarios from "./pages/Usuarios";
 import GestionAlertas from "./pages/GestionAlertas";
 import CentroDespacho from "./pages/CentroDespacho";
 import Tabulacion from "./pages/Tabulacion";
-import { supabase } from './services/supabase'
+import { supabase } from './services/supabase';
+import { ToastProvider } from './context/ToastContext'; // ✅ ya lo tienes importado
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user } = useAuth();
@@ -92,9 +93,11 @@ function AppRoutes() {
 function App() {
   return (
     <Router>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <ToastProvider>   {/* ✅ Envuelve AuthProvider con ToastProvider o viceversa */}
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ToastProvider>
     </Router>
   );
 }

@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { LuZoomIn } from "react-icons/lu";
 import DetalleAlertaModal from "../components/modals/DetalleAlerta";
 import DetalleEmergencia from "../components/modals/DetalleEmergencia";
-import { supabase } from '../services/supabase'
+import { supabase } from "../services/supabase";
 
 function GestionAlertas() {
   const location = useLocation();
@@ -13,152 +13,128 @@ function GestionAlertas() {
   const [alertaSeleccionada, setAlertaSeleccionada] = useState(null);
   const [alertasArchivadas, setAlertasArchivadas] = useState([]);
   const [filaResaltada, setFilaResaltada] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(null);
 
-  // Alertas de pánico (emergencia)
-  const [alertasPanico, setAlertasPanico] = useState([
-    {
-      id: "REGE-0001",
-      ciudadano: "Alex Cristhian Velarde Diaz",
-      ubicacion: "-17.3896, -66.1552",
-      fecha: "21/04/2026",
-      hora: "14:05",
-      estado: "Emergencia",
-      ci: "1234567 CB",
-      celular: "+591 70707070",
-      relato: "Persona armada en la vía pública.",
-      incidente: "Pánico - Amenaza",
-    },
-    {
-      id: "REGE-0002",
-      ciudadano: "Armando Benjhamin Gutierrez Valencia",
-      ubicacion: "-17.3896, -66.1552",
-      fecha: "21/04/2026",
-      hora: "14:12",
-      estado: "Emergencia",
-      ci: "7654321 CB",
-      celular: "+591 60606060",
-      relato: "Accidente de tránsito con heridos.",
-      incidente: "Pánico - Accidente",
-    },
-    {
-      id: "REGE-0003",
-      ciudadano: "Melissa Angelica Moreno Fernandez",
-      ubicacion: "-17.3896, -66.1552",
-      fecha: "21/04/2026",
-      hora: "14:20",
-      estado: "Emergencia",
-      ci: "9876543 CB",
-      celular: "+591 61234567",
-      relato: "Intento de robo en domicilio.",
-      incidente: "Pánico - Robo",
-    },
-    {
-      id: "REGE-0004",
-      ciudadano: "Carlos Andrés López Soto",
-      ubicacion: "-17.4000, -66.1600",
-      fecha: "21/04/2026",
-      hora: "15:00",
-      estado: "Emergencia",
-      ci: "1111111 CB",
-      celular: "+591 71111111",
-      relato: "Incendio en edificio.",
-      incidente: "Pánico - Incendio",
-    },
-    {
-      id: "REGE-0005",
-      ciudadano: "María Fernanda Torrico Paz",
-      ubicacion: "-17.4100, -66.1700",
-      fecha: "21/04/2026",
-      hora: "15:30",
-      estado: "Emergencia",
-      ci: "2222222 CB",
-      celular: "+591 72222222",
-      relato: "Secuestro familiar.",
-      incidente: "Pánico - Secuestro",
-    },
-    {
-      id: "REGE-0006",
-      ciudadano: "Luis Eduardo Rojas Claure",
-      ubicacion: "-17.4200, -66.1800",
-      fecha: "21/04/2026",
-      hora: "16:00",
-      estado: "Emergencia",
-      ci: "3333333 CB",
-      celular: "+591 73333333",
-      relato: "Ataque con arma blanca.",
-      incidente: "Pánico - Agresión",
-    },
-    {
-      id: "REGE-0007",
-      ciudadano: "Patricia Jimena Arce Sánchez",
-      ubicacion: "-17.4300, -66.1900",
-      fecha: "21/04/2026",
-      hora: "16:30",
-      estado: "Emergencia",
-      ci: "4444444 CB",
-      celular: "+591 74444444",
-      relato: "Desaparición de menor.",
-      incidente: "Pánico - Desaparición",
-    },
-  ]);
-
-  // Alertas ciudadanas
-  const [alertasCiudadanas, setAlertasCiudadanas] = useState([
-    {
-      id: "ALTC-0001",
-      ciudadano: "Alex Cristhian Velarde Diaz",
-      ubicacion: "-17.3935, -66.1570",
-      fecha: "21/04/2026",
-      hora: "13:25",
-      estado: "Verificación",
-      ci: "6945862 CB",
-      celular: "+591 69459645",
-      relato: "Jóvenes bebiendo en la esquina.",
-      incidente: "Consumo de bebidas en vía pública",
-    },
-    {
-      id: "ALTC-0002",
-      ciudadano: "Armando Benjhamin Gutierrez Valencia",
-      ubicacion: "-17.3890, -66.1510",
-      fecha: "21/04/2026",
-      hora: "13:40",
-      estado: "Verificación",
-      ci: "7845122 CB",
-      celular: "+591 7845122",
-      relato: "Robo de pertenencias.",
-      incidente: "Robo Agravado",
-    },
-    {
-      id: "ALTC-0003",
-      ciudadano: "Juan Perez Mamani",
-      ubicacion: "-17.4010, -66.1820",
-      fecha: "21/04/2026",
-      hora: "14:10",
-      estado: "Verificación",
-      ci: "5555555 CB",
-      celular: "+591 71234567",
-      relato: "Ruidos molestos después de hora permitida.",
-      incidente: "Alteración del orden público",
-    },
-  ]);
+  const [alertasPanico, setAlertasPanico] = useState([]);
+  const [alertasCiudadanas, setAlertasCiudadanas] = useState([]);
 
   const dataActual = tabActiva === "ciudadana" ? alertasCiudadanas : alertasPanico;
+
+  const transformarAlertas = (data) => {
+    const panico = [];
+    const ciudadanas = [];
+
+    data.forEach((item) => {
+      const base = {
+        id:          item.id_alerta,
+        ciudadano:   item.usuario_ciudadano?.nombre_completo || `Usuario #${item.id_usuario}`,
+        ubicacion:   item.ubicacion  || "Sin ubicación",
+        fecha:       item.fecha_hora
+                       ? new Date(item.fecha_hora).toLocaleDateString("es-BO")
+                       : "—",
+        hora:        item.fecha_hora
+                       ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", {
+                           hour:   "2-digit",
+                           minute: "2-digit",
+                         })
+                       : "—",
+        descripcion: item.descripcion  || "",
+        categoria:   item.categoria    || "",
+        audio_30s:   item.audio_30s    || null,
+        prioridad:   item.prioridad    || "Media",
+        codigo:      item.codigo_alerta || "",
+      };
+
+      if (item.categoria === "Panico") {
+        panico.push({ ...base, estado: "Emergencia" });
+      } else if (item.categoria === "Alerta Ciudadana") {
+        ciudadanas.push({ ...base, estado: "Verificación" });
+      }
+    });
+
+    return { panico, ciudadanas };
+  };
+
+  const cargarAlertas = async () => {
+    setCargando(true);
+    setErrorCarga(null);
+    try {
+      const { data, error } = await supabase
+        .from("alerta")
+        .select(`
+          *,
+          usuario_ciudadano (
+            nombre_completo
+          )
+        `)
+        .order("fecha_hora", { ascending: false });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        setAlertasPanico([]);
+        setAlertasCiudadanas([]);
+        return;
+      }
+
+      const { panico, ciudadanas } = transformarAlertas(data);
+      setAlertasPanico(panico);
+      setAlertasCiudadanas(ciudadanas);
+    } catch (err) {
+      console.error(err);
+      setErrorCarga(err.message);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarAlertas();
+  }, []);
+
+  useEffect(() => {
+    const canal = supabase
+      .channel("alertas-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "alerta" },
+        () => { cargarAlertas(); }
+      )
+      .subscribe();
+    return () => supabase.removeChannel(canal);
+  }, []);
+
+  useEffect(() => {
+    const state = location.state;
+    if (state?.activeTab) {
+      setTabActiva(state.activeTab);
+      if (state.selectedId) {
+        setFilaResaltada(state.selectedId);
+        setTimeout(() => {
+          const fila = document.getElementById(`fila-${state.selectedId}`);
+          if (fila) fila.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 200);
+        setTimeout(() => setFilaResaltada(null), 2000);
+      }
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const manejarDesestimar = (idAlerta, motivo) => {
     const listaOrigen = tabActiva === "emergencia" ? alertasPanico : alertasCiudadanas;
     const alertaEncontrada = listaOrigen.find((a) => a.id === idAlerta);
     if (alertaEncontrada) {
-      const nuevaAlertaArchivada = {
+      setAlertasArchivadas((prev) => [...prev, {
         ...alertaEncontrada,
         estado: "DESESTIMADO",
         motivoDesestimacion: motivo || "Sin motivo especificado",
         fechaArchivo: new Date().toLocaleDateString(),
-      };
-      setAlertasArchivadas((prev) => [...prev, nuevaAlertaArchivada]);
+      }]);
       if (tabActiva === "emergencia") {
-        setAlertasPanico(alertasPanico.filter((alerta) => alerta.id !== idAlerta));
+        setAlertasPanico(alertasPanico.filter((a) => a.id !== idAlerta));
       } else {
-        setAlertasCiudadanas(alertasCiudadanas.filter((alerta) => alerta.id !== idAlerta));
+        setAlertasCiudadanas(alertasCiudadanas.filter((a) => a.id !== idAlerta));
       }
     }
     cerrarModal();
@@ -166,68 +142,60 @@ function GestionAlertas() {
 
   const manejarTransferencia = (idAlerta) => {
     if (tabActiva === "emergencia") {
-      setAlertasPanico(alertasPanico.filter((alerta) => alerta.id !== idAlerta));
+      setAlertasPanico(alertasPanico.filter((a) => a.id !== idAlerta));
       alert("Alerta de pánico transferida a Centro de Despacho");
     } else {
-      setAlertasCiudadanas(alertasCiudadanas.filter((alerta) => alerta.id !== idAlerta));
+      setAlertasCiudadanas(alertasCiudadanas.filter((a) => a.id !== idAlerta));
     }
     cerrarModal();
   };
 
-  const abrirModal = (alerta) => {
-    setAlertaSeleccionada(alerta);
-    setMostrarModal(true);
-  };
+  const abrirModal  = (alerta) => { setAlertaSeleccionada(alerta); setMostrarModal(true); };
+  const cerrarModal = ()       => { setMostrarModal(false); setAlertaSeleccionada(null); };
 
-  const cerrarModal = () => {
-    setMostrarModal(false);
-    setAlertaSeleccionada(null);
-  };
+  if (cargando) {
+    return (
+      <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-[#113e27] font-bold text-lg">Cargando alertas...</div>
+        </div>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    const state = location.state;
-    if (state && state.activeTab) {
-      setTabActiva(state.activeTab);
-      if (state.selectedId) {
-        setFilaResaltada(state.selectedId);
-        setTimeout(() => {
-          const fila = document.getElementById(`fila-${state.selectedId}`);
-          if (fila) {
-            fila.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        }, 200);
-        setTimeout(() => {
-          setFilaResaltada(null);
-        }, 2000);
-      }
-      window.history.replaceState({}, document.title);
-    }
-  }, [location.state]);
+  if (errorCarga) {
+    return (
+      <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
+        <div className="bg-red-100 border-l-4 border-red-600 p-4 rounded shadow-md mx-4">
+          <p className="text-red-700 font-bold">Error al cargar las alertas</p>
+          <p className="text-sm text-red-600">{errorCarga}</p>
+          <button onClick={cargarAlertas} className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition">
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
+
       {/* SELECTOR DE TABS */}
       <div className="px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2">
         <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
           <button
             onClick={() => setTabActiva("emergencia")}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${
-              tabActiva === "emergencia"
-                ? "bg-[#113e27] text-white shadow-md"
-                : "text-slate-400"
-            }`}
+            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${tabActiva === "emergencia" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"}`}
           >
-            <span className="hidden sm:inline">ALERTAS DE PÁNICO</span><span className="sm:hidden">PÁNICO</span>
+            <span className="hidden sm:inline">ALERTAS DE PÁNICO</span>
+            <span className="sm:hidden">PÁNICO</span>
           </button>
           <button
             onClick={() => setTabActiva("ciudadana")}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-2 rounded-lg font-bold text-xs transition-all tracking-wider ${
-              tabActiva === "ciudadana"
-                ? "bg-[#113e27] text-white shadow-md"
-                : "text-slate-400"
-            }`}
+            className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg font-bold text-xs transition-all tracking-wider ${tabActiva === "ciudadana" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"}`}
           >
-            <span className="hidden sm:inline">ALERTAS CIUDADANAS</span><span className="sm:hidden">CIUDADANAS</span>
+            <span className="hidden sm:inline">ALERTAS CIUDADANAS</span>
+            <span className="sm:hidden">CIUDADANAS</span>
           </button>
         </div>
         <div className="bg-gray-50 text-gray-500 px-4 py-2.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wider border border-gray-200">
@@ -235,38 +203,33 @@ function GestionAlertas() {
         </div>
       </div>
 
-      {/* CONTENEDOR BLANCO */}
+      {/* TABLA */}
       <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col max-h-[70vh] min-h-0">
         <h2 className="text-lg font-extrabold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wide flex-shrink-0">
-          {tabActiva === "emergencia"
-            ? "Bandeja de Emergencias"
-            : "Reportes Ciudadanos"}
+          {tabActiva === "emergencia" ? "Bandeja de Emergencias" : "Reportes Ciudadanos"}
         </h2>
 
-        {/* Área de tabla con scroll propio */}
         <div className="overflow-auto flex-1 min-h-0 -mx-4 md:mx-0 px-4 md:px-0">
           <table className="min-w-full border-collapse text-left">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">
                 <th className="pl-3 md:pl-4 pr-1 md:pr-2 py-2 w-[12%] md:w-[15%]">ID</th>
                 <th className="py-2 w-[28%] md:w-[30%]">Ciudadano</th>
-                <th className="px-1 md:px-2 py-2 w-[20%]">Coordenadas</th>
+                <th className="px-1 md:px-2 py-2 w-[20%]">Ubicación</th>
                 <th className="py-2 w-[18%] md:w-[15%]">Fecha y Hora</th>
                 <th className="py-2 w-[12%] md:w-[15%]">Estado</th>
                 <th className="px-3 md:px-4 py-2 w-[10%]">Acciones</th>
-               </tr>
+              </tr>
             </thead>
             <tbody>
               {dataActual.map((item) => (
                 <tr
                   key={item.id}
                   id={`fila-${item.id}`}
-                  className={`bg-white group transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 border-b border-gray-100 ${
-                    filaResaltada === item.id ? "ring-2 bg-slate-50" : ""
-                  }`}
+                  className={`bg-white group transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 border-b border-gray-100 ${filaResaltada === item.id ? "ring-2 bg-slate-50" : ""}`}
                 >
                   <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-5 md:py-6 text-[11px] font-bold text-slate-400 uppercase align-middle">
-                    {item.id}
+                    {item.codigo || item.id}
                   </td>
                   <td className="py-5 md:py-6 align-middle">
                     <div className="flex items-center gap-2 md:gap-3">
@@ -278,13 +241,13 @@ function GestionAlertas() {
                           {item.ciudadano}
                         </span>
                         <span className="mt-0.5 text-[8px] text-gray-400 font-semibold uppercase tracking-wider">
-                          Usuario Verificado
+                          {item.prioridad} prioridad
                         </span>
                       </div>
                     </div>
                   </td>
                   <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle">
-                    <div className="px-1 md:px-2 flex items-center gap-1">
+                    <div className="px-1 md:px-2">
                       <span className="truncate block max-w-[100px] md:max-w-none">{item.ubicacion}</span>
                     </div>
                   </td>
@@ -292,11 +255,7 @@ function GestionAlertas() {
                     {item.fecha} {item.hora}
                   </td>
                   <td className="py-5 md:py-6 align-middle">
-                    <span
-                      className={`inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-extrabold text-white tracking-wide ${
-                        item.estado.toUpperCase() === "EMERGENCIA" ? "bg-red-600" : "bg-[#EBB615]"
-                      }`}
-                    >
+                    <span className={`inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-extrabold text-white tracking-wide ${item.estado.toUpperCase() === "EMERGENCIA" ? "bg-red-600" : "bg-[#EBB615]"}`}>
                       {item.estado.toUpperCase()}
                     </span>
                   </td>
@@ -310,12 +269,19 @@ function GestionAlertas() {
                   </td>
                 </tr>
               ))}
+              {dataActual.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="text-center py-12 text-gray-400 font-medium">
+                    No hay alertas en esta bandeja
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* MODAL CONDICIONAL SEGÚN TIPO DE ALERTA */}
+      {/* MODAL */}
       {mostrarModal && alertaSeleccionada && (
         tabActiva === "emergencia" ? (
           <DetalleEmergencia
