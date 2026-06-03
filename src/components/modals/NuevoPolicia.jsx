@@ -1,12 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   FaTimes,
-  FaUser,
-  FaIdCard,
-  FaPhone,
-  FaBriefcase,
-  FaUserTag,
-  FaLock
+  FaEye,
+  FaEyeSlash
 } from "react-icons/fa";
 import { supabase } from "../../services/supabase";
 
@@ -17,18 +13,29 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
     ci:               "",
     celular:          "",
     cargo:            "",
-    rol:              "Operador",
+    rol:              "",
     numero_escalafon: "",
-    contrasena:       ""
+    contrasena:       "",
+    acceso:           ""        // ← Control de acceso (columna "acceso" en Supabase)
   });
 
-  const [guardando, setGuardando]               = useState(false);
-  const [usuarioWarning, setUsuarioWarning]     = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [nombreWarning, setNombreWarning] = useState(false);
+  const [nombreWarningMsg, setNombreWarningMsg] = useState("");
+  const [ciWarning, setCiWarning] = useState(false);
+  const [ciWarningMsg, setCiWarningMsg] = useState("");
+  const [celularWarning, setCelularWarning] = useState(false);
+  const [celularWarningMsg, setCelularWarningMsg] = useState("");
+  const [usuarioWarning, setUsuarioWarning] = useState(false);
   const [usuarioWarningMsg, setUsuarioWarningMsg] = useState("");
-  const [passwordWarning, setPasswordWarning]   = useState(false);
+  const [passwordWarning, setPasswordWarning] = useState(false);
   const [passwordWarningMsg, setPasswordWarningMsg] = useState("");
 
-  const usuarioTimeout  = useRef(null);
+  const nombreTimeout = useRef(null);
+  const ciTimeout = useRef(null);
+  const celularTimeout = useRef(null);
+  const usuarioTimeout = useRef(null);
   const passwordTimeout = useRef(null);
 
   useEffect(() => {
@@ -38,26 +45,77 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
         ci:               editandoPolicia.ci               || "",
         celular:          editandoPolicia.celular          || "",
         cargo:            editandoPolicia.cargo            || "",
-        rol:              editandoPolicia.rol              || "Operador",
+        rol:              editandoPolicia.rol              || "",
         numero_escalafon: editandoPolicia.numero_escalafon || "",
-        contrasena:       ""
+        contrasena:       "",   // No cargar la contraseña por seguridad
+        acceso:           editandoPolicia.acceso           || ""  // ← Columna "acceso" en Supabase
       });
     } else {
       setFormData({
         nombre_completo: "", ci: "", celular: "", cargo: "",
-        rol: "Operador", numero_escalafon: "", contrasena: ""
+        rol: "", numero_escalafon: "", contrasena: "",
+        acceso: ""
       });
     }
+    setNombreWarning(false);
+    setCiWarning(false);
+    setCelularWarning(false);
     setUsuarioWarning(false);
     setPasswordWarning(false);
+    setShowPassword(false);
   }, [editandoPolicia, isOpen]);
 
-  // VALIDACIÓN ESCALAFÓN — solo números
-  const handleEscalafonChange = (e) => {
-    const raw     = e.target.value;
+  const handleNombreChange = (e) => {
+    const raw = e.target.value;
+    const cleaned = raw.replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g, "");
+    if (raw !== cleaned && raw.trim() !== "") {
+      setNombreWarningMsg("* Solo letras y espacios.");
+      setNombreWarning(true);
+      if (nombreTimeout.current) clearTimeout(nombreTimeout.current);
+      nombreTimeout.current = setTimeout(() => {
+        setNombreWarning(false);
+        setNombreWarningMsg("");
+      }, 1500);
+    }
+    setFormData({ ...formData, nombre_completo: cleaned });
+  };
+
+  const handleCiChange = (e) => {
+    const raw = e.target.value;
+    const cleaned = raw.replace(/[^A-Z0-9\-]/g, "");
+    if (raw !== cleaned && raw.trim() !== "") {
+      setCiWarningMsg("* Solo números, guiones y letras mayúsculas.");
+      setCiWarning(true);
+      if (ciTimeout.current) clearTimeout(ciTimeout.current);
+      ciTimeout.current = setTimeout(() => {
+        setCiWarning(false);
+        setCiWarningMsg("");
+      }, 1500);
+    }
+    setFormData({ ...formData, ci: cleaned });
+  };
+
+  const handleCelularChange = (e) => {
+    const raw = e.target.value;
     const cleaned = raw.replace(/[^0-9]/g, "");
     if (raw !== cleaned && raw.trim() !== "") {
-      setUsuarioWarningMsg("* Solo se permiten números.");
+      setCelularWarningMsg("* Solo números.");
+      setCelularWarning(true);
+      if (celularTimeout.current) clearTimeout(celularTimeout.current);
+      celularTimeout.current = setTimeout(() => {
+        setCelularWarning(false);
+        setCelularWarningMsg("");
+      }, 1500);
+    }
+    setFormData({ ...formData, celular: cleaned });
+  };
+
+  const handleEscalafonChange = (e) => {
+    const raw = e.target.value;
+    let cleaned = raw.replace(/[^a-zA-Z0-9]/g, "");
+    cleaned = cleaned.toUpperCase();
+    if (raw !== cleaned && raw.trim() !== "") {
+      setUsuarioWarningMsg("* Solo mayúsculas y números (sin guiones, ni símbolos).");
       setUsuarioWarning(true);
       if (usuarioTimeout.current) clearTimeout(usuarioTimeout.current);
       usuarioTimeout.current = setTimeout(() => {
@@ -68,88 +126,98 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
     setFormData({ ...formData, numero_escalafon: cleaned });
   };
 
-  // VALIDACIÓN CONTRASEÑA — letras minúsculas y números
   const handlePasswordChange = (e) => {
-    const raw     = e.target.value;
-    const cleaned = raw.replace(/[^a-z0-9]/g, "");
-    if (raw !== cleaned && raw.trim() !== "") {
-      setPasswordWarningMsg("* Solo letras minúsculas y números.");
-      setPasswordWarning(true);
-      if (passwordTimeout.current) clearTimeout(passwordTimeout.current);
-      passwordTimeout.current = setTimeout(() => {
-        setPasswordWarning(false);
-        setPasswordWarningMsg("");
-      }, 1500);
-    }
-    setFormData({ ...formData, contrasena: cleaned });
+    const raw = e.target.value;
+    setFormData({ ...formData, contrasena: raw });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!formData.nombre_completo.trim()) {
+      alert("El nombre completo es obligatorio");
+      return;
+    }
+    if (!formData.ci.trim()) {
+      alert("La cédula es obligatoria");
+      return;
+    }
+    if (!formData.celular.trim()) {
+      alert("El celular es obligatorio");
+      return;
+    }
+    if (!formData.cargo) {
+      alert("Debe seleccionar un rango");
+      return;
+    }
+    if (!formData.rol) {
+      alert("Debe seleccionar un rol");
+      return;
+    }
     if (!formData.numero_escalafon) {
-      alert("El número de escalafón es obligatorio");
+      alert("El usuario (número de escalafón) es obligatorio");
       return;
     }
     if (!editandoPolicia && !formData.contrasena) {
       alert("La contraseña es obligatoria para nuevos oficiales");
       return;
     }
+    if (!formData.acceso) {
+      alert("Debe seleccionar el control de acceso (EN SERVICIO / FUERA DE SERVICIO / DE BAJA)");
+      return;
+    }
 
     setGuardando(true);
 
-    if (editandoPolicia) {
-
-      const cambios = {
-        nombre_completo:  formData.nombre_completo,
-        ci:               formData.ci,
-        celular:          formData.celular,
-        cargo:            formData.cargo,
-        rol:              formData.rol,
-        numero_escalafon: formData.numero_escalafon,
-        ...(formData.contrasena ? { contrasena: formData.contrasena } : {})
-      };
-
-      const { error } = await supabase
-        .from("oficial")
-        .update(cambios)
-        .eq("id_oficial", editandoPolicia.id_oficial);
-
-      if (error) {
-        console.error("Error al actualizar:", error);
-        alert("No se pudo actualizar el oficial");
-        setGuardando(false);
-        return;
-      }
-
-    } else {
-
-      const { error } = await supabase
-        .from("oficial")
-        .insert([{
-          nombre_completo:  formData.nombre_completo,
-          ci:               formData.ci,
-          celular:          formData.celular,
-          cargo:            formData.cargo,
-          rol:              formData.rol,
-          numero_escalafon: formData.numero_escalafon,
-          contrasena:       formData.contrasena,
-          estado:           "EN SERVICIO"
-        }]);
-        
-
-      if (error) {
-        console.error("Error al insertar:", error);
-        alert("No se pudo guardar el oficial");
-        setGuardando(false);
-        return;
-      }
-
+    const datos = {
+      nombre_completo:  formData.nombre_completo,
+      ci:               formData.ci,
+      celular:          formData.celular,
+      cargo:            formData.cargo,
+      rol:              formData.rol,
+      numero_escalafon: formData.numero_escalafon,
+      acceso:           formData.acceso,   // ← Columna "acceso" en Supabase
+    };
+    // Solo incluir contraseña si se escribió algo (nuevo o cambio)
+    if (formData.contrasena && formData.contrasena.trim() !== "") {
+      datos.contrasena = formData.contrasena;
+    } else if (!editandoPolicia) {
+      alert("La contraseña es obligatoria");
+      setGuardando(false);
+      return;
     }
 
-    setGuardando(false);
-    onGuardado(); // refresca la lista en Usuarios.jsx
-    onClose();
+    try {
+      if (editandoPolicia) {
+        const { error } = await supabase
+          .from("oficial")
+          .update(datos)
+          .eq("id_oficial", editandoPolicia.id_oficial);
+        if (error) {
+          console.error("Error al actualizar:", error);
+          alert(`No se pudo actualizar: ${error.message}`);
+          setGuardando(false);
+          return;
+        }
+      } else {
+        const { error } = await supabase
+          .from("oficial")
+          .insert([datos]);
+        if (error) {
+          console.error("Error al insertar:", error);
+          alert(`No se pudo guardar: ${error.message}`);
+          setGuardando(false);
+          return;
+        }
+      }
+      setGuardando(false);
+      onGuardado();
+      onClose();
+    } catch (err) {
+      console.error("Error inesperado:", err);
+      alert("Ocurrió un error inesperado");
+      setGuardando(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -157,100 +225,121 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
-
-        {/* HEADER */}
         <div className="bg-green-800 p-4 flex justify-between items-center text-white">
           <h3 className="text-lg font-black uppercase tracking-tight">
             {editandoPolicia ? "Editar Oficial" : "Nuevo Oficial"}
           </h3>
-          <button
-            onClick={onClose}
-            className="p-1.5 bg-green-700 hover:bg-red-500 rounded-lg transition-all"
-          >
+          <button onClick={onClose} className="p-1.5 bg-green-700 hover:bg-red-500 rounded-lg transition-all">
             <FaTimes size={14} />
           </button>
         </div>
 
         <form className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleSubmit}>
-
-          {/* NOMBRE */}
+          {/* Nombre */}
           <div className="col-span-2 space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 ml-1 flex items-center gap-1">
-              <FaUser size={10} /> Nombre Completo
+            <label className="text-[9px] font-black uppercase text-slate-400 ml-1">
+              Nombre Completo
             </label>
             <input
               type="text"
               required
               className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
               value={formData.nombre_completo}
-              onChange={(e) => setFormData({ ...formData, nombre_completo: e.target.value })}
+              onChange={handleNombreChange}
             />
+            <div className={`overflow-hidden transition-all duration-500 ${nombreWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
+              <p className="text-[8px] text-red-500 font-medium">{nombreWarningMsg}</p>
+            </div>
           </div>
 
-          {/* CI */}
+          {/* Cédula */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1 flex items-center gap-1">
-              <FaIdCard size={10} /> Cédula
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
+              Cédula
             </label>
             <input
               type="text"
               required
               className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
               value={formData.ci}
-              onChange={(e) => setFormData({ ...formData, ci: e.target.value })}
+              onChange={handleCiChange}
             />
+            <div className={`overflow-hidden transition-all duration-500 ${ciWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
+              <p className="text-[8px] text-red-500 font-medium">{ciWarningMsg}</p>
+            </div>
           </div>
 
-          {/* CELULAR */}
+          {/* Celular */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1 flex items-center gap-1">
-              <FaPhone size={10} /> Celular
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
+              Celular
             </label>
             <input
               type="tel"
               required
               className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
               value={formData.celular}
-              onChange={(e) => setFormData({ ...formData, celular: e.target.value })}
+              onChange={handleCelularChange}
             />
+            <div className={`overflow-hidden transition-all duration-500 ${celularWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
+              <p className="text-[8px] text-red-500 font-medium">{celularWarningMsg}</p>
+            </div>
           </div>
 
-          {/* CARGO */}
+          {/* Rango */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1 flex items-center gap-1">
-              <FaBriefcase size={10} /> Cargo
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
+              Rango
             </label>
-            <input
-              type="text"
+            <select
               required
               className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
               value={formData.cargo}
               onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
-            />
+            >
+              <option value="">Seleccionar rango</option>
+              <option value="General">General</option>
+              <option value="Coronel">Coronel</option>
+              <option value="Teniente Coronel">Teniente Coronel</option>
+              <option value="Mayor">Mayor</option>
+              <option value="Capitán">Capitán</option>
+              <option value="Teniente">Teniente</option>
+              <option value="Subteniente">Subteniente</option>
+              <option value="Cadete">Cadete</option>
+              <option value="Suboficial">Suboficial</option>
+            </select>
           </div>
 
-          {/* ROL */}
+          {/* Rol */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1 flex items-center gap-1">
-              <FaUserTag size={10} /> Rol
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
+              Rol
             </label>
             <select
+              required
               className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
               value={formData.rol}
               onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
             >
-              <option value="Administrador">Administrador</option>
+              <option value="">Seleccionar Rol</option>
               <option value="Operador">Operador</option>
-              <option value="Supervisor">Supervisor</option>
               <option value="Despachador">Despachador</option>
               <option value="Tabulador">Tabulador</option>
+              <option value="Patrullero">Patrullero</option>
             </select>
           </div>
 
-          {/* ESCALAFÓN */}
+          {/* SECCIÓN CREDENCIALES */}
+          <div className="col-span-2 mt-2 pt-2 border-t border-gray-200">
+            <h4 className="text-xs font-black uppercase text-gray-700">
+              Credenciales a Asignar
+            </h4>
+          </div>
+
+          {/* Usuario */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1 flex items-center gap-1">
-              <FaUser size={10} /> Número de Escalafón
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
+              Usuario
             </label>
             <input
               type="text"
@@ -258,49 +347,74 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
               className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
               value={formData.numero_escalafon}
               onChange={handleEscalafonChange}
-              placeholder="Solo números"
+              placeholder="Solo mayúsculas y números"
             />
             <div className={`overflow-hidden transition-all duration-500 ${usuarioWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
               <p className="text-[8px] text-red-500 font-medium">{usuarioWarningMsg}</p>
             </div>
           </div>
 
-          {/* CONTRASEÑA */}
+          {/* Contraseña con visibilidad (ojo) */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1 flex items-center gap-1">
-              <FaLock size={10} /> Contraseña
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
+              Contraseña
             </label>
-            <input
-              type="password"
-              required={!editandoPolicia}
-              className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
-              value={formData.contrasena}
-              onChange={handlePasswordChange}
-              placeholder={editandoPolicia ? "Dejar en blanco para no cambiar" : "Mínimo 4 caracteres"}
-            />
-            <div className={`overflow-hidden transition-all duration-500 ${passwordWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
-              <p className="text-[8px] text-red-500 font-medium">{passwordWarningMsg}</p>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                required={!editandoPolicia}
+                className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none pr-8"
+                value={formData.contrasena}
+                onChange={handlePasswordChange}
+                placeholder={editandoPolicia ? "Nueva contraseña (dejar vacío si no se cambia)" : "Mínimo 4 caracteres"}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
+              </button>
             </div>
+            {editandoPolicia && (
+              <p className="text-[8px] text-gray-400 ml-1">
+                Si no escribe una nueva contraseña, se conservará la actual.
+              </p>
+            )}
           </div>
 
-          {/* BOTONES */}
-          <div className="col-span-2 pt-3 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2 font-black uppercase text-[9px] text-slate-400 hover:bg-slate-50 rounded-lg transition-all"
+          {/* Control de Acceso con tres opciones */}
+          <div className="space-y-1">
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
+              Control de Acceso
+            </label>
+            <select
+              required
+              className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
+              value={formData.acceso}
+              onChange={(e) => setFormData({ ...formData, acceso: e.target.value })}
             >
+              <option value="">Seleccionar Acceso</option>
+              <option value="EN SERVICIO">EN SERVICIO</option>
+              <option value="FUERA DE SERVICIO">FUERA DE SERVICIO</option>
+              <option value="DE BAJA">DE BAJA</option>
+            </select>
+            <p className="text-[8px] text-gray-400 ml-1">
+              {formData.acceso === "EN SERVICIO" && "El oficial podrá acceder al sistema según su rol."}
+              {formData.acceso === "FUERA DE SERVICIO" && "Acceso bloqueado temporalmente."}
+              {formData.acceso === "DE BAJA" && "Oficial dado de baja. No podrá iniciar sesión."}
+            </p>
+          </div>
+
+          {/* Botones */}
+          <div className="col-span-2 pt-3 flex gap-3">
+            <button type="button" onClick={onClose} className="flex-1 py-2 font-black uppercase text-[9px] text-slate-400 hover:bg-slate-50 rounded-lg transition-all">
               Cancelar
             </button>
-            <button
-              type="submit"
-              disabled={guardando}
-              className="flex-[2] py-2 bg-green-800 text-white rounded-xl font-black uppercase text-[9px] shadow hover:bg-green-900 transition-all disabled:opacity-60"
-            >
+            <button type="submit" disabled={guardando} className="flex-[2] py-2 bg-green-800 text-white rounded-xl font-black uppercase text-[9px] shadow hover:bg-green-900 transition-all disabled:opacity-60">
               {guardando ? "GUARDANDO..." : editandoPolicia ? "ACTUALIZAR" : "GUARDAR"}
             </button>
           </div>
-
         </form>
       </div>
     </div>

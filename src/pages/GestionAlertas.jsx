@@ -68,6 +68,8 @@ function GestionAlertas() {
             nombre_completo
           )
         `)
+        // SOLO ALERTAS EN ESTADO VERIFICACIÓN (1)
+        .eq("id_estado_actual", 1)
         .order("fecha_hora", { ascending: false });
 
       if (error) throw error;
@@ -98,7 +100,7 @@ function GestionAlertas() {
       .channel("alertas-realtime")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "alerta" },
+        { event: "*", schema: "public", table: "alerta" },
         () => { cargarAlertas(); }
       )
       .subscribe();
@@ -121,7 +123,18 @@ function GestionAlertas() {
     }
   }, [location.state]);
 
-  const manejarDesestimar = (idAlerta, motivo) => {
+  // DESESTIMAR → cambia estado a 4 en Supabase
+  const manejarDesestimar = async (idAlerta, motivo) => {
+    const { error } = await supabase
+      .from("alerta")
+      .update({ id_estado_actual: 4 })
+      .eq("id_alerta", idAlerta);
+
+    if (error) {
+      console.error("Error al desestimar:", error);
+      return;
+    }
+
     const listaOrigen = tabActiva === "emergencia" ? alertasPanico : alertasCiudadanas;
     const alertaEncontrada = listaOrigen.find((a) => a.id === idAlerta);
     if (alertaEncontrada) {
@@ -140,13 +153,23 @@ function GestionAlertas() {
     cerrarModal();
   };
 
-  const manejarTransferencia = (idAlerta) => {
+  const manejarTransferencia = async (idAlerta) => {
+    const { error } = await supabase
+      .from("alerta")
+      .update({ id_estado_actual: 2 })
+      .eq("id_alerta", idAlerta);
+
+    if (error) {
+      console.error("Error al enviar a despacho:", error);
+      return;
+    }
+
     if (tabActiva === "emergencia") {
       setAlertasPanico(alertasPanico.filter((a) => a.id !== idAlerta));
-      alert("Alerta de pánico transferida a Centro de Despacho");
     } else {
       setAlertasCiudadanas(alertasCiudadanas.filter((a) => a.id !== idAlerta));
     }
+
     cerrarModal();
   };
 

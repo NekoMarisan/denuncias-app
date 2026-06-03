@@ -6,6 +6,7 @@ import {
   FaUserShield,
   FaExclamationCircle,
   FaChevronRight,
+  FaSyncAlt,
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 import {
@@ -17,13 +18,18 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-
 import { supabase } from '../services/supabase';
 
 function Dashboard() {
   const navigate = useNavigate();
 
+  const [alertasPanico, setAlertasPanico] = useState([]);
+  const [alertasCiudadanas, setAlertasCiudadanas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
+
   const dividirNombre = (nombreCompleto) => {
+    if (!nombreCompleto) return { nombres: "Usuario", apellidos: "" };
     const partes = nombreCompleto.trim().split(/\s+/);
     if (partes.length === 1) return { nombres: partes[0], apellidos: "" };
     if (partes.length === 2) return { nombres: partes[0], apellidos: partes[1] };
@@ -32,193 +38,169 @@ function Dashboard() {
     return { nombres, apellidos };
   };
 
-  const [stats] = useState({
-    totalAlertas: 24,
-    resueltas: 42,
-    patrullas: 18,
-    oficiales: 42,
-  });
-
-  const [dataGrafica] = useState(() => {
-    const diasSemana = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-    const dataTemporal = [];
-    const hoy = new Date();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date();
-      d.setDate(hoy.getDate() + i);
-      dataTemporal.push({
-        name: diasSemana[d.getDay()],
-        denuncias: Math.floor(Math.random() * 40) + 10,
-        alertas: Math.floor(Math.random() * 25) + 5,
-      });
-    }
-    return dataTemporal;
-  });
-
-  const [alertasPanico, setAlertasPanico] = useState([]);
-  const [alertasCiudadanas, setAlertasCiudadanas] = useState([]);
-
-  const cargarAlertasRecientes = async () => {
+  const cargarAlertas = async () => {
     try {
-      const { data: emergencias, error: errEmer } = await supabase
-        .from("alerta")
-        .select("*")
-        .eq("categoria", "Panico")
-        .order("fecha_hora", { ascending: false })
-        .limit(3);
+      setCargando(true);
+      setError(null);
 
-      if (!errEmer) {
-        const mappedEmer = (emergencias || []).map(item => ({
-          id: item.id_alerta,
-          ciudadano: item.nombre_ciudadano || (item.id_usuario ? `Usuario #${item.id_usuario}` : "Anónimo"),
-          estado: "Emergencia",
-        }));
-        setAlertasPanico(mappedEmer);
+      // Consulta usando la relación con usuario_ciudadano (sin campos inexistentes)
+      const { data, error: fetchError } = await supabase
+        .from("alerta")
+        .select(`
+          id_alerta,
+          id_usuario,
+          fecha_hora,
+          categoria,
+          usuario_ciudadano (
+            nombre_completo
+          )
+        `)
+        .order("fecha_hora", { ascending: false });
+
+      if (fetchError) throw new Error(`Error al cargar alertas: ${fetchError.message}`);
+
+      if (!data || data.length === 0) {
+        setAlertasPanico([]);
+        setAlertasCiudadanas([]);
+        setError("No hay alertas registradas.");
+        return;
       }
 
-      const { data: ciudadanas, error: errCiud } = await supabase
-        .from("alerta")
-        .select("*")
-        .eq("categoria", "Alerta Ciudadana")
-        .order("fecha_hora", { ascending: false })
-        .limit(3);
+      let panico = [];
+      let ciudadanas = [];
 
-      if (!errCiud) {
-        const mappedCiud = (ciudadanas || []).map(item => ({
+      data.forEach(item => {
+        let nombreCiudadano = "Anónimo";
+        if (item.usuario_ciudadano && item.usuario_ciudadano.nombre_completo) {
+          nombreCiudadano = item.usuario_ciudadano.nombre_completo;
+        } else if (item.id_usuario) {
+          nombreCiudadano = `Usuario #${item.id_usuario}`;
+        }
+
+        const alertaBase = {
           id: item.id_alerta,
-          ciudadano: item.nombre_ciudadano || (item.id_usuario ? `Usuario #${item.id_usuario}` : "Anónimo"),
-          estado: "Verificación",
-        }));
-        setAlertasCiudadanas(mappedCiud);
+          ciudadano: nombreCiudadano,
+          fecha_hora: item.fecha_hora,
+        };
+
+        if (item.categoria === "Panico") {
+          panico.push({ ...alertaBase, estado: "Emergencia" });
+        } else if (item.categoria === "Alerta Ciudadana") {
+          ciudadanas.push({ ...alertaBase, estado: "Verificación" });
+        }
+      });
+
+      // Ordenar por fecha descendente
+      panico.sort((a, b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+      ciudadanas.sort((a, b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+
+      // Tomar solo las 3 más recientes
+      setAlertasPanico(panico.slice(0, 3));
+      setAlertasCiudadanas(ciudadanas.slice(0, 3));
+
+      if (panico.length === 0 && ciudadanas.length === 0) {
+        setError("No hay alertas con las categorías 'Panico' o 'Alerta Ciudadana'.");
       }
-    } catch (error) {
-      console.error("Error cargando alertas:", error);
+    } catch (err) {
+      console.error("❌ Error cargando alertas:", err);
+      setError(err.message);
+    } finally {
+      setCargando(false);
     }
   };
 
   useEffect(() => {
-    cargarAlertasRecientes();
+    cargarAlertas();
 
-    const canal = supabase
-      .channel("dashboard-realtime")
+    const channel = supabase
+      .channel("dashboard-cambios")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "alerta" },
-        () => cargarAlertasRecientes()
+        () => cargarAlertas()
       )
       .subscribe();
 
-    return () => supabase.removeChannel(canal);
+    return () => supabase.removeChannel(channel);
   }, []);
 
-  const statCards = [
-    {
-      label: "Alertas de Emergencia",
-      value: stats.totalAlertas,
-      icon: FaExclamationCircle,
-      bgColor: "bg-red-50",
-      borderColor: "border-[#C90A0A]",
-      textColor: "text-[#C90A0A]",
-      dotColor: "bg-[#C90A0A]",
-      description: "ATENCIÓN INMEDIATA",
-    },
-    {
-      label: "Alertas Ciudadanas",
-      value: stats.resueltas,
-      icon: FaUserShield,
-      bgColor: "bg-blue-50",
-      borderColor: "border-[#0C3DC2]",
-      textColor: "text-[#0C3DC2]",
-      dotColor: "bg-[#0C3DC2]",
-      description: "EN VERIFICACIÓN",
-    },
-    {
-      label: "Patrullas Activas",
-      value: stats.patrullas,
-      icon: FaCarSide,
-      bgColor: "bg-yellow-50",
-      borderColor: "border-[#EBB615]",
-      textColor: "text-[#EBB615]",
-      dotColor: "bg-[#EBB615]",
-      description: "DESPLEGADAS",
-    },
-    {
-      label: "Oficiales de Turno",
-      value: stats.oficiales,
-      icon: FaFileAlt,
-      bgColor: "bg-green-50",
-      borderColor: "border-[#088226]",
-      textColor: "text-[#088226]",
-      dotColor: "bg-[#088226]",
-      description: "PERSONAL ACTIVO",
-    },
+  // Datos estáticos de ejemplo para la gráfica (puedes cambiarlos)
+  const dataGrafica = [
+    { name: "Dom", denuncias: 30, alertas: 15 },
+    { name: "Lun", denuncias: 45, alertas: 22 },
+    { name: "Mar", denuncias: 38, alertas: 18 },
+    { name: "Mié", denuncias: 52, alertas: 30 },
+    { name: "Jue", denuncias: 48, alertas: 25 },
+    { name: "Vie", denuncias: 60, alertas: 35 },
+    { name: "Sáb", denuncias: 42, alertas: 20 },
   ];
+
+  const statCards = [
+    { label: "Alertas de Emergencia", value: alertasPanico.length, icon: FaExclamationCircle, bgColor: "bg-red-50", borderColor: "border-[#C90A0A]", textColor: "text-[#C90A0A]", dotColor: "bg-[#C90A0A]", description: "ATENCIÓN INMEDIATA" },
+    { label: "Alertas Ciudadanas", value: alertasCiudadanas.length, icon: FaUserShield, bgColor: "bg-blue-50", borderColor: "border-[#0C3DC2]", textColor: "text-[#0C3DC2]", dotColor: "bg-[#0C3DC2]", description: "EN VERIFICACIÓN" },
+    { label: "Patrullas Activas", value: 18, icon: FaCarSide, bgColor: "bg-yellow-50", borderColor: "border-[#EBB615]", textColor: "text-[#EBB615]", dotColor: "bg-[#EBB615]", description: "DESPLEGADAS" },
+    { label: "Oficiales de Turno", value: 42, icon: FaFileAlt, bgColor: "bg-green-50", borderColor: "border-[#088226]", textColor: "text-[#088226]", dotColor: "bg-[#088226]", description: "PERSONAL ACTIVO" },
+  ];
+
+  if (cargando) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="text-[#113e27] font-bold text-lg animate-pulse">Cargando dashboard...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="-mt-1 space-y-6 animate-fadeIn p-2">
-      {/* TARJETAS */}
+      {error && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-md shadow-sm">
+          <p className="text-yellow-700 text-sm font-medium">{error}</p>
+          <button onClick={cargarAlertas} className="mt-2 text-xs bg-yellow-200 px-3 py-1 rounded-md flex items-center gap-1">
+            <FaSyncAlt size={10} /> Reintentar
+          </button>
+        </div>
+      )}
+
+      {/* Tarjetas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-7">
         {statCards.map((card, idx) => (
-          <motion.div
-            key={idx}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
-            className={`bg-white p-3 shadow-md border-l-8 rounded-xl ${card.borderColor} hover:shadow-lg hover:scale-105 transition-all duration-300 z-10 hover:z-20`}
-          >
+          <motion.div key={idx} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }}
+            className={`bg-white p-3 shadow-md border-l-8 rounded-xl ${card.borderColor} hover:shadow-lg hover:scale-105 transition-all duration-300`}>
             <div className="flex justify-between items-center">
               <div>
-                <p className={`ml-2 font-extrabold text-[11px] uppercase tracking-wider ${card.textColor} mb-0.5`}>
-                  {card.label}
-                </p>
+                <p className={`ml-2 font-extrabold text-[11px] uppercase tracking-wider ${card.textColor} mb-0.5`}>{card.label}</p>
                 <p className="ml-2 mt-1 text-2xl font-black text-slate-900">{card.value}</p>
                 <div className="ml-2 mt-3 flex items-center gap-1.5">
                   <span className={`inline-block w-1.5 h-1.5 rounded-full animate-pulse ${card.dotColor}`}></span>
                   <p className="ml-1 text-[9px] text-slate-400 font-bold uppercase tracking-wider">{card.description}</p>
                 </div>
               </div>
-              <div className={`${card.bgColor} mr-3 p-2 rounded-full flex items-center justify-center`}>
-                <span className={card.textColor}><card.icon size={18} /></span>
-              </div>
+              <div className={`${card.bgColor} mr-3 p-2 rounded-full`}><card.icon size={18} className={card.textColor} /></div>
             </div>
           </motion.div>
         ))}
       </div>
 
-      {/* GRÁFICA */}
+      {/* Gráfica */}
       <div className="p-6 relative top-2 bg-white rounded-2xl shadow-md">
-        <div className="px-2 py-1 flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
-          <h2 className="text-xl font-extrabold text-[#1e293b] uppercase tracking-wide flex items-center gap-2">
-            Gráfica de actividad
-          </h2>
+        <div className="px-2 py-1 flex justify-between items-center mb-2 flex-wrap gap-2">
+          <h2 className="text-xl font-extrabold text-[#1e293b] uppercase tracking-wide">Gráfica de actividad</h2>
           <div className="flex gap-3">
-            <div className="flex items-center gap-1.5 bg-red-50 px-2 py-1 rounded-md border border-red-100">
-              <div className="w-1.5 h-1.5 bg-[#C90A0A] rounded-full animate-pulse"></div>
-              <span className="text-[10px] font-bold text-[#C90A0A] uppercase">Emergencias</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
-              <div className="w-1.5 h-1.5 bg-[#0C3DC2] rounded-full animate-pulse"></div>
-              <span className="text-[10px] font-bold text-[#0C3DC2] uppercase">Ciudadanas</span>
-            </div>
+            <div className="flex items-center gap-1.5 bg-red-50 px-2 py-1 rounded-md"><div className="w-1.5 h-1.5 bg-[#C90A0A] rounded-full"></div><span className="text-[10px] font-bold">Emergencias</span></div>
+            <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded-md"><div className="w-1.5 h-1.5 bg-[#0C3DC2] rounded-full"></div><span className="text-[10px] font-bold">Ciudadanas</span></div>
           </div>
         </div>
-        <div className="p-3 h-[300px] w-full">
+        <div style={{ width: '100%', height: 300, minHeight: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={dataGrafica} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
               <defs>
-                <linearGradient id="colorDen" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
-                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorAlt" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#dc2626" stopOpacity={0.1} />
-                  <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
-                </linearGradient>
+                <linearGradient id="colorDen" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/><stop offset="95%" stopColor="#2563eb" stopOpacity={0}/></linearGradient>
+                <linearGradient id="colorAlt" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#dc2626" stopOpacity={0.1}/><stop offset="95%" stopColor="#dc2626" stopOpacity={0}/></linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: "bold" }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} width={40} tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: "bold" }} />
-              <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 5px 10px -3px rgba(0,0,0,0.1)", fontSize: "12px" }} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} width={40} tick={{ fill: "#94a3b8", fontSize: 11 }} />
+              <Tooltip contentStyle={{ borderRadius: "12px", border: "none" }} />
               <Area type="monotone" dataKey="denuncias" stroke="#2563eb" strokeWidth={2} fillOpacity={1} fill="url(#colorDen)" />
               <Area type="monotone" dataKey="alertas" stroke="#dc2626" strokeWidth={2} fillOpacity={1} fill="url(#colorAlt)" />
             </AreaChart>
@@ -226,105 +208,51 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* TABLAS CON SOLO ID, CIUDADANO, ESTADO */}
+      {/* Tablas */}
       <div className="relative top-4 grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Emergencias */}
         <div className="bg-white p-2 rounded-2xl shadow-md">
-          <div className="flex justify-between items-start px-6 py-5 flex-col md:flex-row md:items-center mb-2 gap-2">
-            <h2 className="text-xl font-extrabold uppercase tracking-wide text-[#1e293b] flex items-center gap-2">
-              Emergencias Recientes
-            </h2>
-            <button
-              onClick={() => navigate("/gestion-alertas", { state: { activeTab: "emergencia" } })}
-              className="text-[10px] font-extrabold text-slate-400 hover:text-slate-500 transition-colors flex items-center gap-1.5 uppercase tracking-wider"
-            >
-              Ver todo <FaChevronRight size={8} />
-            </button>
+          <div className="flex justify-between items-start px-6 py-5 flex-col md:flex-row md:items-center mb-2">
+            <h2 className="text-xl font-extrabold uppercase text-[#1e293b]">Emergencias Recientes</h2>
+            <button onClick={() => navigate("/gestion-alertas", { state: { activeTab: "emergencia" } })} className="text-[10px] font-extrabold text-slate-400 flex items-center gap-1.5 uppercase">Ver todo <FaChevronRight size={8} /></button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full border-separate border-spacing-y-3">
               <tbody>
-                {alertasPanico.map((item) => {
+                {alertasPanico.length > 0 ? alertasPanico.map(item => {
                   const { nombres, apellidos } = dividirNombre(item.ciudadano);
                   return (
-                    <tr key={item.id} className="bg-white group transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
-                      <td className="px-6 py-3 text-[12px] font-bold text-slate-400 border-y border-l rounded-l-xl border-gray-50 uppercase text-left align-top whitespace-nowrap w-[90px]">
-                        {item.id}
-                      </td>
-                      <td className="px-8 py-3 border-y border-gray-50 text-left justify-start align-top leading-tight w-[230px]">
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-8 rounded-md bg-blue-50 text-[#0C3DC2] flex items-center justify-center font-black text-sm shrink-0 shadow-inner">
-                            {item.ciudadano.charAt(0)}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium text-gray-700 leading-tight">
-                              {nombres} {apellidos}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-0 py-3 border-y border-gray-50 text-left align-top w-[110px]">
-                        <span className="inline-flex justify-start w-max px-3 py-1.5 rounded-lg text-[10px] font-bold text-white bg-[#C90A0A] shadow-sm uppercase tracking-wide">
-                          {item.estado}
-                        </span>
-                      </td>
+                    <tr key={item.id} className="bg-white hover:shadow-lg transition-all">
+                      <td className="px-6 py-3 text-xs font-bold text-slate-400 rounded-l-xl">{item.id}</td>
+                      <td className="px-8 py-3"><div className="flex items-center gap-3"><div className="w-6 h-8 bg-blue-50 text-[#0C3DC2] flex items-center justify-center font-black rounded-md">{item.ciudadano.charAt(0)}</div><span className="text-sm font-medium">{nombres} {apellidos}</span></div></td>
+                      <td className="px-0"><span className="inline-flex px-3 py-1.5 rounded-lg text-[10px] font-bold text-white bg-[#C90A0A] uppercase">{item.estado}</span></td>
                     </tr>
                   );
-                })}
-                {alertasPanico.length === 0 && (
-                  <tr><td colSpan="3" className="text-center py-6 text-slate-400 text-sm">No hay emergencias recientes</td></tr>
-                )}
+                }) : <tr><td colSpan="3" className="text-center py-6 text-slate-400 text-sm">No hay emergencias recientes</td></tr>}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Ciudadanas */}
+        {/* Alertas Ciudadanas */}
         <div className="bg-white p-2 rounded-2xl shadow-md">
-          <div className="flex justify-between items-start px-6 py-5 flex-col md:flex-row md:items-center mb-2 gap-2">
-            <h2 className="text-xl font-extrabold uppercase tracking-wide text-[#1e293b] flex items-center gap-2">
-              Alertas Recibidas
-            </h2>
-            <button
-              onClick={() => navigate("/gestion-alertas", { state: { activeTab: "ciudadana" } })}
-              className="text-[10px] font-extrabold text-slate-400 hover:text-slate-500 transition-colors flex items-center gap-1.5 uppercase tracking-wider"
-            >
-              Ver todo <FaChevronRight size={8} />
-            </button>
+          <div className="flex justify-between items-start px-6 py-5 flex-col md:flex-row md:items-center mb-2">
+            <h2 className="text-xl font-extrabold uppercase text-[#1e293b]">Alertas Recibidas</h2>
+            <button onClick={() => navigate("/gestion-alertas", { state: { activeTab: "ciudadana" } })} className="text-[10px] font-extrabold text-slate-400 flex items-center gap-1.5 uppercase">Ver todo <FaChevronRight size={8} /></button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full border-separate border-spacing-y-3">
               <tbody>
-                {alertasCiudadanas.map((item) => {
+                {alertasCiudadanas.length > 0 ? alertasCiudadanas.map(item => {
                   const { nombres, apellidos } = dividirNombre(item.ciudadano);
                   return (
-                    <tr key={item.id} className="bg-white group transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
-                      <td className="px-6 py-3 text-[12px] font-bold text-slate-400 border-y border-l rounded-l-xl border-gray-50 uppercase text-left align-top whitespace-nowrap w-[90px]">
-                        {item.id}
-                      </td>
-                      <td className="px-8 py-3 border-y border-gray-50 text-left justify-start align-top leading-tight w-[230px]">
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-8 rounded-md bg-blue-50 text-[#0C3DC2] flex items-center justify-center font-black text-sm shrink-0 shadow-inner">
-                            {item.ciudadano.charAt(0)}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium text-gray-700 leading-tight">
-                              {nombres} {apellidos}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-0 py-3 border-y border-gray-50 text-left align-top w-[110px]">
-                        <span className="inline-flex justify-start w-max px-3 py-1.5 rounded-lg text-[10px] font-bold text-white bg-[#EBB615] shadow-sm uppercase tracking-wide">
-                          {item.estado}
-                        </span>
-                      </td>
+                    <tr key={item.id} className="bg-white hover:shadow-lg transition-all">
+                      <td className="px-6 py-3 text-xs font-bold text-slate-400 rounded-l-xl">{item.id}</td>
+                      <td className="px-8 py-3"><div className="flex items-center gap-3"><div className="w-6 h-8 bg-blue-50 text-[#0C3DC2] flex items-center justify-center font-black rounded-md">{item.ciudadano.charAt(0)}</div><span className="text-sm font-medium">{nombres} {apellidos}</span></div></td>
+                      <td className="px-0"><span className="inline-flex px-3 py-1.5 rounded-lg text-[10px] font-bold text-white bg-[#EBB615] uppercase">{item.estado}</span></td>
                     </tr>
                   );
-                })}
-                {alertasCiudadanas.length === 0 && (
-                  <tr><td colSpan="3" className="text-center py-6 text-slate-400 text-sm">No hay alertas ciudadanas recientes</td></tr>
-                )}
+                }) : <tr><td colSpan="3" className="text-center py-6 text-slate-400 text-sm">No hay alertas ciudadanas recientes</td></tr>}
               </tbody>
             </table>
           </div>
