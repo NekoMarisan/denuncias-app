@@ -442,4 +442,4 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
   );
 };
 
-export default DetalleAlerta;git satus
+export default DetalleAlerta;
