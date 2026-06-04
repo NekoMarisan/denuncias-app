@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { FaShieldAlt, FaUser, FaLock, FaEye, FaEyeSlash } from "react-icons/fa";
-import { supabase } from '../services/supabase'
 
 function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user } = useAuth(); // 👈 obtenemos user para verificar sesión activa
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,12 +20,30 @@ function Login() {
   const passWarningTimeout = useRef(null);
   const errorTimeout = useRef(null);
 
+  // ✅ Si ya hay un usuario logueado, redirigir según su rol
+  useEffect(() => {
+    if (user) {
+      switch (user.rol) {
+        case "admin":
+        case "operador":
+          navigate("/dashboard");
+          break;
+        case "despachador":
+          navigate("/centro-despacho");
+          break;
+        case "tabulador":
+          navigate("/tabulacion");
+          break;
+        default:
+          navigate("/dashboard");
+      }
+    }
+  }, [user, navigate]);
+
   useEffect(() => {
     if (error) {
       if (errorTimeout.current) clearTimeout(errorTimeout.current);
-      errorTimeout.current = setTimeout(() => {
-        setError("");
-      }, 2000);
+      errorTimeout.current = setTimeout(() => setError(""), 2000);
       return () => clearTimeout(errorTimeout.current);
     }
   }, [error]);
@@ -39,16 +56,8 @@ function Login() {
     };
   }, []);
 
-  // Usuario: solo letras (mayúsc/minúsc) y números (SIN ESPACIOS)
   const validateAndCleanUsername = (value) => {
-    const cleaned = value.replace(/[^a-zA-Z0-9]/g, "");
-    const hasInvalid = value !== cleaned;
-    return { cleaned, hasInvalid };
-  };
-
-  // Contraseña: solo minúsculas y números (sin mayúsculas, espacios, símbolos)
-  const validateAndCleanPassword = (value) => {
-    const cleaned = value.replace(/[^a-z0-9]/g, "");
+    const cleaned = value.replace(/[^a-zA-Z0-9\-]/g, "");
     const hasInvalid = value !== cleaned;
     return { cleaned, hasInvalid };
   };
@@ -58,14 +67,11 @@ function Login() {
     const { cleaned, hasInvalid } = validateAndCleanUsername(rawValue);
 
     if (hasInvalid) {
-      // Determinar el mensaje según lo que se eliminó
       let msg = "";
-      // Detectar espacios
       if (rawValue.includes(" ")) {
         msg = "* No se permiten espacios.";
       } else {
-        // Si no hay espacios, son símbolos
-        msg = "* No se permiten símbolos.";
+        msg = "* Solo letras, números y guiones.";
       }
       setUserWarningMessage(msg);
       setShowUserWarning(true);
@@ -81,28 +87,7 @@ function Login() {
   };
 
   const handlePasswordChange = (e) => {
-    const rawValue = e.target.value;
-    const { cleaned, hasInvalid } = validateAndCleanPassword(rawValue);
-
-    if (hasInvalid) {
-      let msg = "";
-      // Detectar espacios
-      if (rawValue.includes(" ")) {
-        msg = "* No se permiten espacios.";
-      } else {
-        // Si no hay espacios, son mayúsculas o símbolos
-        msg = "* No se permiten mayúsculas ni símbolos.";
-      }
-      setPassWarningMessage(msg);
-      setShowPassWarning(true);
-      if (passWarningTimeout.current) clearTimeout(passWarningTimeout.current);
-      passWarningTimeout.current = setTimeout(() => {
-        setShowPassWarning(false);
-        setPassWarningMessage("");
-      }, 1500);
-    }
-
-    setPassword(cleaned);
+    setPassword(e.target.value);
     if (error) setError("");
   };
 
@@ -111,18 +96,31 @@ function Login() {
     setError("");
     setLoading(true);
 
-    const normalizedUser = username.toLowerCase();
-    const normalizedPass = password;
+    const escalafon = username.trim();
+    const pass = password;
 
-    setTimeout(() => {
-      const result = login(normalizedUser, normalizedPass);
-      if (result.success) {
-        navigate("/dashboard");
-      } else {
-        setError("ERROR DE ACCESO");
-      }
+    if (!escalafon || !pass) {
+      setError("Complete ambos campos");
       setLoading(false);
-    }, 800);
+      return;
+    }
+
+    try {
+      const result = await login(escalafon, pass);
+      if (result.success) {
+        // La redirección se hará automáticamente por el useEffect que observa `user`
+        // (ya que el contexto actualiza el estado y este componente se re-renderiza)
+        // No necesitamos navegar aquí, el useEffect lo hará.
+      } else {
+        // ✅ Mostrar el mensaje de error real devuelto por el contexto
+        setError(result.error || "Credenciales incorrectas");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("ERROR DE CONEXIÓN");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -167,7 +165,6 @@ function Login() {
           </h2>
 
           <form onSubmit={handleLogin} className="space-y-3">
-            {/* Campo Usuario */}
             <div>
               <label className="mt-3 block text-green-800 text-[11px] font-semibold mb-1.5">
                 <FaUser className="inline mr-1.5 text-xs" /> Usuario
@@ -193,7 +190,6 @@ function Login() {
               </div>
             </div>
 
-            {/* Campo Contraseña */}
             <div>
               <label className="mt-5 block text-green-800 text-[11px] font-semibold mb-1.5">
                 <FaLock className="inline mr-1.5 text-xs" /> Contraseña
@@ -215,18 +211,8 @@ function Login() {
                   {showPassword ? <FaEyeSlash /> : <FaEye size={14} />}
                 </button>
               </div>
-              <div
-                className={`overflow-hidden transition-all duration-500 ${
-                  showPassWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"
-                }`}
-              >
-                <p className="text-[9px] text-gray-400 font-medium mt-1 tracking-wide">
-                  {passWarningMessage}
-                </p>
-              </div>
             </div>
 
-            {/* Bloque de Error */}
             <div
               className={`overflow-hidden transition-all duration-500 ease-in-out ${
                 error ? "max-h-24 opacity-100 mt-2" : "max-h-0 opacity-0 mt-0"
@@ -236,13 +222,9 @@ function Login() {
                 <p className="text-red-600 font-extrabold text-[11px] uppercase tracking-wider">
                   {error}
                 </p>
-                <p className="text-red-600 text-[11px] font-semibold mt-0.5 tracking-wide">
-                  Usuario y contraseña incorrectos
-                </p>
               </div>
             </div>
 
-            {/* Botón de Ingreso */}
             <div className="mt-3">
               <button
                 type="submit"

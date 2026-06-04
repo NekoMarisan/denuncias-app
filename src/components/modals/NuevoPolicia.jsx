@@ -16,55 +16,32 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
     rol:              "",
     numero_escalafon: "",
     contrasena:       "",
-    acceso:           ""        // ← Control de acceso (columna "acceso" en Supabase)
+    acceso:           ""
   });
 
   const [guardando, setGuardando] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [disabledAccess, setDisabledAccess] = useState(false); // Estado para bloquear el select
+
+  // Estados de advertencia
   const [nombreWarning, setNombreWarning] = useState(false);
   const [nombreWarningMsg, setNombreWarningMsg] = useState("");
   const [ciWarning, setCiWarning] = useState(false);
   const [ciWarningMsg, setCiWarningMsg] = useState("");
   const [celularWarning, setCelularWarning] = useState(false);
   const [celularWarningMsg, setCelularWarningMsg] = useState("");
-  const [usuarioWarning, setUsuarioWarning] = useState(false);
-  const [usuarioWarningMsg, setUsuarioWarningMsg] = useState("");
+  const [escalafonWarning, setEscalafonWarning] = useState(false);
+  const [escalafonWarningMsg, setEscalafonWarningMsg] = useState("");
   const [passwordWarning, setPasswordWarning] = useState(false);
   const [passwordWarningMsg, setPasswordWarningMsg] = useState("");
 
   const nombreTimeout = useRef(null);
   const ciTimeout = useRef(null);
   const celularTimeout = useRef(null);
-  const usuarioTimeout = useRef(null);
+  const escalafonTimeout = useRef(null);
   const passwordTimeout = useRef(null);
 
-  useEffect(() => {
-    if (editandoPolicia) {
-      setFormData({
-        nombre_completo:  editandoPolicia.nombre_completo  || "",
-        ci:               editandoPolicia.ci               || "",
-        celular:          editandoPolicia.celular          || "",
-        cargo:            editandoPolicia.cargo            || "",
-        rol:              editandoPolicia.rol              || "",
-        numero_escalafon: editandoPolicia.numero_escalafon || "",
-        contrasena:       "",   // No cargar la contraseña por seguridad
-        acceso:           editandoPolicia.acceso           || ""  // ← Columna "acceso" en Supabase
-      });
-    } else {
-      setFormData({
-        nombre_completo: "", ci: "", celular: "", cargo: "",
-        rol: "", numero_escalafon: "", contrasena: "",
-        acceso: ""
-      });
-    }
-    setNombreWarning(false);
-    setCiWarning(false);
-    setCelularWarning(false);
-    setUsuarioWarning(false);
-    setPasswordWarning(false);
-    setShowPassword(false);
-  }, [editandoPolicia, isOpen]);
-
+  // Handlers de validación (sin cambios relevantes)
   const handleNombreChange = (e) => {
     const raw = e.target.value;
     const cleaned = raw.replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g, "");
@@ -115,12 +92,12 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
     let cleaned = raw.replace(/[^a-zA-Z0-9]/g, "");
     cleaned = cleaned.toUpperCase();
     if (raw !== cleaned && raw.trim() !== "") {
-      setUsuarioWarningMsg("* Solo mayúsculas y números (sin guiones, ni símbolos).");
-      setUsuarioWarning(true);
-      if (usuarioTimeout.current) clearTimeout(usuarioTimeout.current);
-      usuarioTimeout.current = setTimeout(() => {
-        setUsuarioWarning(false);
-        setUsuarioWarningMsg("");
+      setEscalafonWarningMsg("* Solo letras y números (sin espacios ni símbolos)");
+      setEscalafonWarning(true);
+      if (escalafonTimeout.current) clearTimeout(escalafonTimeout.current);
+      escalafonTimeout.current = setTimeout(() => {
+        setEscalafonWarning(false);
+        setEscalafonWarningMsg("");
       }, 1500);
     }
     setFormData({ ...formData, numero_escalafon: cleaned });
@@ -131,9 +108,44 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
     setFormData({ ...formData, contrasena: raw });
   };
 
+  // Efecto principal: se ejecuta cada vez que se abre el modal o cambia el oficial a editar
+  useEffect(() => {
+    if (editandoPolicia) {
+      // MODO EDICIÓN: cargar todos los datos y habilitar el control de acceso
+      setFormData({
+        nombre_completo:  editandoPolicia.nombre_completo  || "",
+        ci:               editandoPolicia.ci               || "",
+        celular:          editandoPolicia.celular          || "",
+        cargo:            editandoPolicia.cargo            || "",
+        rol:              editandoPolicia.rol              || "",
+        numero_escalafon: editandoPolicia.numero_escalafon || "",
+        contrasena:       editandoPolicia.contrasena       || "",
+        acceso:           editandoPolicia.acceso           || "FUERA DE SERVICIO"
+      });
+      setDisabledAccess(false); // Select habilitado
+    } else {
+      // MODO NUEVO OFICIAL: valores por defecto, acceso bloqueado y forzado a FUERA DE SERVICIO
+      setFormData({
+        nombre_completo: "", ci: "", celular: "", cargo: "",
+        rol: "", numero_escalafon: "", contrasena: "",
+        acceso: "FUERA DE SERVICIO"   // Valor fijo
+      });
+      setDisabledAccess(true); // Select deshabilitado
+    }
+    // Resetear advertencias y ocultar contraseña
+    setNombreWarning(false);
+    setCiWarning(false);
+    setCelularWarning(false);
+    setEscalafonWarning(false);
+    setPasswordWarning(false);
+    setShowPassword(false);
+  }, [editandoPolicia, isOpen]);
+
+  // Envío del formulario
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Validaciones comunes
     if (!formData.nombre_completo.trim()) {
       alert("El nombre completo es obligatorio");
       return;
@@ -155,20 +167,22 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
       return;
     }
     if (!formData.numero_escalafon) {
-      alert("El usuario (número de escalafón) es obligatorio");
+      alert("El número de escalafón es obligatorio");
       return;
     }
     if (!editandoPolicia && !formData.contrasena) {
       alert("La contraseña es obligatoria para nuevos oficiales");
       return;
     }
-    if (!formData.acceso) {
-      alert("Debe seleccionar el control de acceso (EN SERVICIO / FUERA DE SERVICIO / DE BAJA)");
+    // Solo en edición se valida que el acceso esté seleccionado (aunque en edición siempre hay valor)
+    if (editandoPolicia && !formData.acceso) {
+      alert("Debe seleccionar el control de acceso");
       return;
     }
 
     setGuardando(true);
 
+    // Datos a enviar
     const datos = {
       nombre_completo:  formData.nombre_completo,
       ci:               formData.ci,
@@ -176,12 +190,14 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
       cargo:            formData.cargo,
       rol:              formData.rol,
       numero_escalafon: formData.numero_escalafon,
-      acceso:           formData.acceso,   // ← Columna "acceso" en Supabase
+      acceso:           editandoPolicia ? formData.acceso : "FUERA DE SERVICIO", // Forzado en creación
     };
-    // Solo incluir contraseña si se escribió algo (nuevo o cambio)
+
+    // Incluir contraseña solo si se escribió algo (en edición puede estar vacío y no se actualiza)
     if (formData.contrasena && formData.contrasena.trim() !== "") {
       datos.contrasena = formData.contrasena;
     } else if (!editandoPolicia) {
+      // En creación no debería ocurrir por la validación anterior
       alert("La contraseña es obligatoria");
       setGuardando(false);
       return;
@@ -193,29 +209,17 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
           .from("oficial")
           .update(datos)
           .eq("id_oficial", editandoPolicia.id_oficial);
-        if (error) {
-          console.error("Error al actualizar:", error);
-          alert(`No se pudo actualizar: ${error.message}`);
-          setGuardando(false);
-          return;
-        }
+        if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("oficial")
-          .insert([datos]);
-        if (error) {
-          console.error("Error al insertar:", error);
-          alert(`No se pudo guardar: ${error.message}`);
-          setGuardando(false);
-          return;
-        }
+        const { error } = await supabase.from("oficial").insert([datos]);
+        if (error) throw error;
       }
       setGuardando(false);
-      onGuardado();
-      onClose();
+      onGuardado(); // Refrescar la tabla
+      onClose();    // Cerrar modal
     } catch (err) {
-      console.error("Error inesperado:", err);
-      alert("Ocurrió un error inesperado");
+      console.error("Error al guardar:", err);
+      alert(`No se pudo guardar: ${err.message}`);
       setGuardando(false);
     }
   };
@@ -235,7 +239,7 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
         </div>
 
         <form className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleSubmit}>
-          {/* Nombre */}
+          {/* Nombre Completo */}
           <div className="col-span-2 space-y-1">
             <label className="text-[9px] font-black uppercase text-slate-400 ml-1">
               Nombre Completo
@@ -247,6 +251,7 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
               value={formData.nombre_completo}
               onChange={handleNombreChange}
             />
+            <div className="text-[8px] text-gray-400 ml-1">Solo letras y espacios</div>
             <div className={`overflow-hidden transition-all duration-500 ${nombreWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
               <p className="text-[8px] text-red-500 font-medium">{nombreWarningMsg}</p>
             </div>
@@ -254,9 +259,7 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
 
           {/* Cédula */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
-              Cédula
-            </label>
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Cédula</label>
             <input
               type="text"
               required
@@ -264,6 +267,7 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
               value={formData.ci}
               onChange={handleCiChange}
             />
+            <div className="text-[8px] text-gray-400 ml-1">Números, guiones y letras mayúsculas</div>
             <div className={`overflow-hidden transition-all duration-500 ${ciWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
               <p className="text-[8px] text-red-500 font-medium">{ciWarningMsg}</p>
             </div>
@@ -271,9 +275,7 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
 
           {/* Celular */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
-              Celular
-            </label>
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Celular</label>
             <input
               type="tel"
               required
@@ -281,6 +283,7 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
               value={formData.celular}
               onChange={handleCelularChange}
             />
+            <div className="text-[8px] text-gray-400 ml-1">Solo números</div>
             <div className={`overflow-hidden transition-all duration-500 ${celularWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
               <p className="text-[8px] text-red-500 font-medium">{celularWarningMsg}</p>
             </div>
@@ -288,9 +291,7 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
 
           {/* Rango */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
-              Rango
-            </label>
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Rango</label>
             <select
               required
               className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
@@ -312,9 +313,7 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
 
           {/* Rol */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
-              Rol
-            </label>
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Rol</label>
             <select
               required
               className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
@@ -329,36 +328,31 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
             </select>
           </div>
 
-          {/* SECCIÓN CREDENCIALES */}
+          {/* Credenciales */}
           <div className="col-span-2 mt-2 pt-2 border-t border-gray-200">
-            <h4 className="text-xs font-black uppercase text-gray-700">
-              Credenciales a Asignar
-            </h4>
+            <h4 className="text-xs font-black uppercase text-gray-700">Credenciales a Asignar</h4>
           </div>
 
-          {/* Usuario */}
+          {/* Número de Escalafón */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
-              Usuario
-            </label>
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Número de Escalafón</label>
             <input
               type="text"
               required
               className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
               value={formData.numero_escalafon}
               onChange={handleEscalafonChange}
-              placeholder="Solo mayúsculas y números"
+              placeholder="12345ABC"
             />
-            <div className={`overflow-hidden transition-all duration-500 ${usuarioWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
-              <p className="text-[8px] text-red-500 font-medium">{usuarioWarningMsg}</p>
+            <div className="text-[8px] text-gray-400 ml-1">Solo letras y números, sin espacios</div>
+            <div className={`overflow-hidden transition-all duration-500 ${escalafonWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
+              <p className="text-[8px] text-red-500 font-medium">{escalafonWarningMsg}</p>
             </div>
           </div>
 
-          {/* Contraseña con visibilidad (ojo) */}
+          {/* Contraseña */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
-              Contraseña
-            </label>
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Contraseña</label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
@@ -376,6 +370,7 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
                 {showPassword ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
               </button>
             </div>
+            <div className="text-[8px] text-gray-400 ml-1">Mínimo 4 caracteres</div>
             {editandoPolicia && (
               <p className="text-[8px] text-gray-400 ml-1">
                 Si no escribe una nueva contraseña, se conservará la actual.
@@ -383,27 +378,37 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
             )}
           </div>
 
-          {/* Control de Acceso con tres opciones */}
+          {/* Control de Acceso - AHORA CON BLOQUEO CORRECTO */}
           <div className="space-y-1">
             <label className="text-[8px] font-black uppercase text-slate-400 ml-1">
               Control de Acceso
             </label>
             <select
-              required
-              className="w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none"
+              required={!disabledAccess}
+              disabled={disabledAccess}  // ← Aquí está el bloqueo
+              className={`w-full px-3 py-2 bg-gray-50 border rounded-xl font-bold text-xs text-slate-700 focus:border-green-600 outline-none ${
+                disabledAccess ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""
+              }`}
               value={formData.acceso}
               onChange={(e) => setFormData({ ...formData, acceso: e.target.value })}
             >
-              <option value="">Seleccionar Acceso</option>
               <option value="EN SERVICIO">EN SERVICIO</option>
               <option value="FUERA DE SERVICIO">FUERA DE SERVICIO</option>
               <option value="DE BAJA">DE BAJA</option>
             </select>
-            <p className="text-[8px] text-gray-400 ml-1">
-              {formData.acceso === "EN SERVICIO" && "El oficial podrá acceder al sistema según su rol."}
-              {formData.acceso === "FUERA DE SERVICIO" && "Acceso bloqueado temporalmente."}
-              {formData.acceso === "DE BAJA" && "Oficial dado de baja. No podrá iniciar sesión."}
-            </p>
+            <div className="text-[8px] text-gray-400 ml-1">
+              {disabledAccess ? (
+                <span className="text-amber-600 font-medium">
+                  🔒 Bloqueado para nuevos oficiales. El administrador lo habilitará después desde edición.
+                </span>
+              ) : (
+                <>
+                  {formData.acceso === "EN SERVICIO" && "El oficial podrá acceder al sistema según su rol."}
+                  {formData.acceso === "FUERA DE SERVICIO" && "Acceso bloqueado temporalmente."}
+                  {formData.acceso === "DE BAJA" && "Oficial dado de baja. No podrá iniciar sesión."}
+                </>
+              )}
+            </div>
           </div>
 
           {/* Botones */}

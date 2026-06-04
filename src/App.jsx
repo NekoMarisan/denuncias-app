@@ -6,6 +6,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ToastProvider } from "./context/ToastContext";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -13,8 +14,6 @@ import Usuarios from "./pages/Usuarios";
 import GestionAlertas from "./pages/GestionAlertas";
 import CentroDespacho from "./pages/CentroDespacho";
 import Tabulacion from "./pages/Tabulacion";
-import { supabase } from './services/supabase';
-import { ToastProvider } from './context/ToastContext'; // ✅ ya lo tienes importado
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user } = useAuth();
@@ -25,6 +24,7 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   return children;
 };
 
+
 function AppRoutes() {
   return (
     <Routes>
@@ -33,7 +33,14 @@ function AppRoutes() {
       <Route
         path="/dashboard"
         element={
-          <ProtectedRoute allowedRoles={["admin", "operador"]}>
+<ProtectedRoute
+  allowedRoles={[
+    "admin",
+    "operador",
+    "despachador",
+    "tabulador"
+  ]}
+>
             <Layout>
               <Dashboard />
             </Layout>
@@ -85,6 +92,8 @@ function AppRoutes() {
         }
       />
 
+      
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -93,7 +102,7 @@ function AppRoutes() {
 function App() {
   return (
     <Router>
-      <ToastProvider>   {/* ✅ Envuelve AuthProvider con ToastProvider o viceversa */}
+      <ToastProvider>
         <AuthProvider>
           <AppRoutes />
         </AuthProvider>

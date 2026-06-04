@@ -1,44 +1,77 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import { supabase } from '../services/supabase'
+import React, { createContext, useState, useContext, useEffect } from "react";
+import { supabase } from "../services/supabase";
 
 const AuthContext = createContext();
-
-// Simulamos una base de datos con los roles que tu Layout necesita
-const USERS_DB = [
-  { id: 1, username: "admin", password: "1234", rol: "admin", nombre: "Administrador Central" },
-  { id: 2, username: "operador", password: "12", rol: "operador", nombre: "Operador de Turno" },
-  { id: 3, username: "despacho", password: "12", rol: "despachador", nombre: "Despachador Táctico" },
-  { id: 4, username: "tabulador", password: "12", rol: "tabulador", nombre: "Analista de Datos" }
-];
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("sistema_user");
+    // Leer usuario desde sessionStorage al iniciar
+    const storedUser = sessionStorage.getItem("sistema_user");
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
+
+    // Limpieza de posibles residuos de localStorage de versiones anteriores
+    if (localStorage.getItem("usuario")) {
+      localStorage.removeItem("usuario");
+    }
   }, []);
 
-  const login = (username, password) => {
-    // Buscamos si el usuario existe en nuestra lista
-    const foundUser = USERS_DB.find(u => u.username === username && u.password === password);
+  const login = async (numero_escalafon, contrasena) => {
+    const { data, error } = await supabase
+      .from("oficial")
+      .select("*")
+      .eq("numero_escalafon", numero_escalafon)
+      .eq("contrasena", contrasena)
+      .maybeSingle();
 
-    if (foundUser) {
-      const userWithoutPassword = { ...foundUser };
-      delete userWithoutPassword.password;
-      
-      setUser(userWithoutPassword);
-      localStorage.setItem("sistema_user", JSON.stringify(userWithoutPassword));
-      return { success: true, rol: foundUser.rol };
+    if (error || !data) {
+      console.error("Error login:", error);
+      return { success: false, error: "Credenciales incorrectas" };
     }
-    return { success: false, error: "Credenciales incorrectas" };
+
+    // Verificar acceso
+    if (data.acceso === "DE BAJA" || data.acceso === "FUERA DE SERVICIO") {
+      return { success: false, error: "Usuario sin acceso al sistema" };
+    }
+
+    // Normalizar rol
+    let rolNormalizado = data.rol;
+    if (rolNormalizado === "Administrador") rolNormalizado = "admin";
+    if (rolNormalizado === "Operador") rolNormalizado = "operador";
+    if (rolNormalizado === "Despachador") rolNormalizado = "despachador";
+    if (rolNormalizado === "Tabulador") rolNormalizado = "tabulador";
+
+    const cleanUser = { ...data, rol: rolNormalizado };
+    delete cleanUser.contrasena;
+
+    setUser(cleanUser);
+    // Persistir en sessionStorage (se limpia al cerrar la pestaña)
+    sessionStorage.setItem("sistema_user", JSON.stringify(cleanUser));
+
+    return { success: true, rol: rolNormalizado };
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem("sistema_user");
+    sessionStorage.removeItem("sistema_user");
+    // Limpiar también por si quedó algún residuo anterior
+    localStorage.removeItem("usuario");
+    supabase.auth.signOut();
+  };
+
+  const permissions = {
+    operador: ["dashboard", "alertas"],
+    despachador: ["dashboard", "despacho"],
+    tabulador: ["dashboard", "tabulacion"],
+    admin: ["dashboard", "usuarios", "alertas", "despacho", "tabulacion"],
+  };
+
+  const hasAccess = (module) => {
+    if (!user) return false;
+    return permissions[user.rol]?.includes(module);
   };
 
   return (
@@ -47,11 +80,11 @@ export const AuthProvider = ({ children }) => {
         user,
         login,
         logout,
-        // ARREGLADO: Ahora detectan el rol real del usuario logueado
         isAdmin: user?.rol === "admin",
         isOperador: user?.rol === "operador",
         isDespachador: user?.rol === "despachador",
         isTabulador: user?.rol === "tabulador",
+        hasAccess,
       }}
     >
       {children}
