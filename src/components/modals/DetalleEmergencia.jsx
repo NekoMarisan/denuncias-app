@@ -8,6 +8,15 @@ import { contravenciones, delitos } from "../../constants/CategoriasDelitos";
 import { useToast } from "../../context/ToastContext";
 import { supabase } from "../../services/supabase";
 
+// Plantillas de texto rápido para descripciones de incidentes
+const descripcionesRapidas = [
+  "Ciudadano reporta accidente de tránsito con heridos en vía pública.",
+  "Alerta de alteración del orden público y consumo de bebidas alcohólicas.",
+  "Sospechoso merodeando la zona con actitud evasiva.",
+  "Robo en proceso a local comercial / vivienda.",
+  "Llamada colgada o interferencia sin respuesta del usuario.",
+];
+
 const motivosDesestimo = [
   "Falsa alarma",
   "Información duplicada",
@@ -38,6 +47,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
   const [showDesestimoPanel, setShowDesestimoPanel] = useState(false);
   const [motivosSeleccionados, setMotivosSeleccionados] = useState([]);
   const [transcribiendoAudio, setTranscribiendoAudio] = useState(false);
+  const [showDescripciones, setShowDescripciones] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -239,6 +249,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
     setShowDesestimoPanel(false);
   };
 
+  // ✅ CORREGIDO: Envía objeto con clasificacion, esContravencion y prioridad
   const handleEnviarDespacho = () => {
     if (!contravencion && !delito) {
       showToast("Seleccione un Delito o Contravención", "error");
@@ -248,8 +259,17 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
       showToast("Seleccione un nivel de prioridad (Alta, Media o Baja)", "error");
       return;
     }
+    if (onEnviarDespacho) {
+      onEnviarDespacho(
+        datos?.id_alerta,
+        {
+          clasificacion: contravencion || delito,
+          esContravencion: !!contravencion,
+          prioridad: prioridad
+        }
+      );
+    }
     showToast(`Alerta ${datos?.codigo_alerta || datos?.id_alerta} enviada al despacho`, "success");
-    if (onEnviarDespacho) onEnviarDespacho(datos?.id_alerta);
   };
 
   const formatoFechaHoraBolivia = (fechaISO) => {
@@ -335,7 +355,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
                     Datos del Ciudadano
                   </h3>
-                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 shadow-md">
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-md">
                     <div className="flex gap-4">
                       {ciudadano?.selfie ? (
                         <img
@@ -348,17 +368,21 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                           <FaUser size={28} />
                         </div>
                       )}
-                      <div className="flex-1 space-y-1">
-                        <div className="font-bold text-slate-700 text-sm">
-                          {ciudadano?.nombre_completo || "Usuario Desconocido"}
+                      <div className="flex-1">
+                        <div className="font-bold text-slate-700 text-[16px] capitalize">
+                          {ciudadano?.nombre_completo 
+                            ? ciudadano.nombre_completo.toLowerCase() 
+                            : "Usuario Desconocido"}
                         </div>
-                        <div className="flex items-center gap-2 text-[12px]">
-                          <FaAddressCard className="text-slate-400" size={12} />
-                          <span className="font-medium text-slate-600">CI: {ciudadano?.ci || "—"}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[12px]">
-                          <FaPhone className="text-slate-400" size={12} />
-                          <span className="font-medium text-slate-600">{ciudadano?.celular || "—"}</span>
+                        <div className="mt-1 space-y-1">
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <FaAddressCard className="text-slate-400" size={12} />
+                            <span className="font-medium text-slate-600">CI: {ciudadano?.ci || "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <FaPhone className="text-green-700" size={12} />
+                            <span className="font-medium text-slate-600">{ciudadano?.celular || "—"}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -367,7 +391,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
 
                 <section>
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
-                    Audio del Reporte
+                    Audio de la Alerta
                   </h3>
                   {datos?.audio_30s ? (
                     <div className="bg-[#113e27] rounded-xl p-4 flex flex-col gap-3 shadow-md">
@@ -412,30 +436,35 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                   )}
                 </section>
 
-                <section className="flex flex-col flex-1">
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
+                <section className="flex flex-col flex-1 relative">
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 leading-none">
                     Descripción del hecho
                   </h3>
-                  <div className="bg-slate-50 border border-slate-300 rounded-xl p-3 relative shadow-md flex-1 min-h-[110px]">
+                  
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 relative shadow-md flex-1 min-h-[70px]">
                     <div className="absolute top-4 left-3 text-[#195838] pointer-events-none">
                       <FaExclamationTriangle size={14} />
                     </div>
+                    
                     <textarea
-                      className="w-full pl-7 pr-6 h-full text-[13px] font-medium text-slate-600 bg-transparent border-none focus:outline-none resize-none"
+                      className="w-full pl-7 pr-12 h-full text-[13px] font-medium text-slate-600 bg-transparent border-none focus:outline-none resize-y min-h-[60px]"
                       placeholder="Sin descripción del hecho..."
                       value={relatoEditado}
                       onChange={(e) => setRelatoEditado(e.target.value)}
                     />
-                    {relatoEditado && (
-                      <button
-                        type="button"
-                        onClick={() => setRelatoEditado("")}
-                        className="absolute top-4 right-3 text-slate-400 hover:text-slate-600 transition-colors"
-                        title="Limpiar texto"
-                      >
-                        <FaTimes size={12} />
-                      </button>
-                    )}
+                    
+                    <div className="absolute top-3.5 right-3 flex items-center">
+                      {relatoEditado && (
+                        <button
+                          type="button"
+                          onClick={() => setRelatoEditado("")}
+                          className="text-slate-400 hover:text-slate-600 transition-colors"
+                          title="Limpiar texto"
+                        >
+                          <FaTimes size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </section>
               </div>
@@ -454,61 +483,63 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
 
                 <div className="w-full flex-1 flex flex-col">
                   {showDesestimoPanel ? (
-                    /* VISTA B: PROTOCOLO DE ANULACIÓN REESTRUCTURADO */
-                    <div className="bg-[#fff8f5] border border-[#fbeee9] rounded-xl p-4 shadow-md flex-1 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-start gap-3 mb-3">
-                          <FaExclamationTriangle className="text-[#b43c14] shrink-0 mt-0.5" size={16} />
-                          <div>
-                            <h4 className="text-[11px] font-black uppercase tracking-wider text-[#b43c14]">
-                              Protocolo de Cancelación de Emergencia
-                            </h4>
-                            <p className="text-[10px] text-[#b43c14]/90 font-medium mt-0.5 leading-relaxed">
-                              Por seguridad y auditoría, seleccione el motivo oficial por el cual se desestimará esta alerta.
-                            </p>
+                    <section className="flex flex-col flex-1">
+                      <div className="mb-2.5">
+                        <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 leading-none">
+                          Desestimación de Alerta
+                        </h3>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-md flex-1 flex flex-col justify-between">
+                        <div>
+                          <div className="border-l-4 border-[#C13100] pl-2 text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2.5">
+                            Seleccione el motivo 
+                          </div>
+                          <div className="space-y-1.5">
+                            {motivosDesestimo.map(motivo => {
+                              const isChecked = motivosSeleccionados.includes(motivo);
+                              return (
+                                <label 
+                                  key={motivo} 
+                                  className={`flex items-center gap-3 p-2.5 rounded-xl border text-[11px] font-semibold cursor-pointer transition-all ${
+                                    isChecked 
+                                      ? "bg-white border-slate-300 text-slate-700 shadow-sm font-bold" 
+                                      : "text-slate-600 hover:bg-white hover:border-white"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="accent-[#C13100] w-3.5 h-3.5 rounded shrink-0 cursor-pointer"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      if (isChecked) {
+                                        toggleMotivo(motivo); 
+                                      } else {
+                                        motivosSeleccionados.forEach(m => toggleMotivo(m));
+                                        toggleMotivo(motivo);
+                                      }
+                                    }}
+                                  />
+                                  <span className="truncate">{motivo}</span>
+                                </label>
+                              );
+                            })}
                           </div>
                         </div>
-
-                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                          Seleccione el motivo de desestimación
-                        </div>
-
-                        <div className="space-y-1.5">
-                          {motivosDesestimo.map(motivo => {
-                            const isChecked = motivosSeleccionados.includes(motivo);
-                            return (
-                              <label 
-                                key={motivo} 
-                                className={`flex items-center gap-3 p-2 rounded-xl border text-[11px] font-semibold cursor-pointer transition-all ${
-                                  isChecked 
-                                    ? "bg-white border-[#b43c14] text-[#b43c14] shadow-sm ring-1 ring-[#b43c14]/10" 
-                                    : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="accent-[#b43c14] w-3.5 h-3.5 rounded shrink-0"
-                                  checked={isChecked}
-                                  onChange={() => toggleMotivo(motivo)}
-                                />
-                                <span className="truncate">{motivo}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
+                        <p className="-mb-1 mt-3 -py-2 text-[11px] text-slate-400 font-medium leading-relaxed">
+                          Por seguridad y auditoría, seleccione el motivo oficial por el cual se desestimará esta alerta.
+                        </p>
                       </div>
-                    </div>
+                    </section>
                   ) : (
-                    /* VISTA A: CLASIFICACIÓN Y PRIORIDAD */
-                    <div className="space-y-5 flex-1 flex flex-col justify-start">
+                    <div className="space-y-5 flex-1 flex flex-col mt-0 justify-start">
                       <section>
                         <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
                           Clasificación del Hecho
                         </h3>
-                        <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-4 mt-2">
                           <div className="relative">
                             <select
-                              className="w-full h-11 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
+                              className="w-full h-12 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
                               value={contravencion}
                               onChange={(e) => { setContravencion(e.target.value); setDelito(""); }}
                               disabled={!!delito}
@@ -520,7 +551,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                           </div>
                           <div className="relative">
                             <select
-                              className="w-full h-11 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
+                              className="w-full h-12 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
                               value={delito}
                               onChange={(e) => { setDelito(e.target.value); setContravencion(""); }}
                               disabled={!!contravencion}
@@ -534,21 +565,23 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                       </section>
 
                       <section>
-                        <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
+                        <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none mt-1">
                           Nivel de Prioridad
                         </h3>
-                        <div className="grid grid-cols-3 gap-1.5">
+                        <div className="grid grid-cols-3 gap-4 mt-2">
                           {["ALTA", "MEDIA", "BAJA"].map(p => (
                             <button
                               key={p}
                               type="button"
                               onClick={() => setPrioridad(p)}
-                              className={`py-2.5 rounded-xl border-2 font-extrabold text-[10px] tracking-wider transition-all flex items-center justify-center shadow-sm ${
+                              className={`py-2.5 rounded-xl border-2 font-extrabold text-[10px] tracking-wider transition-all flex items-center justify-center h-10 shadow-sm cursor-pointer ${
                                 prioridad === p
-                                  ? p === "ALTA" ? "bg-red-600 border-red-600 text-white shadow-md"
-                                    : p === "MEDIA" ? "bg-blue-600 border-blue-600 text-white shadow-md"
-                                    : "bg-amber-500 border-amber-500 text-white shadow-md"
-                                  : "bg-white border-slate-200 text-slate-400 hover:border-slate-300"
+                                  ? p === "ALTA" 
+                                    ? "bg-[#C90A0A] border-red-700 text-white shadow-md hover:brightness-90"
+                                    : p === "MEDIA" 
+                                      ? "bg-[#0C3DC2] border-blue-600 text-white shadow-md hover:brightness-90"
+                                      : "bg-[#e9b301] border-[#e9b301d9] text-white shadow-md hover:brightness-90"
+                                  : "bg-white border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
                               }`}
                             >
                               {p}
@@ -566,7 +599,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
           </div>
         )}
 
-        {/* BARRA DE BOTONES SUPER PEGADA AL CONTENIDO */}
+        {/* BARRA DE BOTONES */}
         <div className="p-4 bg-slate-50 border-t flex gap-3 w-full shrink-0">
           <button
             type="button"
@@ -574,13 +607,13 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
               setMotivosSeleccionados([]);
               setShowDesestimoPanel(!showDesestimoPanel);
             }}
-            className={`w-2/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[11px] tracking-wider border-2 transition-all shadow-sm ${
+            className={`w-2/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[11px] tracking-wider border transition-all shadow-sm ${
               showDesestimoPanel 
-                ? "bg-[#b43c14] text-white border-[#b43c14] shadow-md" 
-                : "bg-white text-[#b43c14] border-[#b43c14] hover:bg-[#fff8f5]"
+                ? "bg-slate-500 text-white shadow-md hover:bg-slate-600" 
+                : "bg-white text-[#C13100] border-[#C13100] hover:bg-[#fff8f5]"
             }`}
           >
-            {showDesestimoPanel ? "Volver al Detalle" : "Desestimar Reporte"}
+            {showDesestimoPanel ? "Cancelar" : "Desestimar alerta"}
           </button>
           
           <button
@@ -590,10 +623,10 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
             className={`w-3/5 py-3.5 px-4 rounded-xl font-bold uppercase text-[11px] tracking-wider shadow-md flex items-center justify-center gap-2 transition-all ${
               showDesestimoPanel 
                 ? "bg-[#b43c14] hover:bg-[#9a320f] text-white disabled:opacity-40" 
-                : "bg-[#113e27] hover:bg-[#15472d] text-white disabled:opacity-40"
+                : "bg-[#113e27] hover:bg-[#b43c14] text-white disabled:opacity-40"
             }`}
           >
-            <FaCheckCircle size={12} /> {showDesestimoPanel ? "Confirmar Anulación" : "Enviar a Despacho"}
+            <FaCheckCircle size={12} /> {showDesestimoPanel ? "Desestimar alerta" : "Enviar a Despacho"}
           </button>
         </div>
 
@@ -603,4 +636,3 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
 };
 
 export default DetalleEmergencia;
-// arreglar desestimado

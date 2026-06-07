@@ -1,54 +1,63 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { LuZoomIn } from "react-icons/lu";
+import { FaLock } from "react-icons/fa";
 import DetalleAlertaModal from "../components/modals/DetalleAlerta";
 import DetalleEmergencia from "../components/modals/DetalleEmergencia";
 import { supabase } from "../services/supabase";
+import { useAuth } from "../context/AuthContext";
 
 function GestionAlertas() {
   const location = useLocation();
+  const { user } = useAuth();
 
-  const [tabActiva, setTabActiva] = useState("emergencia");
-  const [mostrarModal, setMostrarModal] = useState(false);
+  const [tabActiva, setTabActiva]                 = useState("emergencia");
+  const [mostrarModal, setMostrarModal]           = useState(false);
   const [alertaSeleccionada, setAlertaSeleccionada] = useState(null);
   const [alertasArchivadas, setAlertasArchivadas] = useState([]);
-  const [filaResaltada, setFilaResaltada] = useState(null);
-  const [cargando, setCargando] = useState(true);
-  const [errorCarga, setErrorCarga] = useState(null);
+  const [filaResaltada, setFilaResaltada]         = useState(null);
+  const [cargando, setCargando]                   = useState(true);
+  const [errorCarga, setErrorCarga]               = useState(null);
 
-  const [alertasPanico, setAlertasPanico] = useState([]);
+  const [alertasPanico, setAlertasPanico]       = useState([]);
   const [alertasCiudadanas, setAlertasCiudadanas] = useState([]);
 
   const dataActual = tabActiva === "ciudadana" ? alertasCiudadanas : alertasPanico;
 
+  // ── TRANSFORMAR ───────────────────────────────────────────────────────────
   const transformarAlertas = (data) => {
-    const panico = [];
+    const panico     = [];
     const ciudadanas = [];
 
     data.forEach((item) => {
       const base = {
-        id:          item.id_alerta,
-        ciudadano:   item.usuario_ciudadano?.nombre_completo || `Usuario #${item.id_usuario}`,
-        ubicacion:   item.ubicacion  || "Sin ubicación",
-        fecha:       item.fecha_hora
-                       ? new Date(item.fecha_hora).toLocaleDateString("es-BO")
-                       : "—",
-        hora:        item.fecha_hora
-                       ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", {
-                           hour:   "2-digit",
-                           minute: "2-digit",
-                         })
-                       : "—",
-        descripcion: item.descripcion  || "",
-        categoria:   item.categoria    || "",
-        audio_30s:   item.audio_30s    || null,
-        prioridad:   item.prioridad    || "Media",
-        codigo:      item.codigo_alerta || "",
+        id:            item.id_alerta,
+        ciudadano:     item.usuario_ciudadano?.nombre_completo || `Usuario #${item.id_usuario}`,
+        ubicacion:     item.ubicacion   || "Sin ubicación",
+        fecha:         item.fecha_hora
+                         ? new Date(item.fecha_hora).toLocaleDateString("es-BO")
+                         : "—",
+        hora:          item.fecha_hora
+                         ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", {
+                             hour: "2-digit", minute: "2-digit",
+                           })
+                         : "—",
+        descripcion:   item.descripcion  || "",
+        contravencion: item.contravenciones || item.contravencion || "",
+        delito:        item.delitos         || item.delito        || "",
+        audio_30s:     item.audio_30s  || null,
+        prioridad:     item.prioridad  || "Media",
+        codigo:        item.codigo_alerta || "",
+        bloqueadoPor:  item.bloqueado_por  || null,
+        bloqueadoRol:  item.bloqueado_rol  || null,
       };
 
-      if (item.categoria === "Panico") {
+      if (
+        item.categoria === "Panico" ||
+        (base.delito && base.delito.trim() !== "")
+      ) {
         panico.push({ ...base, estado: "Emergencia" });
-      } else if (item.categoria === "Alerta Ciudadana") {
+      } else {
         ciudadanas.push({ ...base, estado: "Verificación" });
       }
     });
@@ -56,6 +65,7 @@ function GestionAlertas() {
     return { panico, ciudadanas };
   };
 
+  // ── CARGAR ALERTAS ────────────────────────────────────────────────────────
   const cargarAlertas = async () => {
     setCargando(true);
     setErrorCarga(null);
@@ -68,7 +78,6 @@ function GestionAlertas() {
             nombre_completo
           )
         `)
-        // SOLO ALERTAS EN ESTADO VERIFICACIÓN (1)
         .eq("id_estado_actual", 1)
         .order("fecha_hora", { ascending: false });
 
@@ -91,10 +100,12 @@ function GestionAlertas() {
     }
   };
 
+  // ── INICIALIZACIÓN ────────────────────────────────────────────────────────
   useEffect(() => {
     cargarAlertas();
   }, []);
 
+  // ── TIEMPO REAL ───────────────────────────────────────────────────────────
   useEffect(() => {
     const canal = supabase
       .channel("alertas-realtime")
@@ -107,6 +118,7 @@ function GestionAlertas() {
     return () => supabase.removeChannel(canal);
   }, []);
 
+  // ── RESALTAR FILA DESDE NAVEGACIÓN ────────────────────────────────────────
   useEffect(() => {
     const state = location.state;
     if (state?.activeTab) {
@@ -123,11 +135,62 @@ function GestionAlertas() {
     }
   }, [location.state]);
 
-  // DESESTIMAR → cambia estado a 4 en Supabase
+  // ── ABRIR MODAL (con bloqueo optimista) ──────────────────────────────────
+  const abrirModal = async (alerta) => {
+    const idOficial = user?.id_oficial;
+    if (!idOficial) {
+      alert("Error: No se pudo identificar al operador");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("alerta")
+      .update({
+        bloqueado_por: idOficial,
+        bloqueado_en:  new Date().toISOString(),
+        bloqueado_rol: "operador",
+      })
+      .eq("id_alerta", alerta.id)
+      .is("bloqueado_por", null)
+      .select()
+      .single();
+
+    if (!data || error) {
+      alert("🔒 Esta alerta ya está siendo atendida por otro operador");
+      return;
+    }
+
+    setAlertaSeleccionada(alerta);
+    setMostrarModal(true);
+  };
+
+  // ── CERRAR MODAL (liberar bloqueo) ────────────────────────────────────────
+  const cerrarModal = async () => {
+    if (alertaSeleccionada && user?.id_oficial) {
+      await supabase
+        .from("alerta")
+        .update({
+          bloqueado_por: null,
+          bloqueado_en:  null,
+          bloqueado_rol: null,
+        })
+        .eq("id_alerta", alertaSeleccionada.id)
+        .eq("bloqueado_por", user.id_oficial);
+    }
+    setMostrarModal(false);
+    setAlertaSeleccionada(null);
+  };
+
+  // ── DESESTIMAR ────────────────────────────────────────────────────────────
   const manejarDesestimar = async (idAlerta, motivo) => {
     const { error } = await supabase
       .from("alerta")
-      .update({ id_estado_actual: 4 })
+      .update({
+        id_estado_actual: 4,
+        bloqueado_por:    null,
+        bloqueado_en:     null,
+        bloqueado_rol:    null,
+      })
       .eq("id_alerta", idAlerta);
 
     if (error) {
@@ -138,12 +201,15 @@ function GestionAlertas() {
     const listaOrigen = tabActiva === "emergencia" ? alertasPanico : alertasCiudadanas;
     const alertaEncontrada = listaOrigen.find((a) => a.id === idAlerta);
     if (alertaEncontrada) {
-      setAlertasArchivadas((prev) => [...prev, {
-        ...alertaEncontrada,
-        estado: "DESESTIMADO",
-        motivoDesestimacion: motivo || "Sin motivo especificado",
-        fechaArchivo: new Date().toLocaleDateString(),
-      }]);
+      setAlertasArchivadas((prev) => [
+        ...prev,
+        {
+          ...alertaEncontrada,
+          estado:              "DESESTIMADO",
+          motivoDesestimacion: motivo || "Sin motivo especificado",
+          fechaArchivo:        new Date().toLocaleDateString(),
+        },
+      ]);
       if (tabActiva === "emergencia") {
         setAlertasPanico(alertasPanico.filter((a) => a.id !== idAlerta));
       } else {
@@ -153,10 +219,26 @@ function GestionAlertas() {
     cerrarModal();
   };
 
-  const manejarTransferencia = async (idAlerta) => {
+  // ── TRANSFERIR A DESPACHO (CORREGIDO) ─────────────────────────────────────
+  const manejarTransferencia = async (idAlerta, datosClasificacion) => {
+    // datosClasificacion espera: { esContravencion: bool, clasificacion: string, prioridad: string }
+    const updateData = {
+      id_estado_actual: 2,
+      bloqueado_por:    null,
+      bloqueado_en:     null,
+      bloqueado_rol:    null,
+      contravenciones:  datosClasificacion?.esContravencion
+                        ? datosClasificacion.clasificacion
+                        : null,
+      delitos:          datosClasificacion?.esContravencion
+                        ? null
+                        : datosClasificacion?.clasificacion,
+      prioridad:        datosClasificacion?.prioridad || "Media",
+    };
+
     const { error } = await supabase
       .from("alerta")
-      .update({ id_estado_actual: 2 })
+      .update(updateData)
       .eq("id_alerta", idAlerta);
 
     if (error) {
@@ -164,6 +246,7 @@ function GestionAlertas() {
       return;
     }
 
+    // Eliminar la alerta de la bandeja actual
     if (tabActiva === "emergencia") {
       setAlertasPanico(alertasPanico.filter((a) => a.id !== idAlerta));
     } else {
@@ -173,9 +256,7 @@ function GestionAlertas() {
     cerrarModal();
   };
 
-  const abrirModal  = (alerta) => { setAlertaSeleccionada(alerta); setMostrarModal(true); };
-  const cerrarModal = ()       => { setMostrarModal(false); setAlertaSeleccionada(null); };
-
+  // ── LOADING ───────────────────────────────────────────────────────────────
   if (cargando) {
     return (
       <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
@@ -192,7 +273,10 @@ function GestionAlertas() {
         <div className="bg-red-100 border-l-4 border-red-600 p-4 rounded shadow-md mx-4">
           <p className="text-red-700 font-bold">Error al cargar las alertas</p>
           <p className="text-sm text-red-600">{errorCarga}</p>
-          <button onClick={cargarAlertas} className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition">
+          <button
+            onClick={cargarAlertas}
+            className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition"
+          >
             Reintentar
           </button>
         </div>
@@ -200,22 +284,31 @@ function GestionAlertas() {
     );
   }
 
+  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
 
-      {/* SELECTOR DE TABS */}
+      {/* TABS */}
       <div className="px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2">
         <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
           <button
             onClick={() => setTabActiva("emergencia")}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${tabActiva === "emergencia" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"}`}
+            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${
+              tabActiva === "emergencia"
+                ? "bg-[#113e27] text-white shadow-md"
+                : "text-slate-400"
+            }`}
           >
             <span className="hidden sm:inline">ALERTAS DE PÁNICO</span>
             <span className="sm:hidden">PÁNICO</span>
           </button>
           <button
             onClick={() => setTabActiva("ciudadana")}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg font-bold text-xs transition-all tracking-wider ${tabActiva === "ciudadana" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"}`}
+            className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg font-bold text-xs transition-all tracking-wider ${
+              tabActiva === "ciudadana"
+                ? "bg-[#113e27] text-white shadow-md"
+                : "text-slate-400"
+            }`}
           >
             <span className="hidden sm:inline">ALERTAS CIUDADANAS</span>
             <span className="sm:hidden">CIUDADANAS</span>
@@ -245,56 +338,84 @@ function GestionAlertas() {
               </tr>
             </thead>
             <tbody>
-              {dataActual.map((item) => (
-                <tr
-                  key={item.id}
-                  id={`fila-${item.id}`}
-                  className={`bg-white group transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 border-b border-gray-100 ${filaResaltada === item.id ? "ring-2 bg-slate-50" : ""}`}
-                >
-                  <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-5 md:py-6 text-[11px] font-bold text-slate-400 uppercase align-middle">
-                    {item.codigo || item.id}
-                  </td>
-                  <td className="py-5 md:py-6 align-middle">
-                    <div className="flex items-center gap-2 md:gap-3">
-                      <div className="w-6 h-8 rounded-md flex items-center justify-center font-black text-xs shadow-inner shrink-0 bg-blue-50 text-[#0C3DC2]">
-                        {item.ciudadano.charAt(0)}
+              {dataActual.map((item) => {
+                const bloqueadaPorOtro =
+                  item.bloqueadoPor && item.bloqueadoPor !== user?.id_oficial;
+
+                return (
+                  <tr
+                    key={item.id}
+                    id={`fila-${item.id}`}
+                    className={`bg-white group transition-all duration-200 border-b border-gray-100 ${
+                      filaResaltada === item.id
+                        ? "ring-2 bg-slate-50"
+                        : bloqueadaPorOtro
+                          ? "opacity-50"
+                          : "hover:shadow-lg hover:-translate-y-0.5"
+                    }`}
+                  >
+                    <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-5 md:py-6 text-[11px] font-bold text-slate-400 uppercase align-middle">
+                      {item.codigo || item.id}
+                    </td>
+                    <td className="py-5 md:py-6 align-middle">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <div className="w-6 h-8 rounded-md flex items-center justify-center font-black text-xs shadow-inner shrink-0 bg-blue-50 text-[#0C3DC2]">
+                          {item.ciudadano.charAt(0)}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[12px] font-bold text-[#1e293b] leading-tight truncate max-w-[120px] md:max-w-none">
+                            {item.ciudadano}
+                          </span>
+                          <span className="mt-0.5 text-[8px] text-gray-400 font-semibold uppercase tracking-wider">
+                            {item.prioridad} prioridad
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-[12px] font-bold text-[#1e293b] leading-tight truncate max-w-[120px] md:max-w-none">
-                          {item.ciudadano}
-                        </span>
-                        <span className="mt-0.5 text-[8px] text-gray-400 font-semibold uppercase tracking-wider">
-                          {item.prioridad} prioridad
+                    </td>
+                    <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle">
+                      <div className="px-1 md:px-2">
+                        <span className="truncate block max-w-[100px] md:max-w-none">
+                          {item.ubicacion}
                         </span>
                       </div>
-                    </div>
-                  </td>
-                  <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle">
-                    <div className="px-1 md:px-2">
-                      <span className="truncate block max-w-[100px] md:max-w-none">{item.ubicacion}</span>
-                    </div>
-                  </td>
-                  <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle whitespace-nowrap">
-                    {item.fecha} {item.hora}
-                  </td>
-                  <td className="py-5 md:py-6 align-middle">
-                    <span className={`inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-extrabold text-white tracking-wide ${item.estado.toUpperCase() === "EMERGENCIA" ? "bg-red-600" : "bg-[#EBB615]"}`}>
-                      {item.estado.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="px-3 md:px-4 py-5 md:py-6 align-middle">
-                    <button
-                      onClick={() => abrirModal(item)}
-                      className="p-1.5 md:p-2 bg-[#0C3DC2] text-white rounded-lg shadow hover:scale-105 active:scale-95 transition-all flex items-center justify-center"
-                    >
-                      <LuZoomIn size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle whitespace-nowrap">
+                      {item.fecha} {item.hora}
+                    </td>
+                    <td className="py-5 md:py-6 align-middle">
+                      <span
+                        className={`inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-extrabold text-white tracking-wide ${
+                          item.estado.toUpperCase() === "EMERGENCIA"
+                            ? "bg-red-600"
+                            : "bg-[#EBB615]"
+                        }`}
+                      >
+                        {item.estado.toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-3 md:px-4 py-5 md:py-6 align-middle">
+                      {bloqueadaPorOtro ? (
+                        <div
+                          title="En uso por otro operador"
+                          className="p-1.5 md:p-2 bg-slate-300 text-white rounded-lg flex items-center justify-center cursor-not-allowed"
+                        >
+                          <FaLock size={14} />
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => abrirModal(item)}
+                          className="p-1.5 md:p-2 bg-[#0C3DC2] text-white rounded-lg shadow hover:scale-105 active:scale-95 transition-all flex items-center justify-center"
+                        >
+                          <LuZoomIn size={14} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {dataActual.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="text-center py-12 text-gray-400 font-medium">
+                  <td colSpan={6} className="text-center py-12 text-gray-400 font-medium">
                     No hay alertas en esta bandeja
                   </td>
                 </tr>
@@ -304,7 +425,7 @@ function GestionAlertas() {
         </div>
       </div>
 
-      {/* MODAL */}
+      {/* MODALES */}
       {mostrarModal && alertaSeleccionada && (
         tabActiva === "emergencia" ? (
           <DetalleEmergencia

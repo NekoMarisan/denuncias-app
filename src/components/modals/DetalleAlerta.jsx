@@ -2,89 +2,123 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   FaUser, FaPhone, FaPlay, FaPause, FaFileImage, FaVideo,
   FaFilePdf, FaExclamationTriangle, FaTimes, FaShieldAlt,
-  FaCheckCircle, FaFile, FaAddressCard, FaDownload,
-  FaMapMarkerAlt, FaCalendarAlt, FaTag, FaSpinner
+  FaCheckCircle, FaFile, FaAddressCard, FaEye,
+  FaSpinner, FaChevronDown
 } from "react-icons/fa";
 import { contravenciones, delitos } from "../../constants/CategoriasDelitos";
 import { supabase } from "../../services/supabase";
+import { useToast } from "../../context/ToastContext";
+
+const motivosDesestimo = [
+  "Falsa alarma",
+  "Información duplicada",
+  "Datos insuficientes",
+  "Otro",
+];
 
 const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
-  const [datos, setDatos]             = useState(null);
-  const [ciudadano, setCiudadano]     = useState(null);
-  const [evidencias, setEvidencias]   = useState([]);
-  const [cargando, setCargando]       = useState(true);
+  const { showToast } = useToast();
 
-  const [playing, setPlaying]         = useState(false);
+  const [datos, setDatos] = useState(null);
+  const [ciudadano, setCiudadano] = useState(null);
+  const [evidencias, setEvidencias] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [evidenciasVistas, setEvidenciasVistas] = useState([]);
+
+  const [playing, setPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
-  const audioRef                      = useRef(null);
-  const audioInterval                 = useRef(null);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(60);
+  const audioRef = useRef(null);
+  const audioInterval = useRef(null);
 
+  const [relatoEditado, setRelatoEditado] = useState("");
   const [contravencion, setContravencion] = useState("");
-  const [delito, setDelito]           = useState("");
-  const [prioridad, setPrioridad]     = useState("");
-  const [estadoValidacion, setEstadoValidacion] = useState("pendiente");
+  const [delito, setDelito] = useState("");
+  const [prioridad, setPrioridad] = useState("");
 
-  // ── Bloquear scroll ────────────────────────────────────────────────────────
+  const [estadoValidacion, setEstadoValidacion] = useState("verificacion");
+
+  // ── Desestimación ───────────────────────────────────────────
+  const [showDesestimoPanel, setShowDesestimoPanel] = useState(false);
+  const [motivosSeleccionados, setMotivosSeleccionados] = useState([]);
+
+  const toggleMotivo = (motivo) => {
+    setMotivosSeleccionados(prev =>
+      prev.includes(motivo) ? prev.filter(m => m !== motivo) : [...prev, motivo]
+    );
+  };
+
+  const confirmarDesestimo = () => {
+    if (motivosSeleccionados.length === 0) {
+      showToast("Debe seleccionar al menos un motivo para desestimar", "error");
+      return;
+    }
+    const motivoTexto = motivosSeleccionados.join(", ");
+    if (onDesestimar) onDesestimar(datos?.id_alerta, motivoTexto);
+    else onBack();
+    setShowDesestimoPanel(false);
+  };
+  // ──────────────────────────────────────────────────────────
+
   useEffect(() => {
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = "unset"; };
+    return () => {
+      document.body.style.overflow = "unset";
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+      if (audioInterval.current) clearInterval(audioInterval.current);
+    };
   }, []);
 
-  // ── Cargar datos desde Supabase ────────────────────────────────────────────
   useEffect(() => {
     const idAlerta = alerta?.id_alerta ?? alerta?.id;
     if (!idAlerta) return;
 
     const cargar = async () => {
       setCargando(true);
+      try {
+        const { data: alertaData, error: alertaErr } = await supabase
+          .from("alerta").select("*").eq("id_alerta", idAlerta).single();
 
-      const { data: alertaData, error: alertaErr } = await supabase
-        .from("alerta")
-        .select("*")
-        .eq("id_alerta", idAlerta)
-        .single();
+        if (alertaErr) { console.error("Error alerta:", alertaErr); setCargando(false); return; }
+        setDatos(alertaData);
+        setRelatoEditado(alertaData.descripcion || "");
+        setPrioridad(alertaData.prioridad || "");
 
-      if (alertaErr) {
-        console.error("Error alerta:", alertaErr);
+        if (alertaData.id_usuario) {
+          const { data: ciudadanoData } = await supabase
+            .from("usuario_ciudadano")
+            .select("nombre_completo, ci, celular, email, selfie")
+            .eq("id_usuario", alertaData.id_usuario).single();
+          if (ciudadanoData) setCiudadano(ciudadanoData);
+        }
+
+        const { data: evidenciaData } = await supabase
+          .from("evidencia").select("*").eq("id_alerta", idAlerta);
+        setEvidencias(evidenciaData || []);
+      } catch (err) {
+        console.error("Error crítico:", err);
+      } finally {
         setCargando(false);
-        return;
       }
-      setDatos(alertaData);
-      setPrioridad(alertaData.prioridad || "");
-
-      if (alertaData.id_usuario) {
-        const { data: ciudadanoData } = await supabase
-          .from("usuario_ciudadano")
-          .select("nombre_completo, ci, celular, email, selfie")
-          .eq("id_usuario", alertaData.id_usuario)
-          .single();
-        if (ciudadanoData) setCiudadano(ciudadanoData);
-      }
-
-      const { data: evidenciaData } = await supabase
-        .from("evidencia")
-        .select("*")
-        .eq("id_alerta", idAlerta);
-      setEvidencias(evidenciaData || []);
-
-      setCargando(false);
     };
-
     cargar();
   }, [alerta?.id_alerta, alerta?.id]);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
   const getFileInfo = (tipoEvidencia, archivo) => {
     const tipo = tipoEvidencia?.toLowerCase() || "";
     const ext  = archivo?.split(".").pop().toLowerCase() || "";
-
     if (tipo === "imagen" || ["jpg","jpeg","png","webp"].includes(ext))
-      return { icon: <FaFileImage />, color: "text-blue-500",  label: "IMAGEN"   };
+      return { icon: <FaFileImage size={16} />, color: "text-blue-500", bg: "bg-blue-50", label: "IMAGEN" };
     if (tipo === "video"  || ["mp4","mov","avi"].includes(ext))
-      return { icon: <FaVideo />,     color: "text-rose-500",  label: "VIDEO"    };
+      return { icon: <FaVideo size={16} />,     color: "text-rose-500", bg: "bg-rose-50",  label: "VIDEO"  };
     if (tipo === "pdf"    || ext === "pdf")
-      return { icon: <FaFilePdf />,   color: "text-amber-500", label: "PDF"      };
-    return   { icon: <FaFile />,      color: "text-slate-400", label: "ARCHIVO"  };
+      return { icon: <FaFilePdf size={16} />,   color: "text-amber-500", bg: "bg-amber-50", label: "PDF"   };
+    return     { icon: <FaFile size={16} />,    color: "text-slate-400", bg: "bg-slate-50", label: "ARCHIVO" };
+  };
+
+  const registrarVistaEvidencia = (id) => {
+    if (!evidenciasVistas.includes(id)) setEvidenciasVistas(prev => [...prev, id]);
   };
 
   const fechaFormateada = datos?.fecha_hora
@@ -94,29 +128,37 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
       })
     : "—";
 
-  // ── Audio ──────────────────────────────────────────────────────────────────
   const toggleAudio = () => {
     if (datos?.audio_30s) {
       if (!audioRef.current) {
         audioRef.current = new Audio(datos.audio_30s);
+        audioRef.current.addEventListener("loadedmetadata", () => setAudioDuration(audioRef.current.duration));
         audioRef.current.addEventListener("timeupdate", () => {
-          const pct = (audioRef.current.currentTime / audioRef.current.duration) * 100;
-          setAudioProgress(isNaN(pct) ? 0 : pct);
+          const current = audioRef.current.currentTime;
+          setAudioProgress((current / audioRef.current.duration) * 100);
+          setAudioCurrentTime(current);
         });
         audioRef.current.addEventListener("ended", () => {
-          setPlaying(false); setAudioProgress(0);
+          setPlaying(false); setAudioProgress(0); setAudioCurrentTime(0);
         });
       }
       if (playing) { audioRef.current.pause(); setPlaying(false); }
-      else         { audioRef.current.play();  setPlaying(true);  }
+      else          { audioRef.current.play();  setPlaying(true);  }
     } else {
+      if (audioInterval.current) clearInterval(audioInterval.current);
       if (!playing) {
         setPlaying(true);
+        const totalDuration = audioDuration || 60;
+        const startTime = Date.now() - audioCurrentTime * 1000;
         audioInterval.current = setInterval(() => {
-          setAudioProgress(prev => {
-            if (prev >= 100) { clearInterval(audioInterval.current); setPlaying(false); return 0; }
-            return prev + 2;
-          });
+          const elapsed = (Date.now() - startTime) / 1000;
+          if (elapsed >= totalDuration) {
+            clearInterval(audioInterval.current);
+            setPlaying(false); setAudioProgress(0); setAudioCurrentTime(0);
+          } else {
+            setAudioCurrentTime(elapsed);
+            setAudioProgress((elapsed / totalDuration) * 100);
+          }
         }, 200);
       } else {
         setPlaying(false);
@@ -125,315 +167,429 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
     }
   };
 
-  // ── Acciones ───────────────────────────────────────────────────────────────
-  const handleValidar = () => {
+  const handleSeek = (e) => {
+    const newTime = parseFloat(e.target.value);
+    const totalDuration = audioDuration || 60;
+    if (datos?.audio_30s && audioRef.current) {
+      audioRef.current.currentTime = newTime;
+      setAudioCurrentTime(newTime);
+      setAudioProgress((newTime / audioDuration) * 100);
+    } else {
+      if (audioInterval.current) clearInterval(audioInterval.current);
+      setAudioCurrentTime(newTime);
+      setAudioProgress((newTime / totalDuration) * 100);
+      if (playing) {
+        const startTime = Date.now() - newTime * 1000;
+        audioInterval.current = setInterval(() => {
+          const elapsed = (Date.now() - startTime) / 1000;
+          if (elapsed >= totalDuration) {
+            clearInterval(audioInterval.current);
+            setPlaying(false); setAudioProgress(0); setAudioCurrentTime(0);
+          } else {
+            setAudioCurrentTime(elapsed);
+            setAudioProgress((elapsed / totalDuration) * 100);
+          }
+        }, 200);
+      }
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (isNaN(seconds)) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
+
+  // ✅ CORREGIDO: Envía objeto con clasificacion, esContravencion y prioridad
+  const handleEnviarDespachoLocal = () => {
     if (!contravencion && !delito) {
-      alert("Por favor, seleccione la clasificación antes de validar");
+      if (showToast) showToast("Seleccione un Delito o Contravención antes de enviar", "error");
       return;
     }
     if (!prioridad) {
-      alert("Por favor, seleccione un nivel de prioridad");
+      if (showToast) showToast("Seleccione un nivel de prioridad antes de enviar", "error");
       return;
     }
-    setEstadoValidacion("validado");
-  };
-
-  const handleDesestimar = () => {
-    if (estadoValidacion === "validado") return;
-    if (window.confirm("¿Desestimar este reporte? Se eliminará de la lista.")) {
-      if (onDesestimar) onDesestimar(datos?.id_alerta ?? alerta?.id);
-      else onBack();
-    }
-  };
-
-  const handleEnviarDespachoLocal = () => {
     if (onEnviarDespacho) {
-      onEnviarDespacho(datos?.id_alerta ?? alerta?.id, {
-        clasificacion: contravencion || delito,
-        prioridad
-      });
+      onEnviarDespacho(
+        datos?.id_alerta ?? alerta?.id,
+        {
+          clasificacion: contravencion || delito,
+          esContravencion: !!contravencion,
+          prioridad: prioridad
+        }
+      );
     }
+    if (showToast) showToast(`Alerta ${datos?.codigo_alerta || datos?.id_alerta} enviada al despacho`, "success");
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      <style>{`
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:0; height:0; opacity:0; }
+        input[type="range"]::-moz-range-thumb { width:0; height:0; opacity:0; }
+      `}</style>
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onBack} />
 
-      <div className="relative w-full max-w-5xl max-h-[98vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[90vh]">
 
-        {/* Cabecera */}
-        <div className="bg-[#113e27] py-4 px-6 flex justify-between items-center text-white">
-          <div className="flex items-center gap-3">
-            <FaShieldAlt className="text-white/80" size={16} />
-            <span className="text-sm font-extrabold uppercase tracking-wide">Gestión de Alerta Entrante</span>
-            {datos?.codigo_alerta && (
-              <span className="px-2 py-0.5 bg-white/10 rounded-lg text-[10px] font-black tracking-widest">
-                {datos.codigo_alerta}
-              </span>
-            )}
+        {/* BARRA SUPERIOR */}
+        <div className="bg-[#113e27] py-4 px-6 text-white w-full shrink-0">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/10 p-2 rounded-md flex items-center justify-center shrink-0">
+                <FaShieldAlt className="text-white" size={30} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <h2 className="text-[18px] font-extrabold uppercase tracking-wide leading-none mt-0.5">Detalle de Alerta</h2>
+                <div className="flex flex-wrap gap-2 text-[10px] font-medium text-white/70 mt-0.5">
+                  {datos?.codigo_alerta && <span>{datos.codigo_alerta}</span>}
+                  <span>{fechaFormateada}</span>
+                </div>
+              </div>
+            </div>
+            <button type="button" onClick={onBack} className="hover:bg-white/20 p-1.5 rounded-md transition-colors shrink-0 mt-1">
+              <FaTimes size={16} />
+            </button>
           </div>
-          <button onClick={onBack} className="hover:bg-white/20 p-1.5 rounded-full transition-colors">
-            <FaTimes size={16} />
-          </button>
         </div>
 
-        {/* Contenido */}
         {cargando ? (
-          <div className="flex-1 flex items-center justify-center py-20">
+          <div className="p-20 flex items-center justify-center">
             <FaSpinner className="animate-spin text-green-800 text-3xl" />
           </div>
         ) : (
-          <div className="overflow-y-auto flex-1 p-5 md:p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="p-6 bg-white overflow-y-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
 
-              {/* Columna izquierda */}
-              <div className="space-y-5">
+              {/* ── COLUMNA IZQUIERDA ── */}
+              <div className="flex flex-col gap-5 h-full">
+
+                {/* Ciudadano */}
                 <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
                     Datos del Ciudadano
                   </h3>
-                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 shadow-sm flex items-center gap-4">
-                    {ciudadano?.selfie ? (
-                      <img src={ciudadano.selfie} alt="Foto"
-                        className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0" />
-                    ) : (
-                      <div className="w-16 h-16 rounded-xl bg-white flex items-center justify-center text-slate-200 shadow-sm border border-slate-100 shrink-0">
-                        <FaUser size={28} />
-                      </div>
-                    )}
-                    <div className="flex flex-col gap-1.5 min-w-0">
-                      <h4 className="text-sm font-bold text-slate-700 truncate">
-                        {ciudadano?.nombre_completo || "Usuario Desconocido"}
-                      </h4>
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <FaAddressCard className="text-slate-400 shrink-0" size={11} />
-                        <span className="text-[11px] font-bold">CI: {ciudadano?.ci || "—"}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <FaPhone className="text-emerald-600 shrink-0" size={11} />
-                        <span className="text-[11px] font-medium">{ciudadano?.celular || "—"}</span>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
-                    Información de la Alerta
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <FaMapMarkerAlt className="text-red-500 mt-0.5 shrink-0" size={13} />
-                      <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase">Ubicación</p>
-                        <p className="text-[11px] font-bold text-slate-700 break-all">{datos?.ubicacion || "No disponible"}</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                        <FaCalendarAlt className="text-purple-500 shrink-0" size={12} />
-                        <div>
-                          <p className="text-[8px] font-black text-slate-400 uppercase">Fecha / Hora</p>
-                          <p className="text-[10px] font-bold text-slate-700">{fechaFormateada}</p>
-                        </div>
-                      </div>
-                      {datos?.categoria && (
-                        <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                          <FaTag className="text-blue-500 shrink-0" size={12} />
-                          <div>
-                            <p className="text-[8px] font-black text-slate-400 uppercase">Categoría</p>
-                            <p className="text-[10px] font-bold text-slate-700">{datos.categoria}</p>
-                          </div>
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-md">
+                    <div className="flex gap-4">
+                      {ciudadano?.selfie ? (
+                        <img src={ciudadano.selfie} alt="Foto" className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-xl bg-white flex items-center justify-center text-slate-200 shadow-sm border border-slate-100 shrink-0">
+                          <FaUser size={28} />
                         </div>
                       )}
+                      <div className="flex-1">
+                        <div className="font-bold text-slate-700 text-[16px] capitalize">
+                          {ciudadano?.nombre_completo ? ciudadano.nombre_completo.toLowerCase() : "Usuario Desconocido"}
+                        </div>
+                        <div className="mt-1 space-y-1">
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <FaAddressCard className="text-slate-400" size={12} />
+                            <span className="font-medium text-slate-600">CI: {ciudadano?.ci || "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <FaPhone className="text-green-700" size={12} />
+                            <span className="font-medium text-slate-600">{ciudadano?.celular || "—"}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </section>
 
-                <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                {/* Evidencia */}
+                <section className="flex flex-col flex-1 min-h-0">
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none flex items-center gap-1 shrink-0">
                     Evidencia Adjunta
+                    {evidencias.length > 0 && (
+                      <span className="text-gray-400 text-[11px] font-black tracking-wider shrink-0">
+                        ({evidencias.length})
+                      </span>
+                    )}
                   </h3>
                   {evidencias.length > 0 ? (
-                    <div className="space-y-2">
+                    <div className="flex flex-col flex-1 gap-5">
                       {evidencias.map((ev) => {
                         const info = getFileInfo(ev.tipo_evidencia, ev.archivo);
                         const nombreArchivo = ev.archivo?.split("/").pop() || ev.archivo || "archivo";
+                        const yaVisto = evidenciasVistas.includes(ev.id_evidencia);
                         return (
-                          <div key={ev.id_evidencia}
-                            className="flex items-center justify-between p-3 bg-white border border-green-100 rounded-xl">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className={`w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 ${info.color}`}>
+                          <div
+                            key={ev.id_evidencia}
+                            className={`flex items-center justify-between px-3 rounded-xl transition-all border shadow-sm flex-1 ${
+                              yaVisto ? "border-[#195c39] bg-emerald-50/30" : "border-slate-200 bg-slate-50 hover:shadow-md"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1 py-3">
+                              <div className={`w-9 h-9 rounded-md flex items-center justify-center shrink-0 ${info.bg} ${info.color}`}>
                                 {info.icon}
                               </div>
-                              <div className="min-w-0">
-                                <p className="text-[9px] font-black text-slate-700 uppercase truncate">{nombreArchivo}</p>
-                                <p className="text-[8px] font-bold text-slate-400">{info.label}</p>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] font-bold text-slate-700 uppercase truncate" title={nombreArchivo}>
+                                  {nombreArchivo}
+                                </p>
+                                <p className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">{info.label}</p>
                               </div>
                             </div>
                             {ev.archivo && (
-                              <a href={ev.archivo} target="_blank" rel="noreferrer"
-                                className="text-slate-300 hover:text-emerald-600 transition-colors shrink-0 ml-2">
-                                <FaDownload size={12} />
-                              </a>
+                              <div className="flex items-center gap-1.5 ml-4 shrink-0">
+                                <a
+                                  href={ev.archivo}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={() => registrarVistaEvidencia(ev.id_evidencia)}
+                                  className="flex items-center gap-1 text-[10px] font-bold text-white bg-[#113e27] hover:bg-[#113e27] px-3 py-1.5 rounded-md shadow-sm transition-colors cursor-pointer"
+                                >
+                                  <FaEye size={11} /> Ver
+                                </a>
+                              </div>
                             )}
                           </div>
                         );
                       })}
                     </div>
                   ) : (
-                    <p className="text-[12px] font-medium text-slate-400">No se adjuntaron archivos.</p>
+                    <div className="flex-1 bg-slate-50 rounded-xl p-4 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase tracking-wide shadow-sm border border-slate-200">
+                      No se adjuntaron archivos.
+                    </div>
                   )}
                 </section>
+
               </div>
 
-              {/* Columna derecha */}
-              <div className="space-y-5">
+              {/* ── COLUMNA DERECHA ── */}
+              <div className="flex flex-col gap-5 border-l border-slate-100 lg:pl-6">
+
+                {/* Estado de Validación */}
+                <div>
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
+                    Estado de Validación
+                  </h3>
+                  <div className={`px-4 py-2 text-white text-xs font-extrabold uppercase tracking-widest rounded-[8px] shadow-md text-center inline-flex items-center justify-center min-w-32 ${
+                    estadoValidacion === "validado"
+                      ? "bg-green-700"
+                      : estadoValidacion === "verificacion"
+                        ? "bg-[#EAB308] text-slate-900"
+                        : "bg-[#C90A0A]"
+                  }`}>
+                    {estadoValidacion === "validado" ? "VALIDADO" : estadoValidacion === "verificacion" ? "VERIFICACIÓN" : "PENDIENTE"}
+                  </div>
+                </div>
+
+                {/* Audio */}
                 <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
                     Audio del Reporte
                   </h3>
                   {datos?.audio_30s ? (
-                    <div className="bg-[#1a5336] rounded-xl p-4 flex items-center gap-4 shadow-md">
-                      <button onClick={toggleAudio}
-                        className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-[#1a5336] shrink-0">
-                        {playing ? <FaPause size={12} /> : <FaPlay size={12} className="ml-0.5" />}
-                      </button>
-                      <div className="flex-1">
-                        <div className="flex justify-between text-[9px] font-semibold text-white/60 mb-1.5 uppercase">
-                          <span>{playing ? "Reproduciendo..." : "Audio del ciudadano"}</span>
-                        </div>
-                        <div className="h-1 w-full bg-white/20 rounded-full overflow-hidden">
-                          <div className="h-full bg-white transition-all" style={{ width: `${audioProgress}%` }} />
+                    <div className="bg-[#113e27] rounded-xl p-4 flex flex-col gap-3 shadow-md">
+                      <div className="flex items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={toggleAudio}
+                          className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-[#113e27] shrink-0"
+                        >
+                          {playing ? <FaPause size={12} /> : <FaPlay size={12} className="ml-0.5" />}
+                        </button>
+                        <div className="flex-1">
+                          <div className="flex justify-between text-[9px] font-semibold text-white/60 mb-1.5 uppercase">
+                            <span>{playing ? "Reproduciendo..." : "Audio del ciudadano"}</span>
+                            <span>{formatTime(audioCurrentTime)} / {formatTime(audioDuration || 60)}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max={audioDuration || 60}
+                            step="0.01"
+                            value={audioCurrentTime}
+                            onChange={handleSeek}
+                            className="w-full h-1 rounded-lg appearance-none cursor-pointer"
+                            style={{ background: `linear-gradient(to right, white 0%, white ${audioProgress}%, rgba(255,255,255,0.2) ${audioProgress}%, rgba(255,255,255,0.2) 100%)` }}
+                          />
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-slate-100 rounded-xl p-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                    <div className="bg-slate-100 rounded-xl p-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-wide shadow-md">
                       Sin audio adjunto
                     </div>
                   )}
                 </section>
 
+                {/* Descripción */}
                 <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 leading-none">
                     Descripción del hecho
                   </h3>
-                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 relative">
-                    <FaExclamationTriangle
-                      className="absolute -top-1.5 -left-1.5 text-green-900 bg-white rounded-md p-0.5 shadow-sm"
-                      size={16}
+                  <div className="bg-white border border-slate-200 rounded-xl p-3 relative transition-all shadow-md">
+                    <div className="absolute top-4 left-3 text-[#113e27] pointer-events-none">
+                      <FaExclamationTriangle size={14} />
+                    </div>
+                    <textarea
+                      className="w-full pl-7 pr-8 text-[13px] font-medium text-slate-600 bg-transparent border-none focus:outline-none resize-y min-h-[65px] max-h-[180px] overflow-y-auto"
+                      placeholder="Sin descripción del hecho..."
+                      value={relatoEditado}
+                      onChange={(e) => setRelatoEditado(e.target.value)}
                     />
-                    <p className="text-[13px] font-bold text-slate-500 leading-relaxed">
-                      {datos?.descripcion || "Sin descripción adjunta."}
-                    </p>
+                    {relatoEditado && (
+                      <div className="absolute top-3.5 right-3">
+                        <button type="button" onClick={() => setRelatoEditado("")} className="text-slate-400 hover:text-slate-600 transition-colors">
+                          <FaTimes size={12} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </section>
 
-                <section className="space-y-3">
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                    Clasificación del Hecho
-                  </h3>
-                  <div className="flex flex-col gap-2">
-                    <div className="relative">
-                      <select
-                        className={`w-full p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none ${!contravencion ? "text-slate-400" : "text-slate-700"}`}
-                        value={contravencion}
-                        onChange={(e) => { setContravencion(e.target.value); setDelito(""); setEstadoValidacion("pendiente"); }}
-                        disabled={!!delito || estadoValidacion === "validado"}
-                      >
-                        <option value="">Seleccionar Contravención</option>
-                        {contravenciones.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                        <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" />
-                        </svg>
+                {/* Clasificación y Prioridad / Panel Desestimación */}
+                <div className="w-full flex-1 flex flex-col">
+                  {showDesestimoPanel ? (
+                    <section className="flex flex-col flex-1">
+                      <div className="mb-2.5">
+                        <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 leading-none">
+                          Desestimación de Alerta
+                        </h3>
                       </div>
-                    </div>
-                    <div className="relative">
-                      <select
-                        className={`w-full p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none ${!delito ? "text-slate-400" : "text-slate-700"}`}
-                        value={delito}
-                        onChange={(e) => { setDelito(e.target.value); setContravencion(""); setEstadoValidacion("pendiente"); }}
-                        disabled={!!contravencion || estadoValidacion === "validado"}
-                      >
-                        <option value="">Seleccionar Delito</option>
-                        {delitos.map(d => <option key={d} value={d}>{d}</option>)}
-                      </select>
-                      <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                        <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" />
-                        </svg>
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-md flex-1 flex flex-col justify-between">
+                        <div>
+                          <div className="border-l-4 border-[#C13100] pl-2 text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2.5">
+                            Seleccione el motivo
+                          </div>
+                          <div className="space-y-1.5">
+                            {motivosDesestimo.map(motivo => {
+                              const isChecked = motivosSeleccionados.includes(motivo);
+                              return (
+                                <label
+                                  key={motivo}
+                                  className={`flex items-center gap-3 p-2.5 rounded-md border text-[11px] font-semibold cursor-pointer transition-all ${
+                                    isChecked
+                                      ? "bg-white border-slate-300 text-slate-700 shadow-sm font-bold"
+                                      : "text-slate-600 hover:bg-white hover:border-white"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="accent-[#C13100] w-3.5 h-3.5 rounded shrink-0 cursor-pointer"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      if (isChecked) {
+                                        toggleMotivo(motivo);
+                                      } else {
+                                        motivosSeleccionados.forEach(m => toggleMotivo(m));
+                                        toggleMotivo(motivo);
+                                      }
+                                    }}
+                                  />
+                                  <span className="truncate">{motivo}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <p className="-mb-1 mt-3 text-[11px] text-slate-400 font-medium leading-relaxed">
+                          Por seguridad y auditoría, seleccione el motivo oficial por el cual se desestimará esta alerta.
+                        </p>
                       </div>
-                    </div>
-                  </div>
-                </section>
+                    </section>
+                  ) : (
+                    <div className="space-y-5 flex-1 flex flex-col">
+                      <section>
+                        <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
+                          Clasificación del Hecho
+                        </h3>
+                        <div className="flex flex-col gap-4 mt-2">
+                          <div className="relative">
+                            <select
+                              className="w-full h-12 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
+                              value={contravencion}
+                              onChange={(e) => { setContravencion(e.target.value); setDelito(""); }}
+                              disabled={!!delito}
+                            >
+                              <option value="">Seleccionar Contravención</option>
+                              {contravenciones.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                            <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12} />
+                          </div>
+                          <div className="relative">
+                            <select
+                              className="w-full h-12 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
+                              value={delito}
+                              onChange={(e) => { setDelito(e.target.value); setContravencion(""); }}
+                              disabled={!!contravencion}
+                            >
+                              <option value="">Seleccionar Delito</option>
+                              {delitos.map(d => <option key={d} value={d}>{d}</option>)}
+                            </select>
+                            <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12} />
+                          </div>
+                        </div>
+                      </section>
 
-                <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
-                    Nivel de Prioridad
-                  </h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {["ALTA", "MEDIA", "BAJA"].map(p => (
-                      <button key={p} type="button"
-                        disabled={estadoValidacion === "validado"}
-                        onClick={() => { setPrioridad(p); setEstadoValidacion("pendiente"); }}
-                        className={`py-2 rounded-xl border-2 font-bold text-[11px] tracking-wider transition-all ${
-                          prioridad === p
-                            ? p === "ALTA"  ? "bg-red-600 border-red-600 text-white"
-                            : p === "MEDIA" ? "bg-blue-600 border-blue-600 text-white"
-                            :                 "bg-amber-500 border-amber-500 text-white"
-                            : "bg-white border-slate-200 text-slate-400 hover:border-slate-300"
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                </section>
+                      <section>
+                        <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none mt-1">
+                          Nivel de Prioridad
+                        </h3>
+                        <div className="grid grid-cols-3 gap-4 mt-2">
+                          {["ALTA", "MEDIA", "BAJA"].map(p => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setPrioridad(p)}
+                              className={`py-2.5 rounded-xl border-2 font-extrabold text-[10px] tracking-wider transition-all flex items-center justify-center h-10 shadow-sm cursor-pointer ${
+                                prioridad === p
+                                  ? p === "ALTA"
+                                    ? "bg-[#C90A0A] border-red-700 text-white shadow-md hover:brightness-90"
+                                    : p === "MEDIA"
+                                      ? "bg-[#0C3DC2] border-blue-600 text-white shadow-md hover:brightness-90"
+                                      : "bg-[#EAB308] border-yellow-600 text-slate-900 shadow-md hover:brightness-90"
+                                  : "bg-white border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
           </div>
         )}
 
-        {/* Botones inferiores */}
-        <div className="p-5 bg-slate-50 border-t flex flex-wrap md:flex-nowrap gap-3">
+        {/* BOTONES INFERIORES */}
+        <div className="p-4 bg-slate-50 border-t flex gap-3 w-full shrink-0">
           <button
-            onClick={handleDesestimar}
-            disabled={estadoValidacion === "validado"}
-            className={`flex items-center justify-center gap-1.5 py-1.5 px-4 rounded-xl font-bold uppercase text-[11px] tracking-wider border-2 transition-all ${
-              estadoValidacion === "validado"
-                ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-                : "bg-white text-orange-600 border-orange-500 hover:bg-orange-50"
+            type="button"
+            onClick={() => {
+              setMotivosSeleccionados([]);
+              setShowDesestimoPanel(!showDesestimoPanel);
+            }}
+            className={`w-2/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[11px] tracking-wider border transition-all shadow-sm ${
+              showDesestimoPanel
+                ? "bg-slate-500 text-white shadow-md hover:bg-slate-600"
+                : "bg-white text-[#C13100] border-[#C13100] hover:bg-[#fff8f5]"
             }`}
           >
-            Desestimar Reporte
+            {showDesestimoPanel ? "Cancelar" : "Desestimar alerta"}
           </button>
 
           <button
-            onClick={handleValidar}
-            disabled={cargando}
-            className={`flex-1 py-1.5 rounded-xl font-bold uppercase text-[11px] tracking-wider flex items-center justify-center gap-1.5 border-2 transition-all ${
-              estadoValidacion === "validado"
-                ? "bg-blue-600 border-blue-600 text-white shadow-md"
-                : "bg-white border-blue-600 text-blue-600 hover:bg-blue-50"
+            type="button"
+            onClick={showDesestimoPanel ? confirmarDesestimo : handleEnviarDespachoLocal}
+            disabled={cargando || (showDesestimoPanel && motivosSeleccionados.length === 0)}
+            className={`w-3/5 py-3.5 px-4 rounded-xl font-bold uppercase text-[11px] tracking-wider shadow-md flex items-center justify-center gap-2 transition-all ${
+              showDesestimoPanel
+                ? "bg-[#b43c14] hover:bg-[#9a320f] text-white disabled:opacity-40"
+                : "bg-[#113e27] hover:bg-[#b43c14] text-white disabled:opacity-40"
             }`}
           >
-            {estadoValidacion === "validado" ? "Alerta Validada" : "Validar Clasificación"}
-          </button>
-
-          <button
-            onClick={handleEnviarDespachoLocal}
-            disabled={estadoValidacion !== "validado"}
-            className={`flex-[1.5] py-3 rounded-xl font-bold uppercase text-[11px] tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all ${
-              estadoValidacion !== "validado"
-                ? "bg-gray-300 text-white cursor-not-allowed shadow-none"
-                : "bg-emerald-900 text-white hover:bg-emerald-800"
-            }`}
-          >
-            <FaCheckCircle size={12} /> Enviar a Despacho
+            <FaCheckCircle size={12} />
+            {showDesestimoPanel ? "Desestimar alerta" : "Enviar a Despacho"}
           </button>
         </div>
 

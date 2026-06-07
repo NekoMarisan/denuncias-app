@@ -10,7 +10,6 @@ import {
   FaChevronLeft,
 } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
-import { supabase } from '../services/supabase'
 
 const Layout = ({ children }) => {
   const navigate = useNavigate();
@@ -46,48 +45,67 @@ const Layout = ({ children }) => {
         <div className="border-b border-white/10 my-4 mx-4"></div>
 
         <nav className="mt-1 flex-1 p-4 space-y-2 overflow-y-auto">
-          {["admin", "operador"].includes(user?.rol) && (
+          {/* Inicio: solo para los roles autorizados (admin, operador, despachador, tabulador) */}
+          {["admin", "operador", "despachador", "tabulador"].includes(user?.rol) && (
             <Link
               to="/dashboard"
-              className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${location.pathname === "/dashboard" ? "bg-white/20" : "hover:bg-white/10"}`}
+              className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${
+                location.pathname === "/dashboard" ? "bg-white/20" : "hover:bg-white/10"
+              }`}
             >
-              <FaHome className="text-base" size={12} />{" "}
+              <FaHome className="text-base" size={12} />
               <span className="font-semibold">Inicio</span>
             </Link>
           )}
+
+          {/* Alertas: solo admin y operador */}
           {["admin", "operador"].includes(user?.rol) && (
             <Link
               to="/gestion-alertas"
-              className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${location.pathname === "/gestion-alertas" ? "bg-white/20" : "hover:bg-white/10"}`}
+              className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${
+                location.pathname === "/gestion-alertas" ? "bg-white/20" : "hover:bg-white/10"
+              }`}
             >
-              <FaBell className="text-base" size={12} />{" "}
+              <FaBell className="text-base" size={12} />
               <span className="font-semibold">Alertas</span>
             </Link>
           )}
+
+          {/* Despacho: solo admin y despachador */}
           {["admin", "despachador"].includes(user?.rol) && (
             <Link
               to="/centro-despacho"
-              className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${location.pathname === "/centro-despacho" ? "bg-white/20" : "hover:bg-white/10"}`}
+              className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${
+                location.pathname === "/centro-despacho" ? "bg-white/20" : "hover:bg-white/10"
+              }`}
             >
-              <FaCarSide className="text-base" size={12} />{" "}
+              <FaCarSide className="text-base" size={12} />
               <span className="font-semibold">Despacho</span>
             </Link>
           )}
+
+          {/* Tabulación: solo admin y tabulador */}
           {["admin", "tabulador"].includes(user?.rol) && (
             <Link
               to="/tabulacion"
-              className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${location.pathname === "/tabulacion" ? "bg-white/20" : "hover:bg-white/10"}`}
+              className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${
+                location.pathname === "/tabulacion" ? "bg-white/20" : "hover:bg-white/10"
+              }`}
             >
-              <FaFileAlt className="text-base" size={12} />{" "}
+              <FaFileAlt className="text-base" size={12} />
               <span className="font-semibold">Tabulación</span>
             </Link>
           )}
+
+          {/* Usuarios: solo admin */}
           {user?.rol === "admin" && (
             <Link
               to="/usuarios"
-              className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${location.pathname === "/usuarios" ? "bg-white/20" : "hover:bg-white/10"}`}
+              className={`flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm tracking-wider ${
+                location.pathname === "/usuarios" ? "bg-white/20" : "hover:bg-white/10"
+              }`}
             >
-              <FaUsers className="text-base" size={12} />{" "}
+              <FaUsers className="text-base" size={12} />
               <span className="font-semibold">Usuarios</span>
             </Link>
           )}
@@ -109,7 +127,7 @@ const Layout = ({ children }) => {
 
       {/* CONTENEDOR PRINCIPAL */}
       <div className="flex-auto ml-56 min-h-screen flex flex-col">
-        {/* HEADER - altura reducida, padding menor */}
+        {/* HEADER */}
         <header className="bg-white h-[4.5rem] border-b border-gray-200 shadow-sm flex items-center justify-between px-6 sticky top-0 z-20">
           <div className="flex items-center gap-4">
             {shouldShowBackButton() && (
@@ -145,7 +163,7 @@ const Layout = ({ children }) => {
           </div>
         </header>
 
-        {/* CONTENIDO - padding reducido */}
+        {/* CONTENIDO */}
         <main className="p-6 flex-1">{children}</main>
       </div>
     </div>
