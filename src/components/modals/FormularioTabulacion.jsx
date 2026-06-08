@@ -53,7 +53,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
     const abortController = new AbortController();
     isLoadingRef.current = true;
 
-    const cargar = async () => {
+const cargar = async () => {
   setCargandoDatos(true);
   try {
     // 1. Alerta: ciudadano y operador receptor
@@ -82,13 +82,10 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
       if (idOper) {
         const { data: operador } = await supabase
           .from("oficial")
-          .select("nombre_completo, numero_escalafon, placa")
+          .select("nombre_completo")
           .eq("id_oficial", idOper)
           .maybeSingle();
         setNombreOperador(operador?.nombre_completo || `Operador #${idOper}`);
-
-
-        
       }
     }
 
@@ -101,49 +98,42 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
       .maybeSingle();
 
     if (asigRow) {
-          setIdAsignacion(asigRow.id_asignacion);
-          setIdPatrullero(asigRow.id_patrullero);
-          setIdDespachador(asigRow.id_oficial_asignador ?? null);
+      setIdAsignacion(asigRow.id_asignacion);
+      setIdPatrullero(asigRow.id_patrullero);
+      setIdDespachador(asigRow.id_oficial_asignador ?? null);
 
-      // Obtener despachador
-          if (asigRow.id_oficial_asignador) {
-            const { data: despachador } = await supabase
+      if (asigRow.id_oficial_asignador) {
+        const { data: despachador } = await supabase
+          .from("oficial")
+          .select("nombre_completo")
+          .eq("id_oficial", asigRow.id_oficial_asignador)
+          .maybeSingle();
+        setNombreDespachador(despachador?.nombre_completo || `Oficial #${asigRow.id_oficial_asignador}`);
+      }
+
+      if (asigRow.id_patrullero) {
+        const { data: patrulleroData } = await supabase
+          .from("patrullero")
+          .select("placa, id_oficial")
+          .eq("id_patrullero", asigRow.id_patrullero)
+          .maybeSingle();
+        if (patrulleroData) {
+          setPlaca(patrulleroData.placa || '—');
+          if (patrulleroData.id_oficial) {
+            const { data: oficialData } = await supabase
               .from("oficial")
-              .select("nombre_completo")
-              .eq("id_oficial", asigRow.id_oficial_asignador)
+              .select("nombre_completo, numero_escalafon, cargo")
+              .eq("id_oficial", patrulleroData.id_oficial)
               .maybeSingle();
-            setNombreDespachador(despachador?.nombre_completo || `Oficial #${asigRow.id_oficial_asignador}`);
-          }
-
-// Obtener patrullero y sus datos de placa/epi
-          if (asigRow.id_patrullero) {
-            // PRIMERO: Buscamos en la tabla patrullero para obtener el id_oficial
-            const { data: patrulleroData } = await supabase
-              .from("patrullero")
-              .select("placa, id_oficial")
-              .eq("id_patrullero", asigRow.id_patrullero)
-              .maybeSingle();
-            
-            if (patrulleroData) {
-              setPlaca(patrulleroData.placa || '—');
-              
-              // SEGUNDO: Con el id_oficial, buscamos en la tabla OFICIAL los datos extra
-              if (patrulleroData.id_oficial) {
-                const { data: oficialData } = await supabase
-                  .from("oficial")
-                  .select("nombre_completo, numero_escalafon, placa, epi") // <-- AQUI AGREGAMOS 'epi'
-                  .eq("id_oficial", patrulleroData.id_oficial)
-                  .maybeSingle();
-                  
-                if (oficialData) {
-                  setNombrePatrullero(oficialData.nombre_completo || `Oficial #${patrulleroData.id_oficial}`);
-                  setEscalafon(oficialData.numero_escalafon || '—');
-                  setEpi(oficialData.epi || oficialData.cargo || 'EPI CENTRAL'); // Usa la columna epi de la tabla oficial
-                }
-              }
+            if (oficialData) {
+              setNombrePatrullero(oficialData.nombre_completo || `Oficial #${patrulleroData.id_oficial}`);
+              setEscalafon(oficialData.numero_escalafon || '—');
+              setEpi(oficialData.cargo || 'EPI CENTRAL');
             }
           }
         }
+      }
+    }
 
     // 3. Reporte del patrullero
     if (asigRow?.id_patrullero) {
@@ -160,6 +150,8 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
       }
     }
 
+    // 4. Precargar clasificación y derivación
+    // Nota: Asegúrate de que la variable 'alerta' esté definida en tu componente
     if (alerta?.contravenciones) {
       setTipoSeleccion('contravencion');
       setContravencionValue(alerta.contravenciones);
@@ -168,7 +160,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm }) => {
       setDelitoValue(alerta.delitos);
     }
     if (alerta?.derivacion) setRemisionCaso(alerta.derivacion);
-
   } catch (err) {
     if (err.name !== 'AbortError') console.error("Error cargando datos:", err);
   } finally {
