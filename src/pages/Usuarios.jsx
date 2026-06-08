@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   FaEdit,
   FaTrashAlt,
@@ -11,8 +11,9 @@ import {
   FaCheckCircle,
   FaFilePdf,
   FaFileExcel,
-  FaPowerOff,     // Icono elegante para FUERA DE SERVICIO
-  FaUserSlash     // Icono elegante para DE BAJA
+  FaPowerOff,
+  FaUserSlash,
+  FaSyncAlt
 } from "react-icons/fa";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -25,6 +26,7 @@ function Usuarios() {
   const [filtroActivo, setFiltroActivo] = useState("Todos");
   const [busqueda, setBusqueda] = useState("");
   const [cargando, setCargando] = useState(true);
+  const [refrescando, setRefrescando] = useState(false);
   const [ciudadanoSeleccionado, setCiudadanoSeleccionado] = useState(null);
   const [mostrarModalPolicia, setMostrarModalPolicia] = useState(false);
   const [editandoPolicia, setEditandoPolicia] = useState(null);
@@ -32,35 +34,61 @@ function Usuarios() {
   const [oficiales, setOficiales] = useState([]);
   const [ciudadanos, setCiudadanos] = useState([]);
 
-  // ================== CARGAR DATOS ==================
-  const cargarOficiales = async () => {
+  const cargarOficiales = useCallback(async () => {
     const { data, error } = await supabase
       .from("oficial")
       .select("*")
       .order("id_oficial", { ascending: true });
     if (error) console.error("Error oficiales:", error);
-    else setOficiales(data || []);
-  };
+    else {
+      setOficiales(data || []);
+      // Log para depuración (puedes eliminarlo)
+      console.log("Oficiales cargados:", data?.map(o => ({ id: o.id_oficial, estado: o.estado })));
+    }
+  }, []);
 
-  const cargarCiudadanos = async () => {
+  const cargarCiudadanos = useCallback(async () => {
     const { data, error } = await supabase
       .from("usuario_ciudadano")
       .select("*")
       .order("id_usuario", { ascending: true });
     if (error) console.error("Error ciudadanos:", error);
     else setCiudadanos(data || []);
-  };
-
-  useEffect(() => {
-    const cargarTodo = async () => {
-      setCargando(true);
-      await Promise.all([cargarOficiales(), cargarCiudadanos()]);
-      setCargando(false);
-    };
-    cargarTodo();
   }, []);
 
-  // ================== CRUD OFICIALES ==================
+  const recargarTodo = useCallback(async () => {
+    setRefrescando(true);
+    await Promise.all([cargarOficiales(), cargarCiudadanos()]);
+    setRefrescando(false);
+  }, [cargarOficiales, cargarCiudadanos]);
+
+  // Carga inicial
+  useEffect(() => {
+    const cargarInicial = async () => {
+      setCargando(true);
+      await recargarTodo();
+      setCargando(false);
+    };
+    cargarInicial();
+  }, [recargarTodo]);
+
+  // Recarga periódica cada 10 segundos (para reflejar cambios de estado)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      recargarTodo();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [recargarTodo]);
+
+  // Recarga cuando la ventana recupera el foco
+  useEffect(() => {
+    const handleFocus = () => {
+      recargarTodo();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [recargarTodo]);
+
   const eliminarOficial = async (id) => {
     if (!window.confirm("¿Eliminar este oficial?")) return;
     const { error } = await supabase.from("oficial").delete().eq("id_oficial", id);
@@ -68,9 +96,8 @@ function Usuarios() {
     else await cargarOficiales();
   };
 
-  // ================== CIUDADANOS ==================
   const habilitarCiudadano = async (ciudadano) => {
-    if (!window.confirm(`¿Habilitar a ${ciudadano.nombre_completo}?`)) return;
+    if (!window.confirm(`¿Habilitar a ${ciudadano.nombre_completo}? La cuenta pasará a ACTIVO.`)) return;
     const { error } = await supabase
       .from("usuario_ciudadano")
       .update({ estado_cuenta: "ACTIVO" })
@@ -79,8 +106,9 @@ function Usuarios() {
     else await cargarCiudadanos();
   };
 
-  // ================== EXPORTACIONES ==================
+  // Funciones de exportación (sin cambios)
   const exportarPDF = () => {
+    // ... (igual que antes)
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const titulo = tabActiva === "oficiales" ? "REPORTE DE PERSONAL POLICIAL" : "REPORTE DE REGISTRO DE CIUDADANOS";
     const fechaActual = new Date().toLocaleString("es-ES", {
@@ -98,19 +126,18 @@ function Usuarios() {
     doc.setDrawColor(200); doc.line(20, 30, 190, 30);
 
     const headers = tabActiva === "oficiales"
-      ? [["ID", "Nombre", "Cédula", "Escalafón", "Rango", "Estado Conexión", "Control Acceso"]]
-      : [["ID", "Nombre", "Cédula", "Celular", "Estado Cuenta"]];
+      ? [["ID", "Oficial", "Escalafón / Rol", "Rango", "Celular", "Estado"]]
+      : [["ID", "Ciudadano", "Cédula", "Celular", "Estado"]];
 
     const body = datosFiltrados.map(item =>
       tabActiva === "oficiales"
         ? [
             item.id_oficial,
             item.nombre_completo,
-            item.ci,
-            item.numero_escalafon,
-            item.cargo,
-            item.estado === true || item.estado === "conectado" ? "Conectado" : "Desconectado",
-            item.acceso || "—"
+            `${item.numero_escalafon || "—"} - ${item.rol || "—"}`,
+            item.cargo || "—",
+            item.celular || "—",
+            item.estado === true ? "Conectado" : "Desconectado"
           ]
         : [
             item.id_usuario,
@@ -153,26 +180,28 @@ function Usuarios() {
       <xml xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
         <head><meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8"></head>
         <body>
-          <table><td colspan="6" style="font-size:16pt;font-weight:bold">${titulo}</td></tr>
+          <tr><td colspan="6" style="font-size:16pt;font-weight:bold">${titulo}</td></tr>
           <tr><td colspan="6" style="color:#666">SISTEMA DE SEGURIDAD CIUDADANA - COCHABAMBA | Generado: ${fecha}</td></tr>
           <tr>
-            <th>ID</th><th>NOMBRE</th><th>CÉDULA</th>
-            <th>${tabActiva === "oficiales" ? "ESCALAFÓN" : "CELULAR"}</th>
-            <th>${tabActiva === "oficiales" ? "ESTADO CONEXIÓN" : "ESTADO"}</th>
-            ${tabActiva === "oficiales" ? "<th>CONTROL ACCESO</th>" : ""}
+            ${tabActiva === "oficiales" 
+              ? "<th>ID</th><th>OFICIAL</th><th>ESCALAFÓN / ROL</th><th>RANGO</th><th>CELULAR</th><th>ESTADO</th>"
+              : "<th>ID</th><th>CIUDADANO</th><th>CÉDULA</th><th>CELULAR</th><th>ESTADO</th>"
+            }
           </tr>
           ${registros.map(item => `
             <tr>
               <td>${tabActiva === "oficiales" ? item.id_oficial : item.id_usuario}</td>
               <td style="font-weight:bold">${item.nombre_completo}</td>
-              <td>${item.ci || ""}</td>
-              <td>${tabActiva === "oficiales" ? (item.numero_escalafon || "") : (item.celular || "")}</td>
-              <td style="font-weight:bold">
-                ${tabActiva === "oficiales" 
-                  ? (item.estado === true || item.estado === "conectado" ? "Conectado" : "Desconectado") 
-                  : (item.estado_cuenta || "")}
-              </td>
-              ${tabActiva === "oficiales" ? `<td>${item.acceso || "—"}</td>` : ""}
+              ${tabActiva === "oficiales" ? `
+                <td>${item.numero_escalafon || "—"} - ${item.rol || "—"}</td>
+                <td>${item.cargo || "—"}</td>
+                <td>${item.celular || ""}</td>
+                <td style="font-weight:bold">${item.estado === true ? "Conectado" : "Desconectado"}</td>
+              ` : `
+                <td>${item.ci || ""}</td>
+                <td>${item.celular || ""}</td>
+                <td style="font-weight:bold">${item.estado_cuenta || ""}</td>
+              `}
             </tr>
           `).join("")}
         </body>
@@ -185,7 +214,6 @@ function Usuarios() {
     link.click();
   };
 
-  // ================== FILTRADO ==================
   const datosFiltrados = (tabActiva === "oficiales" ? oficiales : ciudadanos).filter((item) => {
     const nombre = item.nombre_completo?.toLowerCase() || "";
     const ci = item.ci?.toLowerCase() || "";
@@ -195,17 +223,16 @@ function Usuarios() {
 
     if (tabActiva === "ciudadanos") return cumpleBusqueda;
 
-    // Filtro para oficiales según estado de conexión (booleano o string)
-    const estadoConexion = item.estado === true || item.estado === "conectado";
+    // Aseguramos la comparación booleana
+    const estaConectado = item.estado === true;
     const cumpleFiltro =
       filtroActivo === "Todos" ||
-      (filtroActivo === "conectado" && estadoConexion) ||
-      (filtroActivo === "desconectado" && !estadoConexion);
+      (filtroActivo === "conectado" && estaConectado) ||
+      (filtroActivo === "desconectado" && !estaConectado);
 
     return cumpleBusqueda && cumpleFiltro;
   });
 
-  // ================== RENDER ==================
   if (cargando) {
     return (
       <div className="-mt-4 w-full px-1 py-5 bg-gray-50/30 min-h-screen flex items-center justify-center">
@@ -216,8 +243,7 @@ function Usuarios() {
 
   return (
     <div className="-mt-4 w-full px-1 py-4 space-y-5 animate-fadeIn pb-6 bg-gray-50/30">
-
-      {/* BARRA DE HERRAMIENTAS */}
+      {/* Barra de herramientas con indicador de refresco */}
       <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 flex-1">
           <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100 shrink-0">
@@ -284,10 +310,20 @@ function Usuarios() {
               </button>
             </div>
           </div>
+
+          {/* Botón de recarga manual con indicador de refresco */}
+          <button
+            onClick={recargarTodo}
+            disabled={refrescando}
+            className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
+            title="Recargar datos"
+          >
+            <FaSyncAlt className={`text-gray-600 text-xs ${refrescando ? "animate-spin" : ""}`} />
+          </button>
         </div>
       </div>
 
-      {/* TABLA */}
+      {/* Tabla (sin cambios) */}
       <div className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-50 text-left">
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-xl font-black uppercase tracking-tight text-[#1e293b]">
@@ -299,18 +335,19 @@ function Usuarios() {
           <table className="w-full border-separate border-spacing-y-3 table-fixed">
             <thead>
               <tr className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wide">
-                <th className="px-3 pb-2 w-[10%] text-left">ID</th>
-                <th className="pb-2 w-[25%] text-left">{tabActiva === "oficiales" ? "Oficial" : "Ciudadano"}</th>
-                <th className="pb-2 w-[12%] text-left">Cédula</th>
+                <th className="px-3 pb-2 w-[8%] text-left">ID</th>
+                <th className="pb-2 w-[22%] text-left">{tabActiva === "oficiales" ? "Oficial" : "Ciudadano"}</th>
                 {tabActiva === "oficiales" ? (
                   <>
-                    <th className="pb-2 w-[12%] text-left">Escalafón</th>
-                    <th className="pb-2 w-[15%] text-left">Rango</th>
-                    <th className="px-0 pb-2 w-[15%] text-left">Estado</th>
+                    <th className="pb-2 w-[18%] text-left">Escalafón / Rol</th>
+                    <th className="pb-2 w-[12%] text-left">Rango</th>
+                    <th className="pb-2 w-[12%] text-left">Celular</th>
+                    <th className="px-0 pb-2 w-[12%] text-left">Estado</th>
                   </>
                 ) : (
                   <>
-                    <th className="pb-2 w-[15%] text-left">Celular</th>
+                    <th className="pb-2 w-[12%] text-left">Cédula</th>
+                    <th className="pb-2 w-[12%] text-left">Celular</th>
                     <th className="px-0 pb-2 w-[12%] text-left">Estado</th>
                   </>
                 )}
@@ -321,9 +358,8 @@ function Usuarios() {
               {datosFiltrados.map((item, i) => {
                 const esOficial = tabActiva === "oficiales";
                 const idMostrar = esOficial ? `ROF-${String(item.id_oficial).padStart(4, "0")}` : `REGC-${String(item.id_usuario).padStart(4, "0")}`;
-                const estaConectado = item.estado === true || item.estado === "conectado";
+                const estaConectado = item.estado === true;
                 
-                // Determinar ícono según acceso
                 let IconoAcceso = null;
                 if (item.acceso === "FUERA DE SERVICIO") {
                   IconoAcceso = <FaPowerOff size={12} className="text-amber-600 mr-1" title="FUERA DE SERVICIO" />;
@@ -341,23 +377,20 @@ function Usuarios() {
                         </div>
                         <div className="flex flex-col min-w-0">
                           <span className="text-xs font-bold text-[#1e293b] leading-tight truncate">{item.nombre_completo}</span>
-                          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
-                            {esOficial ? (item.rol || "") : "Ciudadano Verificado"}
-                          </span>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">{item.ci || "—"}</td>
                     {esOficial ? (
                       <>
-                        <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">{item.numero_escalafon || "—"}</td>
+                        <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">
+                          {item.numero_escalafon || "—"} - {item.rol || "—"}
+                        </td>
                         <td className="py-3 text-[11px] font-extrabold text-slate-600 border-y border-gray-50 text-left">{item.cargo || "—"}</td>
+                        <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">{item.celular || "—"}</td>
                         <td className="py-3 border-y border-gray-50 text-left">
                           <div className="flex items-center">
                             {IconoAcceso}
-                            <span className={`inline-flex justify-center w-24 py-1.5 rounded-lg text-[9px] font-black uppercase text-white shadow-sm ${
-                              estaConectado ? "bg-[#00a65a]" : "bg-[#e00000]"
-                            }`}>
+                            <span className={`inline-flex justify-center w-24 py-1.5 rounded-lg text-[9px] font-black uppercase text-white shadow-sm ${estaConectado ? "bg-[#00a65a]" : "bg-[#e00000]"}`}>
                               {estaConectado ? "Conectado" : "Desconectado"}
                             </span>
                           </div>
@@ -365,10 +398,11 @@ function Usuarios() {
                       </>
                     ) : (
                       <>
+                        <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">{item.ci || "—"}</td>
                         <td className="py-3 text-[11px] font-extrabold text-slate-600 border-y border-gray-50 text-left">{item.celular || "—"}</td>
                         <td className="py-3 border-y border-gray-50 text-left">
                           <div className="flex flex-col items-start justify-center">
-                            <span className={`inline-flex justify-center w-24 py-1.5 rounded-lg text-[9px] font-black uppercase text-white shadow-sm ${
+                            <span className={`inline-flex justify-center w-28 py-1.5 rounded-lg text-[9px] font-black uppercase text-white shadow-sm ${
                               item.estado_cuenta === "ACTIVO" ? "bg-[#00a65a]" :
                               item.estado_cuenta === "ADVERTIDO" ? "bg-[#ff7e00]" :
                               item.estado_cuenta === "SUSPENDIDO" ? "bg-[#e00000]" : "bg-[#9da1a3]"
@@ -415,7 +449,11 @@ function Usuarios() {
                               <FaSearch size={11} />
                             </button>
                             {item.estado_cuenta === "SUSPENDIDO" && (
-                              <button onClick={() => habilitarCiudadano(item)} className="p-2 bg-green-600 text-white rounded-lg shadow shadow-green-100 hover:scale-105 transition-all shrink-0">
+                              <button
+                                onClick={() => habilitarCiudadano(item)}
+                                className="p-2 bg-green-600 text-white rounded-lg shadow shadow-green-100 hover:scale-105 transition-all shrink-0"
+                                title="Habilitar cuenta"
+                              >
                                 <FaCheckCircle size={11} />
                               </button>
                             )}
@@ -438,7 +476,6 @@ function Usuarios() {
         </div>
       </div>
 
-      {/* MODAL NUEVO/EDITAR OFICIAL */}
       <NuevoPolicia
         isOpen={mostrarModalPolicia}
         onClose={() => setMostrarModalPolicia(false)}
@@ -446,7 +483,6 @@ function Usuarios() {
         editandoPolicia={editandoPolicia}
       />
 
-      {/* MODAL PERFIL CIUDADANO */}
       <PerfilCiudadano
         ciudadano={ciudadanoSeleccionado}
         onClose={() => setCiudadanoSeleccionado(null)}

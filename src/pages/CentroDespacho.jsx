@@ -620,7 +620,7 @@ const CentroDespacho = () => {
         </div>
       )}
 
-      {/* SIDEBAR */}
+      {/* SIDEBAR - CON LÍNEA DIVISORIA MÁS NOTORIA */}
       <div className="w-[320px] shrink-0 flex flex-col bg-white rounded-2xl shadow-md overflow-hidden">
         <div className="p-3 bg-white border-b border-slate-100">
           <div className="mt-1 flex bg-slate-50 p-1 rounded-xl border border-slate-200">
@@ -639,19 +639,20 @@ const CentroDespacho = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-5">
+        <div className="flex-1 flex flex-col overflow-hidden">
           {cargando ? (
-            <div className="flex justify-center py-10">
+            <div className="flex justify-center items-center flex-1">
               <FaSpinner className="animate-spin text-green-800 text-2xl" />
             </div>
           ) : (
             <>
-              <div>
-                <h3 className="text-[10px] font-extrabold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider">
-                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+              {/* Emergencias */}
+              <div className="flex-1 flex flex-col min-h-0 py-3">
+                <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3">
+                  <span className="w-1.5 h-1.5 bg-[#C90A0A] rounded-full animate-pulse" />
                   Alertas de Emergencia
                 </h3>
-                <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3">
+                <div className="flex-1 overflow-y-auto px-3 space-y-3">
                   {alertasVisibles.filter(a => a.tipo === "EMERGENCIA").map(a => (
                     <AlertaCard
                       key={a.id}
@@ -666,14 +667,16 @@ const CentroDespacho = () => {
                 </div>
               </div>
 
-              <div className="border-t border-slate-100" />
+              {/* LÍNEA DIVISORIA MÁS GRUESA Y NOTORIA */}
+              <div className="border-t-2 border-slate-100 mx-3 my-1 mt-4" />
 
-              <div>
-                <h3 className="text-[10px] font-extrabold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider">
+              {/* Ciudadanas */}
+              <div className="flex-1 flex flex-col min-h-0 py-3">
+                <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3">
                   <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
                   Alertas Ciudadanas
                 </h3>
-                <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3">
+                <div className="flex-1 overflow-y-auto px-3 space-y-3">
                   {alertasVisibles.filter(a => a.tipo === "CIUDADANA").map(a => (
                     <AlertaCard
                       key={a.id}
@@ -692,7 +695,7 @@ const CentroDespacho = () => {
         </div>
       </div>
 
-      {/* PANEL CENTRAL */}
+      {/* PANEL CENTRAL - resto del código sin cambios */}
       <div className="flex-1 flex flex-col gap-4 pb-6">
         <div className="w-full h-[380px] shrink-0 bg-white rounded-2xl shadow-md overflow-hidden">
           {!isLoaded ? (

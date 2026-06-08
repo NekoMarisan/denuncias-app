@@ -5,7 +5,7 @@ import { FaShieldAlt, FaUser, FaLock, FaEye, FaEyeSlash } from "react-icons/fa";
 
 function Login() {
   const navigate = useNavigate();
-  const { login, user } = useAuth(); // 👈 obtenemos user para verificar sesión activa
+  const { login, user } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -20,7 +20,7 @@ function Login() {
   const passWarningTimeout = useRef(null);
   const errorTimeout = useRef(null);
 
-  // ✅ Si ya hay un usuario logueado, redirigir según su rol
+  // Redirigir si ya hay sesión activa
   useEffect(() => {
     if (user) {
       switch (user.rol) {
@@ -40,6 +40,7 @@ function Login() {
     }
   }, [user, navigate]);
 
+  // Limpiar error automáticamente después de 2 segundos
   useEffect(() => {
     if (error) {
       if (errorTimeout.current) clearTimeout(errorTimeout.current);
@@ -107,12 +108,7 @@ function Login() {
 
     try {
       const result = await login(escalafon, pass);
-      if (result.success) {
-        // La redirección se hará automáticamente por el useEffect que observa `user`
-        // (ya que el contexto actualiza el estado y este componente se re-renderiza)
-        // No necesitamos navegar aquí, el useEffect lo hará.
-      } else {
-        // ✅ Mostrar el mensaje de error real devuelto por el contexto
+      if (!result.success) {
         setError(result.error || "Credenciales incorrectas");
       }
     } catch (err) {
@@ -130,6 +126,7 @@ function Login() {
     >
       <div className="absolute inset-0 bg-black/40"></div>
       <div className="relative z-10 flex w-full max-w-4xl h-auto min-h-[540px] sm:h-[540px] shadow-xl rounded-3xl overflow-hidden bg-white border-2 border-gray-200 flex-col lg:flex-row">
+        {/* Panel izquierdo */}
         <div className="hidden lg:flex flex-col justify-between w-full lg:w-1/2 p-6 relative text-white">
           <div
             className="absolute inset-0 bg-cover bg-center"
@@ -159,6 +156,8 @@ function Login() {
             <p>© {new Date().getFullYear()} Comando Dptal. de Policía</p>
           </div>
         </div>
+
+        {/* Panel derecho - formulario */}
         <div className="w-full lg:w-1/2 p-5 px-6 sm:px-10 md:p-8 md:px-12 flex flex-col justify-center">
           <h2 className="text-[20px] sm:text-[23px] font-bold text-green-900 mb-6 text-center uppercase tracking-wider">
             Ingreso al Sistema
@@ -167,7 +166,7 @@ function Login() {
           <form onSubmit={handleLogin} className="space-y-3">
             <div>
               <label className="mt-3 block text-green-800 text-[11px] font-semibold mb-1.5">
-                <FaUser className="inline mr-1.5 text-xs" /> Usuario
+                <FaUser className="inline mr-1.5 text-xs" /> Número de Escalafón
               </label>
               <div className="relative">
                 <input

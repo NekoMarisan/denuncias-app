@@ -5,59 +5,56 @@ import { FaLock } from "react-icons/fa";
 import DetalleAlertaModal from "../components/modals/DetalleAlerta";
 import DetalleEmergencia from "../components/modals/DetalleEmergencia";
 import { supabase } from "../services/supabase";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/AuthContext"; // 👈 necesario para saber quién es el operador
 
 function GestionAlertas() {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user } = useAuth(); // 👈 obtener el oficial autenticado
 
-  const [tabActiva, setTabActiva]                 = useState("emergencia");
-  const [mostrarModal, setMostrarModal]           = useState(false);
+  const [tabActiva, setTabActiva] = useState("emergencia");
+  const [mostrarModal, setMostrarModal] = useState(false);
   const [alertaSeleccionada, setAlertaSeleccionada] = useState(null);
   const [alertasArchivadas, setAlertasArchivadas] = useState([]);
-  const [filaResaltada, setFilaResaltada]         = useState(null);
-  const [cargando, setCargando]                   = useState(true);
-  const [errorCarga, setErrorCarga]               = useState(null);
+  const [filaResaltada, setFilaResaltada] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(null);
 
-  const [alertasPanico, setAlertasPanico]       = useState([]);
+  const [alertasPanico, setAlertasPanico] = useState([]);
   const [alertasCiudadanas, setAlertasCiudadanas] = useState([]);
 
   const dataActual = tabActiva === "ciudadana" ? alertasCiudadanas : alertasPanico;
 
-  // ── TRANSFORMAR ───────────────────────────────────────────────────────────
   const transformarAlertas = (data) => {
-    const panico     = [];
+    const panico = [];
     const ciudadanas = [];
 
     data.forEach((item) => {
       const base = {
-        id:            item.id_alerta,
-        ciudadano:     item.usuario_ciudadano?.nombre_completo || `Usuario #${item.id_usuario}`,
-        ubicacion:     item.ubicacion   || "Sin ubicación",
-        fecha:         item.fecha_hora
-                         ? new Date(item.fecha_hora).toLocaleDateString("es-BO")
-                         : "—",
-        hora:          item.fecha_hora
-                         ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", {
-                             hour: "2-digit", minute: "2-digit",
-                           })
-                         : "—",
-        descripcion:   item.descripcion  || "",
-        contravencion: item.contravenciones || item.contravencion || "",
-        delito:        item.delitos         || item.delito        || "",
-        audio_30s:     item.audio_30s  || null,
-        prioridad:     item.prioridad  || "Media",
-        codigo:        item.codigo_alerta || "",
-        bloqueadoPor:  item.bloqueado_por  || null,
-        bloqueadoRol:  item.bloqueado_rol  || null,
+        id:           item.id_alerta,
+        ciudadano:    item.usuario_ciudadano?.nombre_completo || `Usuario #${item.id_usuario}`,
+        ubicacion:    item.ubicacion  || "Sin ubicación",
+        fecha:        item.fecha_hora
+                        ? new Date(item.fecha_hora).toLocaleDateString("es-BO")
+                        : "—",
+        hora:         item.fecha_hora
+                        ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", {
+                            hour:   "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—",
+        descripcion:  item.descripcion  || "",
+        categoria:    item.categoria    || "",
+        audio_30s:    item.audio_30s    || null,
+        prioridad:    item.prioridad    || "Media",
+        codigo:       item.codigo_alerta || "",
+        // ✅ AGREGADO: campos de bloqueo
+        bloqueadoPor: item.bloqueado_por  || null,
+        bloqueadoRol: item.bloqueado_rol  || null,
       };
 
-      if (
-        item.categoria === "Panico" ||
-        (base.delito && base.delito.trim() !== "")
-      ) {
+      if (item.categoria === "Panico") {
         panico.push({ ...base, estado: "Emergencia" });
-      } else {
+      } else if (item.categoria === "Alerta Ciudadana") {
         ciudadanas.push({ ...base, estado: "Verificación" });
       }
     });
@@ -65,7 +62,6 @@ function GestionAlertas() {
     return { panico, ciudadanas };
   };
 
-  // ── CARGAR ALERTAS ────────────────────────────────────────────────────────
   const cargarAlertas = async () => {
     setCargando(true);
     setErrorCarga(null);
@@ -100,12 +96,10 @@ function GestionAlertas() {
     }
   };
 
-  // ── INICIALIZACIÓN ────────────────────────────────────────────────────────
   useEffect(() => {
     cargarAlertas();
   }, []);
 
-  // ── TIEMPO REAL ───────────────────────────────────────────────────────────
   useEffect(() => {
     const canal = supabase
       .channel("alertas-realtime")
@@ -118,7 +112,6 @@ function GestionAlertas() {
     return () => supabase.removeChannel(canal);
   }, []);
 
-  // ── RESALTAR FILA DESDE NAVEGACIÓN ────────────────────────────────────────
   useEffect(() => {
     const state = location.state;
     if (state?.activeTab) {
@@ -135,27 +128,33 @@ function GestionAlertas() {
     }
   }, [location.state]);
 
-  // ── ABRIR MODAL (con bloqueo optimista) ──────────────────────────────────
+  // ✅ MODIFICADO: abrirModal ahora intenta tomar el bloqueo antes de abrir
   const abrirModal = async (alerta) => {
     const idOficial = user?.id_oficial;
+
     if (!idOficial) {
       alert("Error: No se pudo identificar al operador");
       return;
     }
 
+    // Intentar bloquear la alerta (operación atómica)
+// Intentar bloquear la alerta (operación atómica)
     const { data, error } = await supabase
       .from("alerta")
       .update({
         bloqueado_por: idOficial,
         bloqueado_en:  new Date().toISOString(),
         bloqueado_rol: "operador",
+        // ESTA ES LA LÍNEA QUE FALTA PARA QUE EL NOMBRE APAREZCA
+        id_operador_receptor: idOficial 
       })
       .eq("id_alerta", alerta.id)
-      .is("bloqueado_por", null)
+      .is("bloqueado_por", null) // solo si nadie la tiene
       .select()
       .single();
 
     if (!data || error) {
+      // Alguien más ya la tiene abierta
       alert("🔒 Esta alerta ya está siendo atendida por otro operador");
       return;
     }
@@ -164,7 +163,7 @@ function GestionAlertas() {
     setMostrarModal(true);
   };
 
-  // ── CERRAR MODAL (liberar bloqueo) ────────────────────────────────────────
+  // ✅ MODIFICADO: cerrarModal libera el bloqueo
   const cerrarModal = async () => {
     if (alertaSeleccionada && user?.id_oficial) {
       await supabase
@@ -175,21 +174,22 @@ function GestionAlertas() {
           bloqueado_rol: null,
         })
         .eq("id_alerta", alertaSeleccionada.id)
-        .eq("bloqueado_por", user.id_oficial);
+        .eq("bloqueado_por", user.id_oficial); // solo el dueño puede liberar
     }
     setMostrarModal(false);
     setAlertaSeleccionada(null);
   };
 
-  // ── DESESTIMAR ────────────────────────────────────────────────────────────
+  // DESESTIMAR → cambia estado a 4 y libera bloqueo
   const manejarDesestimar = async (idAlerta, motivo) => {
     const { error } = await supabase
       .from("alerta")
       .update({
         id_estado_actual: 4,
-        bloqueado_por:    null,
-        bloqueado_en:     null,
-        bloqueado_rol:    null,
+        // ✅ AGREGADO: liberar bloqueo al desestimar
+        bloqueado_por: null,
+        bloqueado_en:  null,
+        bloqueado_rol: null,
       })
       .eq("id_alerta", idAlerta);
 
@@ -201,15 +201,12 @@ function GestionAlertas() {
     const listaOrigen = tabActiva === "emergencia" ? alertasPanico : alertasCiudadanas;
     const alertaEncontrada = listaOrigen.find((a) => a.id === idAlerta);
     if (alertaEncontrada) {
-      setAlertasArchivadas((prev) => [
-        ...prev,
-        {
-          ...alertaEncontrada,
-          estado:              "DESESTIMADO",
-          motivoDesestimacion: motivo || "Sin motivo especificado",
-          fechaArchivo:        new Date().toLocaleDateString(),
-        },
-      ]);
+      setAlertasArchivadas((prev) => [...prev, {
+        ...alertaEncontrada,
+        estado: "DESESTIMADO",
+        motivoDesestimacion: motivo || "Sin motivo especificado",
+        fechaArchivo: new Date().toLocaleDateString(),
+      }]);
       if (tabActiva === "emergencia") {
         setAlertasPanico(alertasPanico.filter((a) => a.id !== idAlerta));
       } else {
@@ -219,26 +216,17 @@ function GestionAlertas() {
     cerrarModal();
   };
 
-  // ── TRANSFERIR A DESPACHO (CORREGIDO) ─────────────────────────────────────
-  const manejarTransferencia = async (idAlerta, datosClasificacion) => {
-    // datosClasificacion espera: { esContravencion: bool, clasificacion: string, prioridad: string }
-    const updateData = {
-      id_estado_actual: 2,
-      bloqueado_por:    null,
-      bloqueado_en:     null,
-      bloqueado_rol:    null,
-      contravenciones:  datosClasificacion?.esContravencion
-                        ? datosClasificacion.clasificacion
-                        : null,
-      delitos:          datosClasificacion?.esContravencion
-                        ? null
-                        : datosClasificacion?.clasificacion,
-      prioridad:        datosClasificacion?.prioridad || "Media",
-    };
-
+  // TRANSFERIR A DESPACHO → libera bloqueo al enviar
+  const manejarTransferencia = async (idAlerta) => {
     const { error } = await supabase
       .from("alerta")
-      .update(updateData)
+      .update({
+        id_estado_actual: 2,
+        // ✅ AGREGADO: liberar bloqueo al transferir
+        bloqueado_por: null,
+        bloqueado_en:  null,
+        bloqueado_rol: null,
+      })
       .eq("id_alerta", idAlerta);
 
     if (error) {
@@ -246,7 +234,6 @@ function GestionAlertas() {
       return;
     }
 
-    // Eliminar la alerta de la bandeja actual
     if (tabActiva === "emergencia") {
       setAlertasPanico(alertasPanico.filter((a) => a.id !== idAlerta));
     } else {
@@ -256,7 +243,6 @@ function GestionAlertas() {
     cerrarModal();
   };
 
-  // ── LOADING ───────────────────────────────────────────────────────────────
   if (cargando) {
     return (
       <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
@@ -273,10 +259,7 @@ function GestionAlertas() {
         <div className="bg-red-100 border-l-4 border-red-600 p-4 rounded shadow-md mx-4">
           <p className="text-red-700 font-bold">Error al cargar las alertas</p>
           <p className="text-sm text-red-600">{errorCarga}</p>
-          <button
-            onClick={cargarAlertas}
-            className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition"
-          >
+          <button onClick={cargarAlertas} className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition">
             Reintentar
           </button>
         </div>
@@ -284,31 +267,22 @@ function GestionAlertas() {
     );
   }
 
-  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
 
-      {/* TABS */}
+      {/* SELECTOR DE TABS */}
       <div className="px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2">
         <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
           <button
             onClick={() => setTabActiva("emergencia")}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${
-              tabActiva === "emergencia"
-                ? "bg-[#113e27] text-white shadow-md"
-                : "text-slate-400"
-            }`}
+            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${tabActiva === "emergencia" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"}`}
           >
             <span className="hidden sm:inline">ALERTAS DE PÁNICO</span>
             <span className="sm:hidden">PÁNICO</span>
           </button>
           <button
             onClick={() => setTabActiva("ciudadana")}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg font-bold text-xs transition-all tracking-wider ${
-              tabActiva === "ciudadana"
-                ? "bg-[#113e27] text-white shadow-md"
-                : "text-slate-400"
-            }`}
+            className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg font-bold text-xs transition-all tracking-wider ${tabActiva === "ciudadana" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"}`}
           >
             <span className="hidden sm:inline">ALERTAS CIUDADANAS</span>
             <span className="sm:hidden">CIUDADANAS</span>
@@ -339,6 +313,7 @@ function GestionAlertas() {
             </thead>
             <tbody>
               {dataActual.map((item) => {
+                // ✅ AGREGADO: calcular si está bloqueada por otro
                 const bloqueadaPorOtro =
                   item.bloqueadoPor && item.bloqueadoPor !== user?.id_oficial;
 
@@ -350,6 +325,7 @@ function GestionAlertas() {
                       filaResaltada === item.id
                         ? "ring-2 bg-slate-50"
                         : bloqueadaPorOtro
+                          // ✅ AGREGADO: fila atenuada si está bloqueada
                           ? "opacity-50"
                           : "hover:shadow-lg hover:-translate-y-0.5"
                     }`}
@@ -374,27 +350,20 @@ function GestionAlertas() {
                     </td>
                     <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle">
                       <div className="px-1 md:px-2">
-                        <span className="truncate block max-w-[100px] md:max-w-none">
-                          {item.ubicacion}
-                        </span>
+                        <span className="truncate block max-w-[100px] md:max-w-none">{item.ubicacion}</span>
                       </div>
                     </td>
                     <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle whitespace-nowrap">
                       {item.fecha} {item.hora}
                     </td>
                     <td className="py-5 md:py-6 align-middle">
-                      <span
-                        className={`inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-extrabold text-white tracking-wide ${
-                          item.estado.toUpperCase() === "EMERGENCIA"
-                            ? "bg-red-600"
-                            : "bg-[#EBB615]"
-                        }`}
-                      >
+                      <span className={`inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-extrabold text-white tracking-wide ${item.estado.toUpperCase() === "EMERGENCIA" ? "bg-red-600" : "bg-[#EBB615]"}`}>
                         {item.estado.toUpperCase()}
                       </span>
                     </td>
                     <td className="px-3 md:px-4 py-5 md:py-6 align-middle">
                       {bloqueadaPorOtro ? (
+                        // ✅ AGREGADO: candado si está bloqueada por otro operador
                         <div
                           title="En uso por otro operador"
                           className="p-1.5 md:p-2 bg-slate-300 text-white rounded-lg flex items-center justify-center cursor-not-allowed"
@@ -415,7 +384,7 @@ function GestionAlertas() {
               })}
               {dataActual.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-400 font-medium">
+                  <td colSpan="6" className="text-center py-12 text-gray-400 font-medium">
                     No hay alertas en esta bandeja
                   </td>
                 </tr>
@@ -425,7 +394,7 @@ function GestionAlertas() {
         </div>
       </div>
 
-      {/* MODALES */}
+      {/* MODAL */}
       {mostrarModal && alertaSeleccionada && (
         tabActiva === "emergencia" ? (
           <DetalleEmergencia

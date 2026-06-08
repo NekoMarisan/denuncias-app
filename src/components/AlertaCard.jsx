@@ -24,7 +24,7 @@ export const AlertaCard = ({ alerta, seleccionada, onClick }) => {
       className={`${baseClasses} ${shadowClasses} ${stateClasses}`}
     >
       <div className="flex items-center gap-2 mb-1">
-        <div className="w-7 h-8 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm shrink-0">
+        <div className="w-7 h-8 rounded-md bg-blue-50 text-blue-600 flex items-center shadow-inner justify-center font-black text-sm shrink-0">
           {nombre.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
@@ -36,11 +36,11 @@ export const AlertaCard = ({ alerta, seleccionada, onClick }) => {
           </span>
         </div>
         <span
-          className={`-mt-4 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase whitespace-nowrap text-white ${
-            alerta.tipo === "EMERGENCIA" ? "bg-red-600" : "bg-blue-600"
+          className={`-mt-4 px-1.5 py-0.5 rounded-[5px] text-[9px] font-bold uppercase whitespace-nowrap text-white ${
+            alerta.tipo === "EMERGENCIA" ? "bg-[#C90A0A]" : "bg-[#0C3DC2]"
           }`}
         >
-          {alerta.tipo === "EMERGENCIA" ? "EMERGENCIA" : "INTERVENCION"}
+          {alerta.tipo === "EMERGENCIA" ? "EMERGENCIA" : "INTERVENCIÓN"}
         </span>
       </div>
       <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-white/50 p-1.5 rounded-lg border border-slate-100">

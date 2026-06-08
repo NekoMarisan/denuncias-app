@@ -2,23 +2,27 @@ import React, { useState } from "react";
 import { FaTimes, FaIdCard, FaPhone, FaShieldAlt, FaEnvelope, FaCalendarAlt, FaUserCheck } from "react-icons/fa";
 import { supabase } from "../../services/supabase";
 
+// ========== NUEVA CONSTANTE DE ESTADOS ==========
 const ESTADOS = [
-  { value: "VERIFICADO", label: "Verificado",  color: "bg-green-600"  },
-  { value: "ADVERTIDO",  label: "Advertido",   color: "bg-orange-500" },
-  { value: "SUSPENDIDO", label: "Suspendido",  color: "bg-red-600"    },
+  { value: "ACTIVO",    label: "Activo",     color: "bg-green-600"  },
+  { value: "ADVERTIDO", label: "Advertido",  color: "bg-orange-500" },
+  { value: "SUSPENDIDO",label: "Suspendido", color: "bg-red-600"    },
+  { value: "INACTIVO",  label: "Inactivo",   color: "bg-gray-500"   },
 ];
 
+// Función para obtener el color de la badge según el estado
 const getBadgeColor = (estado) => {
   switch (estado) {
-    case "VERIFICADO":
     case "ACTIVO":     return "bg-green-600";
     case "ADVERTIDO":  return "bg-orange-500";
     case "SUSPENDIDO": return "bg-red-600";
+    case "INACTIVO":   return "bg-gray-500";
     default:           return "bg-gray-400";
   }
 };
 
 const PerfilCiudadano = ({ ciudadano, onClose, onActualizar }) => {
+  // estadoActual se inicializa con el valor recibido (ciudadano.estado)
   const [estadoActual, setEstadoActual] = useState(ciudadano?.estado || null);
   const [guardando, setGuardando]       = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState(null);
@@ -31,6 +35,7 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar }) => {
       })
     : "—";
 
+  // Función para cambiar el estado en Supabase
   const cambiarEstado = async (nuevoEstado) => {
     setGuardando(true);
     const { error } = await supabase
@@ -45,7 +50,7 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar }) => {
     }
     setEstadoActual(nuevoEstado);
     setGuardando(false);
-    if (onActualizar) onActualizar();
+    if (onActualizar) onActualizar(); // Refresca la lista principal
   };
 
   return (
@@ -77,7 +82,7 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar }) => {
                   ID: REGC-{String(ciudadano.id).padStart(4, "0")}
                 </p>
                 <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase text-white ${getBadgeColor(estadoActual)}`}>
-                  {estadoActual || "SIN VERIFICAR"}
+                  {estadoActual || "SIN ESTADO"}
                 </span>
               </div>
             </div>
@@ -163,7 +168,7 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar }) => {
               </div>
             </div>
 
-            {/* Cambiar estado */}
+            {/* Cambiar estado con los nuevos valores */}
             <div className="pt-1">
               <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Cambiar Estado</p>
               <div className="flex gap-2">
@@ -192,6 +197,11 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar }) => {
               {estadoActual === "SUSPENDIDO" && (
                 <div className="mt-3 bg-red-50 border-l-4 border-red-400 p-2 rounded">
                   <p className="text-[9px] font-bold text-red-700 uppercase">⛔ Ciudadano suspendido por acumulación de advertencias</p>
+                </div>
+              )}
+              {estadoActual === "INACTIVO" && (
+                <div className="mt-3 bg-gray-50 border-l-4 border-gray-400 p-2 rounded">
+                  <p className="text-[9px] font-bold text-gray-600 uppercase">💤 Cuenta inactiva (no verificada o deshabilitada)</p>
                 </div>
               )}
               {!estadoActual && (

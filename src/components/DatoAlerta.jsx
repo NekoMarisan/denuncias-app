@@ -3,6 +3,15 @@ import { FaUser, FaFileAlt, FaMapMarkerAlt, FaExclamationCircle } from "react-ic
 import { motion, AnimatePresence } from "framer-motion";
 
 export const DatoAlerta = forwardRef(({ alerta, visible, onClose }, ref) => {
+  const getPrioridadStyles = (prioridad) => {
+    if (!prioridad) return "bg-amber-400 text-white";
+    const p = prioridad.toString().toLowerCase().trim();
+    if (p === "alta" || p === "alto") return "bg-[#C90A0A] text-white";
+    if (p === "media" || p === "medio") return "bg-[#0C3DC2] text-white";
+    if (p === "baja" || p === "bajo") return "bg-[#e9b301] text-white";
+    return "bg-amber-400 text-white";
+  };
+
   return (
     <AnimatePresence>
       {visible && alerta && (
@@ -22,13 +31,18 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose }, ref) => {
                     <h2 className="text-xl font-extrabold text-[#1e293b] uppercase">
                       {alerta.tipo === "EMERGENCIA" ? "Alerta de Emergencia" : "Alerta Ciudadana"} — {alerta.codigo}
                     </h2>
-                    <div className={`px-2 py-0.5 rounded-md text-[10px] font-bold text-white ${alerta.tipo === "EMERGENCIA" ? "bg-red-600" : "bg-blue-600"}`}>
+                    <div className={`px-2.5 py-1 rounded-md text-[11px] tracking-wider font-extrabold text-white ${alerta.tipo === "EMERGENCIA" ? "bg-[#C90A0A]" : "bg-[#0C3DC2]"}`}>
                       {alerta.tipo === "EMERGENCIA" ? "EMERGENCIA" : "INTERVENCIÓN"}
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2 border-l-2 border-slate-300 pl-3">
-                    <FaUser size={12} className="text-slate-400" />
-                    <span className="text-sm font-bold text-[#474d56]">{alerta.nombre}</span>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex items-center gap-2 border-l-2 border-slate-300 pl-2">
+                      <FaUser size={12} className="text-slate-400" />
+                      <span className="text-sm font-bold text-[#474d56]">{alerta.nombre}</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider ${getPrioridadStyles(alerta.prioridad)}`}>
+                      {alerta.prioridad || "N/A"}
+                    </span>
                   </div>
                 </div>
                 <button 
@@ -39,77 +53,42 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose }, ref) => {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Columna izquierda */}
-                <div className="flex flex-col gap-4">
-                  {/* CLASIFICACIÓN con tipo */}
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">
-                      {alerta.tipoClasificacion || "Clasificación"}
-                    </p>
-                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
-                      <FaFileAlt className="text-blue-500 text-sm shrink-0" />
-                      <span className="text-sm font-semibold text-slate-700 uppercase">
-                        {alerta.clasificacionHecho || "—"}
-                      </span>
-                    </div>
-                  </div>
+<div className="flex flex-col md:flex-row gap-6">
+  {/* Columna izquierda: ocupa el espacio restante */}
+  <div className="flex-1 flex flex-col gap-4">
+    <div>
+      <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">
+        {alerta.tipoClasificacion || "Clasificación"}
+      </p>
+      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
+        <FaFileAlt className="text-[#0C3DC2] text-sm shrink-0" />
+        <span className="text-sm font-semibold text-slate-700 uppercase">
+          {alerta.clasificacionHecho || "—"}
+        </span>
+      </div>
+    </div>
+    <div>
+      <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Coordenadas</p>
+      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
+        <FaMapMarkerAlt className="text-[#C90A0A] text-sm shrink-0" />
+        <span className="text-sm font-semibold text-slate-700">
+          {alerta.lat?.toFixed(6)}, {alerta.lng?.toFixed(6)}
+        </span>
+      </div>
+    </div>
+  </div>
 
-                  {/* PRIORIDAD (nuevo) */}
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">
-                      Prioridad
-                    </p>
-                    <div className={`p-3 rounded-lg border shadow-sm flex items-center gap-3 ${
-                      alerta.prioridad?.toUpperCase() === "ALTA"
-                        ? "bg-red-50 border-red-200"
-                        : alerta.prioridad?.toUpperCase() === "MEDIA"
-                        ? "bg-blue-50 border-blue-200"
-                        : "bg-amber-50 border-amber-200"
-                    }`}>
-                      <FaExclamationCircle className={`text-sm shrink-0 ${
-                        alerta.prioridad?.toUpperCase() === "ALTA"
-                          ? "text-red-500"
-                          : alerta.prioridad?.toUpperCase() === "MEDIA"
-                          ? "text-blue-500"
-                          : "text-amber-500"
-                      }`} />
-                      <span className="text-sm font-bold text-slate-700 uppercase">
-                        {alerta.prioridad || "—"}
-                      </span>
-                    </div>
-                  </div>
+  {/* Separador vertical (solo visible en pantallas md+) */}
+  <div className="hidden md:block w-px bg-slate-200 self-stretch"></div>
 
-                  {/* Coordenadas */}
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Coordenadas</p>
-                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
-                      <FaMapMarkerAlt className="text-red-500 text-sm shrink-0" />
-                      <span className="text-sm font-semibold text-slate-700">{alerta.lat?.toFixed(6)}, {alerta.lng?.toFixed(6)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Columna derecha */}
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Descripción</p>
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-sm h-32 overflow-y-auto">
-                      <p className="text-sm text-slate-600 leading-relaxed">{alerta.relato || "—"}</p>
-                    </div>
-                  </div>
-
-                  {/* Reporte del patrullero (solo si existe) */}
-                  {alerta.reportePatrullero && (
-                    <div>
-                      <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Reporte del patrullero</p>
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-sm">
-                        <p className="text-sm text-slate-600 leading-relaxed">{alerta.reportePatrullero}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+  {/* Columna derecha: ancho fijo 500px */}
+  <div className="w-[500px] shrink-0">
+    <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Descripción</p>
+    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-sm h-[130px] overflow-y-auto">
+      <p className="text-sm text-slate-600 leading-relaxed">{alerta.relato || "—"}</p>
+    </div>
+  </div>
+</div>
             </div>
           </div>
         </motion.div>
@@ -118,5 +97,4 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose }, ref) => {
   );
 });
 
-// Exportación para que funcione con el nombre DetalleAlerta en CentroDespacho
 export const DetalleAlerta = DatoAlerta;

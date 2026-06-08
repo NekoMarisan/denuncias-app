@@ -1,41 +1,47 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { 
+import {
   FaEye, FaClipboardList, FaChartLine, FaClock, FaFilePdf, FaChevronRight, FaSpinner
 } from "react-icons/fa";
 import FormularioTabulacion from "../components/modals/FormularioTabulacion";
+import { contravenciones, delitos } from "../constants/CategoriasDelitos";
 import ArchivoHistorico from "./ArchivoHistorico";
 import { supabase } from '../services/supabase';
+import { useAuth } from "../context/AuthContext"; // ✅ AGREGADO
 
-const colorMap = {
-  "CONSUMO DE BEBIDAS ALCOHÓLICAS EN UN PARQUE": "bg-blue-600",
-  "RIÑAS Y PELEAS":      "bg-orange-500",
-  "INTENTO DE SUICIDIO": "bg-purple-600",
-  "ESTADO DE EBRIEDAD":  "bg-yellow-400",
-  "VIOLENCIA FAMILIAR":  "bg-slate-400",
-  "ALERTA CIUDADANA":    "bg-teal-500",
-  "OTROS":               "bg-gray-300",
+const getColorByCategoria = (categoria) => {
+  if (!categoria) return "bg-gray-300";
+  const upperCat = categoria.toUpperCase().trim();
+
+  const esContravencion = contravenciones.some(c => upperCat === c.toUpperCase() || upperCat.includes(c.toUpperCase()));
+  if (esContravencion) return "bg-orange-500";
+
+  const esDelito = delitos.some(d => upperCat === d.toUpperCase() || upperCat.includes(d.toUpperCase()));
+  if (esDelito) return "bg-red-600";
+
+  if (upperCat.includes("VIOLENCIA FAMILIAR")) return "bg-slate-400";
+  if (upperCat.includes("ALERTA CIUDADANA")) return "bg-teal-500";
+  if (upperCat.includes("INTENTO DE SUICIDIO")) return "bg-purple-600";
+
+  return "bg-gray-300";
 };
 
 function Tabulacion() {
-  const [renderKey]                               = useState(Date.now());
-  const [isModalOpen, setIsModalOpen]             = useState(false);
+  const { user } = useAuth(); // ✅ OBTENER USUARIO AUTENTICADO
+  const [renderKey] = useState(Date.now());
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [alertaSeleccionada, setAlertaSeleccionada] = useState(null);
-  const [verTodo, setVerTodo]                     = useState(false);
-  const [cargando, setCargando]                   = useState(true);
+  const [verTodo, setVerTodo] = useState(false);
+  const [cargando, setCargando] = useState(true);
 
-  // Alertas atendidas pendientes de tabular
   const [alertasPendientes, setAlertasPendientes] = useState([]);
-  // Registros ya tabulados
-  const [tabuladas, setTabuladas]                 = useState([]);
+  const [tabuladas, setTabuladas] = useState([]);
 
   const fechaHoy = new Date().toISOString().split('T')[0];
 
-  // ── Carga de datos desde Supabase ──────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setCargando(true);
     try {
-
-      // 1. IDs de alertas ya tabuladas (para excluirlas de pendientes)
+      // 1. Obtener alertas ya tabuladas (incluyendo los campos contravenciones/delitos de la alerta)
       const { data: tabData, error: tabErr } = await supabase
         .from("tabulacion")
         .select(`
@@ -47,6 +53,8 @@ function Tabulacion() {
           alerta:id_alerta (
             codigo_alerta,
             categoria,
+            contravenciones,
+            delitos,
             descripcion,
             fecha_hora,
             usuario_ciudadano:id_usuario (
@@ -61,19 +69,19 @@ function Tabulacion() {
 
       const idsTabulados = new Set((tabData || []).map(t => t.id_alerta));
 
-      // 2. Asignaciones con estado ATENDIDO (id_estado = 3, ajustar si difiere)
-      //    Traemos alerta + ciudadano + estado actual
+      // 2. Obtener asignaciones activas con alerta (incluyendo contravenciones/delitos)
       const { data: asigData, error: asigErr } = await supabase
-        .from("asignacion_patrullero")
+        .from("asignacion_patrulla")
         .select(`
           id_asignacion,
           id_patrullero,
-          id_operador_receptor,
-          id_despachador,
+          id_oficial_asignador,
           alerta:id_alerta (
             id_alerta,
             codigo_alerta,
             categoria,
+            contravenciones,
+            delitos,
             descripcion,
             fecha_hora,
             ubicacion,
@@ -88,38 +96,46 @@ function Tabulacion() {
         `)
         .order("id_asignacion", { ascending: false });
 
-      if (asigErr) console.error("Error asignaciones:", asigErr);
+      if (asigErr) {
+        console.error("Error asignaciones:", asigErr);
+        setAlertasPendientes([]);
+        return;
+      }
 
-      // Filtrar: solo alertas con estado ATENDIDO (id_estado_actual = 3)
-      // y que aún no tengan tabulacion
-      const ESTADO_ATENDIDO = 3; // Cambia este número si tu BD usa otro id
+      const ESTADO_ATENDIDO = 3;
       const pendientes = (asigData || [])
         .filter(a =>
           a.alerta &&
           a.alerta.id_estado_actual === ESTADO_ATENDIDO &&
           !idsTabulados.has(a.alerta.id_alerta)
         )
-        .map(a => ({
-          id:               a.alerta.codigo_alerta || `ALT-${String(a.alerta.id_alerta).padStart(4,"0")}`,
-          id_alerta:        a.alerta.id_alerta,
-          id_asignacion:    a.id_asignacion,
-          id_patrullero:    a.id_patrullero,
-          id_operador_receptor: a.id_operador_receptor,
-          id_despachador:   a.id_despachador,
-          incidente:        a.alerta.categoria || a.alerta.descripcion || "Sin categoría",
-          descripcion:      a.alerta.descripcion || "",
-          patrulla:         `PAT-${a.id_patrullero}`,
-          estado:           "ATENDIDO",
-          ciudadano:        a.alerta.usuario_ciudadano?.nombre_completo || "Ciudadano desconocido",
-          ci:               a.alerta.usuario_ciudadano?.ci    || "—",
-          celular:          a.alerta.usuario_ciudadano?.celular || "—",
-          id_usuario:       a.alerta.id_usuario,
-          ubicacion:        a.alerta.ubicacion || "",
-          fecha:            a.alerta.fecha_hora?.split("T")[0] || fechaHoy,
-        }));
+        .map(a => {
+          let clasificacion = a.alerta.contravenciones || a.alerta.delitos;
+          if (!clasificacion) clasificacion = a.alerta.categoria || a.alerta.descripcion || "Sin clasificar";
+          
+          return {
+            id: a.alerta.codigo_alerta || `ALT-${String(a.alerta.id_alerta).padStart(4, "0")}`,
+            id_alerta: a.alerta.id_alerta,
+            id_asignacion: a.id_asignacion,
+            id_patrullero: a.id_patrullero,
+            id_despachador: a.id_oficial_asignador,
+            incidente: clasificacion,
+            contravenciones: a.alerta.contravenciones,
+            delitos: a.alerta.delitos,
+            descripcion: a.alerta.descripcion || "",
+            patrulla: `PAT-${a.id_patrullero}`,
+            estado: "ATENDIDO",
+            ciudadano: a.alerta.usuario_ciudadano?.nombre_completo || "Ciudadano desconocido",
+            ci: a.alerta.usuario_ciudadano?.ci || "—",
+            celular: a.alerta.usuario_ciudadano?.celular || "—",
+            id_usuario: a.alerta.id_usuario,
+            ubicacion: a.alerta.ubicacion || "",
+            fecha: a.alerta.fecha_hora?.split("T")[0] || fechaHoy,
+          };
+        });
 
       setAlertasPendientes(pendientes);
-
+      console.log("Alertas pendientes cargadas:", pendientes.length);
     } catch (err) {
       console.error("Error crítico:", err);
     } finally {
@@ -127,52 +143,65 @@ function Tabulacion() {
     }
   }, [fechaHoy]);
 
-  useEffect(() => { cargarDatos(); }, [cargarDatos]);
+  // Suscripción en tiempo real
+  useEffect(() => {
+    const subscription = supabase
+      .channel('tabulacion-realtime')
+      .on('postgres_changes', 
+        { event: 'UPDATE', schema: 'public', table: 'alerta', filter: 'id_estado_actual=eq.3' }, 
+        () => cargarDatos()
+      )
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'tabulacion' }, 
+        () => cargarDatos()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(subscription); };
+  }, [cargarDatos]);
 
-  // ── Métricas ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos]);
+
+  // Métricas
   const metricas = useMemo(() => {
-    // Tabuladas hoy
     const tabuladasHoy = tabuladas.filter(t =>
       t.fecha_tabulacion?.split("T")[0] === fechaHoy
     ).length;
-
-    // Pendientes
     const pendientes = alertasPendientes.length;
 
-    // Ranking por categoría de las tabuladas
-    const conteo = tabuladas.reduce((acc, curr) => {
-      const key = (curr.alerta?.categoria || "OTROS").toUpperCase();
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
+    const conteo = {};
 
-    // Si no hay tabuladas, usar las pendientes para el ranking
-    const conteoFinal = Object.keys(conteo).length > 0
-      ? conteo
-      : alertasPendientes.reduce((acc, curr) => {
-          const key = (curr.incidente || "OTROS").toUpperCase();
-          acc[key] = (acc[key] || 0) + 1;
-          return acc;
-        }, {});
+    alertasPendientes.forEach(a => {
+      const key = a.incidente.toUpperCase();
+      conteo[key] = (conteo[key] || 0) + 1;
+    });
 
-    const ranking = Object.entries(conteoFinal)
+    tabuladas.forEach(t => {
+      if (t.alerta) {
+        let clasificacion = t.alerta.contravenciones || t.alerta.delitos;
+        if (!clasificacion) clasificacion = t.alerta.categoria || "OTROS";
+        const key = clasificacion.toUpperCase();
+        conteo[key] = (conteo[key] || 0) + 1;
+      }
+    });
+
+    const ranking = Object.entries(conteo)
       .map(([nombre, total]) => ({
         nombre,
         total,
-        color: colorMap[nombre] || "bg-slate-300"
+        color: getColorByCategoria(nombre)
       }))
       .sort((a, b) => b.total - a.total);
 
     return { tabuladasHoy, pendientes, ranking };
   }, [alertasPendientes, tabuladas, fechaHoy]);
 
-  // ── Confirmar tabulación desde el modal ───────────────────────────────────
-  const handleTabular = useCallback(async (id_alerta) => {
+  const handleTabular = useCallback(async () => {
     setIsModalOpen(false);
-    await cargarDatos(); // refresca ambas listas
+    await cargarDatos();
   }, [cargarDatos]);
 
-  // ── Últimas 3 tabuladas para las tarjetas ─────────────────────────────────
   const ultimasTabuladas = useMemo(() => tabuladas.slice(0, 3), [tabuladas]);
 
   if (verTodo) {
@@ -181,7 +210,6 @@ function Tabulacion() {
 
   return (
     <div key={renderKey} className="-mt-4 px-1 min-h-screen bg-slate-50/50 font-sans text-left w-full py-4 space-y-5 animate-fadeIn pb-6">
-
       {cargando ? (
         <div className="flex items-center justify-center py-24">
           <FaSpinner className="animate-spin text-green-800 text-3xl" />
@@ -190,8 +218,6 @@ function Tabulacion() {
         <>
           <div className="flex flex-col lg:flex-row gap-4 mb-4">
             <div className="lg:w-3/4 flex flex-col gap-4">
-
-              {/* ── Tarjetas métricas ── */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between px-5">
                   <div className="flex items-center gap-4">
@@ -220,12 +246,10 @@ function Tabulacion() {
                 </div>
               </div>
 
-              {/* ── Tabla alertas atendidas pendientes de tabular ── */}
               <div className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-50">
                 <div className="mb-4">
                   <h2 className="text-xl font-black uppercase tracking-tight text-[#1e293b]">Tabulación de Alertas</h2>
                 </div>
-
                 <div className="overflow-y-auto max-h-[450px] pr-1">
                   <table className="w-full border-separate border-spacing-y-3">
                     <thead>
@@ -243,14 +267,14 @@ function Tabulacion() {
                         <tr>
                           <td colSpan={6} className="text-center py-12 text-slate-300 text-[11px] font-black uppercase tracking-widest">
                             No hay alertas atendidas pendientes de tabulación
-                          </td>
+                           </td>
                         </tr>
                       ) : (
                         alertasPendientes.map((alerta) => (
                           <tr key={alerta.id_alerta} className="bg-white group transition-all duration-150 hover:shadow-lg hover:-translate-y-0.5">
                             <td className="px-0 py-3 text-[11px] font-bold text-slate-400 border-y border-l rounded-l-xl border-gray-50 uppercase">
                               {alerta.id}
-                            </td>
+                             </td>
                             <td className="py-3 border-y border-gray-50 pl-6">
                               <div className="flex items-center gap-3">
                                 <div className="w-7 h-8 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm shrink-0">
@@ -263,33 +287,37 @@ function Tabulacion() {
                                   <span className="text-[8px] text-slate-400 font-semibold uppercase mt-0.5">Verificado</span>
                                 </div>
                               </div>
-                            </td>
+                             </td>
                             <td className="py-3 border-y border-gray-50">
                               <span className="text-[10px] font-bold text-slate-500 uppercase leading-tight block w-[140px] truncate">
                                 {alerta.incidente}
                               </span>
-                            </td>
+                             </td>
                             <td className="py-3 border-y border-gray-50">
                               <span className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg font-black text-[10px] border border-gray-200 uppercase">
                                 {alerta.patrulla}
                               </span>
-                            </td>
+                             </td>
                             <td className="py-3 border-y border-gray-50">
                               <span className="inline-flex justify-center w-20 py-1.5 rounded-lg text-[9px] font-extrabold uppercase text-white shadow-sm bg-[#00a65a]">
                                 Atendido
                               </span>
-                            </td>
+                             </td>
                             <td className="px-3 py-3 border-y border-r rounded-r-xl border-gray-50 text-left">
                               <button
                                 onClick={() => {
-                                  setAlertaSeleccionada(alerta);
+                                  // ✅ PASAR id_tabulador DESDE EL USUARIO AUTENTICADO
+                                  setAlertaSeleccionada({
+                                    ...alerta,
+                                    id_tabulador: user?.id_oficial || null
+                                  });
                                   setIsModalOpen(true);
                                 }}
                                 className="p-2 bg-amber-500 text-white rounded-lg shadow shadow-amber-100 hover:scale-105 transition-all"
                               >
                                 <FaClipboardList size={12} />
                               </button>
-                            </td>
+                             </td>
                           </tr>
                         ))
                       )}
@@ -299,7 +327,6 @@ function Tabulacion() {
               </div>
             </div>
 
-            {/* ── Panel lateral ranking ── */}
             <div className="lg:w-1/4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
               <div className="mb-5">
                 <h2 className="text-base font-black text-slate-800 uppercase">Reportes Comunes</h2>
@@ -325,7 +352,6 @@ function Tabulacion() {
             </div>
           </div>
 
-          {/* ── Sección Alertas Tabuladas ── */}
           <div className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-50 relative">
             <button
               onClick={() => setVerTodo(true)}
@@ -334,11 +360,9 @@ function Tabulacion() {
               <span className="text-green-600 font-black text-[9px] uppercase tracking-wider">Ver todo</span>
               <FaChevronRight className="text-green-600 text-[8px]" />
             </button>
-
             <div className="mb-4">
               <h2 className="text-lg font-black uppercase tracking-tight text-[#1e293b]">Alertas Tabuladas</h2>
             </div>
-
             {ultimasTabuladas.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/30">
                 <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-200 shadow-sm mb-2">
@@ -350,9 +374,10 @@ function Tabulacion() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fadeIn">
                 {ultimasTabuladas.map((tab) => {
                   const ciudadano = tab.alerta?.usuario_ciudadano?.nombre_completo || "Ciudadano";
-                  const codigo    = tab.alerta?.codigo_alerta    || `TAB-${String(tab.id_tabulacion).padStart(4,"0")}`;
-                  const categoria = tab.alerta?.categoria        || "Sin categoría";
-                  const fecha     = tab.fecha_tabulacion?.split("T")[0] || "—";
+                  const codigo = tab.alerta?.codigo_alerta || `TAB-${String(tab.id_tabulacion).padStart(4, "0")}`;
+                  let clasificacion = tab.alerta?.contravenciones || tab.alerta?.delitos;
+                  if (!clasificacion) clasificacion = tab.resultado_final || "Sin clasificar";
+                  const fecha = tab.fecha_tabulacion?.split("T")[0] || "—";
                   return (
                     <div key={tab.id_tabulacion} className="bg-white rounded-2xl p-4 border border-gray-100 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md group overflow-hidden">
                       <div className="absolute left-0 top-0 bottom-0 w-2 bg-[#00a65a] rounded-l-2xl" />
@@ -372,8 +397,8 @@ function Tabulacion() {
                         </div>
                       </div>
                       <div className="mb-4 p-2.5 bg-slate-50/50 rounded-xl border border-slate-100 ml-3">
-                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Categoría</p>
-                        <p className="text-[9px] font-black text-slate-600 uppercase leading-relaxed">{categoria}</p>
+                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Clasificación</p>
+                        <p className="text-[9px] font-black text-slate-600 uppercase leading-relaxed">{clasificacion}</p>
                       </div>
                       <div className="grid grid-cols-2 gap-2 ml-3">
                         <button className="flex items-center justify-center gap-1 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-gray-100 transition-colors">

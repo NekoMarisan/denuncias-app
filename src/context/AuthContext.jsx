@@ -20,6 +20,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (numero_escalafon, contrasena) => {
+    // 1. Buscar oficial por escalafón y contraseña
     const { data, error } = await supabase
       .from("oficial")
       .select("*")
@@ -32,36 +33,55 @@ export const AuthProvider = ({ children }) => {
       return { success: false, error: "Credenciales incorrectas" };
     }
 
-    // Verificar acceso
-    if (data.acceso === "DE BAJA" || data.acceso === "FUERA DE SERVICIO") {
-      return { success: false, error: "Usuario sin acceso al sistema" };
+    // 2. Verificar acceso (solo "EN SERVICIO" puede ingresar)
+    if (data.acceso !== "EN SERVICIO") {
+      return { success: false, error: "Cuenta no habilitada. Contacte a la central." };
     }
 
-    // Normalizar rol
+    // 3. Actualizar estado a CONECTADO (true)
+    const { error: updateError } = await supabase
+      .from("oficial")
+      .update({ estado: true })
+      .eq("id_oficial", data.id_oficial);
+
+    if (updateError) {
+      console.error("Error al actualizar estado:", updateError);
+      // No impedimos el login, solo registramos error
+    }
+
+    // 4. Normalizar rol
     let rolNormalizado = data.rol;
     if (rolNormalizado === "Administrador") rolNormalizado = "admin";
     if (rolNormalizado === "Operador") rolNormalizado = "operador";
     if (rolNormalizado === "Despachador") rolNormalizado = "despachador";
     if (rolNormalizado === "Tabulador") rolNormalizado = "tabulador";
 
+    // 5. Construir objeto de usuario (sin contraseña)
     const cleanUser = { ...data, rol: rolNormalizado };
     delete cleanUser.contrasena;
 
+    // 6. Guardar sesión en sessionStorage y estado
     setUser(cleanUser);
-    // Persistir en sessionStorage (se limpia al cerrar la pestaña)
     sessionStorage.setItem("sistema_user", JSON.stringify(cleanUser));
 
     return { success: true, rol: rolNormalizado };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (user) {
+      // Actualizar estado a DESCONECTADO (false) en la BD
+      await supabase
+        .from("oficial")
+        .update({ estado: false })
+        .eq("id_oficial", user.id_oficial);
+    }
     setUser(null);
     sessionStorage.removeItem("sistema_user");
-    // Limpiar también por si quedó algún residuo anterior
     localStorage.removeItem("usuario");
     supabase.auth.signOut();
   };
 
+  // Permisos
   const permissions = {
     operador: ["dashboard", "alertas"],
     despachador: ["dashboard", "despacho"],
@@ -77,7 +97,7 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider
       value={{
-        user,
+        user,               // ✅ contiene id_oficial, nombre_completo, rol, etc.
         login,
         logout,
         isAdmin: user?.rol === "admin",
