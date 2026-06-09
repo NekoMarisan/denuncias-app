@@ -12,6 +12,19 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose }, ref) => {
     return "bg-amber-400 text-white";
   };
 
+  // Determinar tipo y texto de clasificación
+  let tipoClasificacion = "Clasificación";
+  let textoClasificacion = "—";
+  if (alerta?.contravenciones) {
+    tipoClasificacion = "Contravención";
+    textoClasificacion = alerta.contravenciones;
+  } else if (alerta?.delitos) {
+    tipoClasificacion = "Delito";
+    textoClasificacion = alerta.delitos;
+  } else if (alerta?.clasificacionHecho) {
+    textoClasificacion = alerta.clasificacionHecho;
+  }
+
   return (
     <AnimatePresence>
       {visible && alerta && (
@@ -53,42 +66,42 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose }, ref) => {
                 </button>
               </div>
 
-<div className="flex flex-col md:flex-row gap-6">
-  {/* Columna izquierda: ocupa el espacio restante */}
-  <div className="flex-1 flex flex-col gap-4">
-    <div>
-      <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">
-        {alerta.tipoClasificacion || "Clasificación"}
-      </p>
-      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
-        <FaFileAlt className="text-[#0C3DC2] text-sm shrink-0" />
-        <span className="text-sm font-semibold text-slate-700 uppercase">
-          {alerta.clasificacionHecho || "—"}
-        </span>
-      </div>
-    </div>
-    <div>
-      <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Coordenadas</p>
-      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
-        <FaMapMarkerAlt className="text-[#C90A0A] text-sm shrink-0" />
-        <span className="text-sm font-semibold text-slate-700">
-          {alerta.lat?.toFixed(6)}, {alerta.lng?.toFixed(6)}
-        </span>
-      </div>
-    </div>
-  </div>
+              <div className="flex flex-col md:flex-row gap-6">
+                {/* Columna izquierda */}
+                <div className="flex-1 flex flex-col gap-4">
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">
+                      {tipoClasificacion}
+                    </p>
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
+                      <FaFileAlt className="text-[#0C3DC2] text-sm shrink-0" />
+                      <span className="text-sm font-semibold text-slate-700 uppercase">
+                        {textoClasificacion}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Coordenadas</p>
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
+                      <FaMapMarkerAlt className="text-[#C90A0A] text-sm shrink-0" />
+                      <span className="text-sm font-semibold text-slate-700">
+                        {alerta.lat?.toFixed(6)}, {alerta.lng?.toFixed(6)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-  {/* Separador vertical (solo visible en pantallas md+) */}
-  <div className="hidden md:block w-px bg-slate-200 self-stretch"></div>
+                {/* Separador vertical */}
+                <div className="hidden md:block w-px bg-slate-200 self-stretch"></div>
 
-  {/* Columna derecha: ancho fijo 500px */}
-  <div className="w-[500px] shrink-0">
-    <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Descripción</p>
-    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-sm h-[130px] overflow-y-auto">
-      <p className="text-sm text-slate-600 leading-relaxed">{alerta.relato || "—"}</p>
-    </div>
-  </div>
-</div>
+                {/* Columna derecha */}
+                <div className="w-[500px] shrink-0">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Descripción</p>
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-sm h-[130px] overflow-y-auto">
+                    <p className="text-sm text-slate-600 leading-relaxed">{alerta.relato || "—"}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>

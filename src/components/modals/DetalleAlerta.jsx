@@ -61,12 +61,60 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
   };
   // ──────────────────────────────────────────────────────────
 
+  // ✅ Debounce para la descripción
+  const debounceTimeout = useRef(null);
+
+  // ✅ Función genérica para guardar cambios en la BD
+  const guardarCambios = async (camposActualizados) => {
+    if (!datos?.id_alerta) return;
+    try {
+      const { error } = await supabase
+        .from("alerta")
+        .update(camposActualizados)
+        .eq("id_alerta", datos.id_alerta);
+      if (error) throw error;
+      setDatos(prev => ({ ...prev, ...camposActualizados }));
+    } catch (err) {
+      console.error("Error guardando cambios:", err);
+      showToast("Error al guardar cambios", "error");
+    }
+  };
+
+  // ✅ Descripción con debounce
+  const handleDescripcionChange = (texto) => {
+    setRelatoEditado(texto);
+    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    debounceTimeout.current = setTimeout(() => {
+      guardarCambios({ descripcion: texto });
+    }, 800);
+  };
+
+  // ✅ Clasificación: solo una de las dos
+  const handleContravencionChange = async (valor) => {
+    setContravencion(valor);
+    setDelito("");
+    await guardarCambios({ contravenciones: valor, delitos: null });
+  };
+
+  const handleDelitoChange = async (valor) => {
+    setDelito(valor);
+    setContravencion("");
+    await guardarCambios({ delitos: valor, contravenciones: null });
+  };
+
+  // ✅ Prioridad
+  const handlePrioridadChange = async (valor) => {
+    setPrioridad(valor);
+    await guardarCambios({ prioridad: valor });
+  };
+
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "unset";
       if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
       if (audioInterval.current) clearInterval(audioInterval.current);
+      if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
     };
   }, []);
 
@@ -84,6 +132,8 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
         setDatos(alertaData);
         setRelatoEditado(alertaData.descripcion || "");
         setPrioridad(alertaData.prioridad || "");
+        setContravencion(alertaData.contravenciones || "");
+        setDelito(alertaData.delitos || "");
 
         if (alertaData.id_usuario) {
           const { data: ciudadanoData } = await supabase
@@ -201,7 +251,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  // ✅ CORREGIDO: Envía objeto con clasificacion, esContravencion y prioridad
+  // ✅ Enviar a despacho (ya usaba contravencion/delito/prioridad)
   const handleEnviarDespachoLocal = () => {
     if (!contravencion && !delito) {
       if (showToast) showToast("Seleccione un Delito o Contravención antes de enviar", "error");
@@ -263,7 +313,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
           <div className="p-6 bg-white overflow-y-auto">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
 
-              {/* ── COLUMNA IZQUIERDA ── */}
+              {/* ── COLUMNA IZQUIERDA (sin cambios) ── */}
               <div className="flex flex-col gap-5 h-full">
 
                 {/* Ciudadano */}
@@ -359,7 +409,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
 
               </div>
 
-              {/* ── COLUMNA DERECHA ── */}
+              {/* ── COLUMNA DERECHA (modificada para auto‑guardado) ── */}
               <div className="flex flex-col gap-5 border-l border-slate-100 lg:pl-6">
 
                 {/* Estado de Validación */}
@@ -378,7 +428,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                   </div>
                 </div>
 
-                {/* Audio */}
+                {/* Audio (sin cambios) */}
                 <section>
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
                     Audio del Reporte
@@ -418,7 +468,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                   )}
                 </section>
 
-                {/* Descripción */}
+                {/* Descripción con auto‑guardado */}
                 <section>
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 leading-none">
                     Descripción del hecho
@@ -431,11 +481,11 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                       className="w-full pl-7 pr-8 text-[13px] font-medium text-slate-600 bg-transparent border-none focus:outline-none resize-y min-h-[65px] max-h-[180px] overflow-y-auto"
                       placeholder="Sin descripción del hecho..."
                       value={relatoEditado}
-                      onChange={(e) => setRelatoEditado(e.target.value)}
+                      onChange={(e) => handleDescripcionChange(e.target.value)}
                     />
                     {relatoEditado && (
                       <div className="absolute top-3.5 right-3">
-                        <button type="button" onClick={() => setRelatoEditado("")} className="text-slate-400 hover:text-slate-600 transition-colors">
+                        <button type="button" onClick={() => handleDescripcionChange("")} className="text-slate-400 hover:text-slate-600 transition-colors">
                           <FaTimes size={12} />
                         </button>
                       </div>
@@ -443,7 +493,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                   </div>
                 </section>
 
-                {/* Clasificación y Prioridad / Panel Desestimación */}
+                {/* Clasificación y Prioridad / Panel Desestimación con auto‑guardado */}
                 <div className="w-full flex-1 flex flex-col">
                   {showDesestimoPanel ? (
                     <section className="flex flex-col flex-1">
@@ -504,7 +554,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                             <select
                               className="w-full h-12 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
                               value={contravencion}
-                              onChange={(e) => { setContravencion(e.target.value); setDelito(""); }}
+                              onChange={(e) => handleContravencionChange(e.target.value)}
                               disabled={!!delito}
                             >
                               <option value="">Seleccionar Contravención</option>
@@ -516,7 +566,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                             <select
                               className="w-full h-12 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
                               value={delito}
-                              onChange={(e) => { setDelito(e.target.value); setContravencion(""); }}
+                              onChange={(e) => handleDelitoChange(e.target.value)}
                               disabled={!!contravencion}
                             >
                               <option value="">Seleccionar Delito</option>
@@ -536,7 +586,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                             <button
                               key={p}
                               type="button"
-                              onClick={() => setPrioridad(p)}
+                              onClick={() => handlePrioridadChange(p)}
                               className={`py-2.5 rounded-xl border-2 font-extrabold text-[10px] tracking-wider transition-all flex items-center justify-center h-10 shadow-sm cursor-pointer ${
                                 prioridad === p
                                   ? p === "ALTA"
@@ -561,7 +611,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
           </div>
         )}
 
-        {/* BOTONES INFERIORES */}
+        {/* BOTONES INFERIORES (sin cambios) */}
         <div className="p-4 bg-slate-50 border-t flex gap-3 w-full shrink-0">
           <button
             type="button"
@@ -599,3 +649,4 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
 };
 
 export default DetalleAlerta;
+

@@ -11,6 +11,7 @@ import {
 } from "react-icons/fa";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { getRoute } from "../services/orsService";
 import { AlertaCard } from "../components/AlertaCard";
 import { DetalleAlerta } from "../components/DatoAlerta";
@@ -34,12 +35,14 @@ const ESTADO_DISPONIBLE = 1;
 const ESTADO_NOTIFICADO = 2;
 const ESTADO_EN_CAMINO  = 3;
 const ESTADO_EN_LUGAR   = 4;
+const ESTADO_REVISION   = 5;
 
 const COLOR_EMERGENCIA  = "#ef4444";
 const COLOR_CIUDADANA   = "#3b82f6";
 const COLOR_DISPONIBLE  = "#10b981";
 const COLOR_OCUPADO     = "#9ca3af";
 const COLOR_INACTIVO    = "#6b7280";
+const COLOR_REVISION    = "#9ca3af";
 
 const makeCircleIcon = (color, scale = 8) => ({
   path: window.google.maps.SymbolPath.CIRCLE,
@@ -62,11 +65,11 @@ const makeHaloIcon = (color, scale = 10, opacity = 0.7) => ({
 
 const CentroDespacho = () => {
   const { user } = useAuth();
+  const { showToast } = useToast(); // ✅ Usar el sistema central de notificaciones
 
   const [tabActiva, setTabActiva] = useState("nuevas");
   const [alertaSeleccionada, setAlertaSeleccionada] = useState(null);
   const [intervencionSeleccionada, setIntervencionSeleccionada] = useState(null);
-  const [toast, setToast] = useState({ message: "", visible: false });
   const [cargando, setCargando] = useState(true);
   const [derivacionDestino, setDerivacionDestino] = useState("");
 
@@ -85,11 +88,6 @@ const CentroDespacho = () => {
   const zoomIntervalRef     = useRef(null);
   const detalleRef          = useRef(null);
   const [detalleVisible, setDetalleVisible] = useState(false);
-
-  const showToast = useCallback((msg) => {
-    setToast({ message: msg, visible: true });
-    setTimeout(() => setToast({ message: "", visible: false }), 3000);
-  }, []);
 
   const parsearUbicacion = (str) => {
     if (!str) return null;
@@ -148,22 +146,31 @@ const CentroDespacho = () => {
   };
 
   const cargarRutaPatrullero = async (idPatrullero, alerta) => {
-    if (!alerta?.lat || !alerta?.lng) { showToast("La alerta no tiene coordenadas válidas"); return; }
+    if (!alerta?.lat || !alerta?.lng) {
+      showToast("La alerta no tiene coordenadas válidas", "error");
+      return;
+    }
     const pat = patrulleros.find(p => p.id_patrullero === idPatrullero);
-    if (!pat) { showToast("Patrullero no encontrado"); return; }
+    if (!pat) {
+      showToast("Patrullero no encontrado", "error");
+      return;
+    }
     const coordsPat = parsearUbicacion(pat.ubicacion_actual);
-    if (!coordsPat) { showToast(`El patrullero ${pat.placa || idPatrullero} no tiene ubicación válida`); return; }
+    if (!coordsPat) {
+      showToast(`El patrullero ${pat.placa || idPatrullero} no tiene ubicación válida`, "error");
+      return;
+    }
     try {
       const routeData = await getRoute([coordsPat.lng, coordsPat.lat], [alerta.lng, alerta.lat]);
       if (routeData?.features?.[0]) {
         setRouteGeometry(routeData.features[0]);
-        showToast("Ruta calculada exitosamente");
+        showToast("Ruta calculada exitosamente", "success");
       } else {
-        showToast("No se pudo obtener la ruta");
+        showToast("No se pudo obtener la ruta", "error");
       }
     } catch (e) {
       console.error("Error ruta:", e);
-      showToast("Error al calcular la ruta");
+      showToast("Error al calcular la ruta", "error");
     }
   };
 
@@ -206,7 +213,7 @@ const CentroDespacho = () => {
       for (const item of alertas) {
         const asig = mapaAsig.get(item.id_alerta);
         const coords = parsearUbicacion(item.ubicacion);
-        const esEmergencia = (item.categoria === "Panico" || item.prioridad === "ALTA");
+        const esEmergencia = (item.categoria === "Panico");
 
         const alertaObj = {
           id: item.id_alerta,
@@ -237,7 +244,7 @@ const CentroDespacho = () => {
       setAsignaciones(Object.fromEntries(mapaPatrulla));
     } catch (err) {
       console.error("Error cargar alertas:", err);
-      showToast("Error al cargar alertas");
+      showToast("Error al cargar alertas", "error");
     } finally {
       setCargando(false);
     }
@@ -259,7 +266,7 @@ const CentroDespacho = () => {
 
       if (error) throw error;
 
-      const lista = (data || []).map(p => ({
+      let lista = (data || []).map(p => ({
         ...p,
         estado_disponibilidad: p.estado_patrullero?.nombre_estado || "DESCONOCIDO",
         id_estado: p.id_estado_patrullero,
@@ -267,10 +274,21 @@ const CentroDespacho = () => {
         nombre_oficial: p.oficial?.nombre_completo || "Sin oficial asignado",
       }));
 
+      // Orden: activos ordenados por prioridad de estado, luego inactivos, y dentro de cada grupo por id_patrullero
       lista.sort((a, b) => {
-        const pA = a.activo ? (a.id_estado === ESTADO_DISPONIBLE ? 0 : 1) : 2;
-        const pB = b.activo ? (b.id_estado === ESTADO_DISPONIBLE ? 0 : 1) : 2;
-        return pA - pB;
+        if (a.activo !== b.activo) return a.activo ? -1 : 1;
+        const prioridadEstado = (estado) => {
+          if (estado === ESTADO_DISPONIBLE) return 0;
+          if (estado === ESTADO_NOTIFICADO) return 1;
+          if (estado === ESTADO_EN_CAMINO) return 2;
+          if (estado === ESTADO_EN_LUGAR) return 3;
+          if (estado === ESTADO_REVISION) return 4;
+          return 99;
+        };
+        const prioridadA = prioridadEstado(a.id_estado);
+        const prioridadB = prioridadEstado(b.id_estado);
+        if (prioridadA !== prioridadB) return prioridadA - prioridadB;
+        return a.id_patrullero - b.id_patrullero;
       });
 
       setPatrulleros(lista);
@@ -310,7 +328,14 @@ const CentroDespacho = () => {
       const coords = parsearUbicacion(p.ubicacion_actual);
       if (!coords) return;
 
-      const color = p.id_estado === ESTADO_DISPONIBLE ? COLOR_DISPONIBLE : COLOR_OCUPADO;
+      let color;
+      if (p.id_estado === ESTADO_DISPONIBLE) color = COLOR_DISPONIBLE;
+      else if (p.id_estado === ESTADO_NOTIFICADO) color = COLOR_OCUPADO;
+      else if (p.id_estado === ESTADO_EN_CAMINO) color = COLOR_OCUPADO;
+      else if (p.id_estado === ESTADO_EN_LUGAR) color = COLOR_OCUPADO;
+      else if (p.id_estado === ESTADO_REVISION) color = COLOR_REVISION;
+      else color = COLOR_INACTIVO;
+
       const halo = new window.google.maps.Marker({
         position: { lat: coords.lat, lng: coords.lng },
         map,
@@ -464,7 +489,10 @@ const CentroDespacho = () => {
     if (pendientes.length === 0) return;
 
     const idOficialAsignador = user?.id_oficial;
-    if (!idOficialAsignador) { showToast("Error: No se pudo identificar al oficial asignador."); return; }
+    if (!idOficialAsignador) {
+      showToast("Error: No se pudo identificar al oficial asignador.", "error");
+      return;
+    }
 
     let errores = false;
     for (const idPat of pendientes) {
@@ -477,20 +505,27 @@ const CentroDespacho = () => {
           fecha_asignacion: new Date().toISOString(),
           id_estado_asignacion: ESTADO_NOTIFICADO,
         }]);
-      if (errInsert) { showToast(`Error asignando PAT-${idPat}`); errores = true; continue; }
+      if (errInsert) {
+        showToast(`Error asignando PAT-${idPat}`, "error");
+        errores = true;
+        continue;
+      }
 
       const { error: errUpdate } = await supabase
         .from("patrullero")
         .update({ id_estado_patrullero: ESTADO_NOTIFICADO })
         .eq("id_patrullero", Number(idPat));
-      if (errUpdate) { showToast(`Error actualizando PAT-${idPat}`); errores = true; }
+      if (errUpdate) {
+        showToast(`Error actualizando PAT-${idPat}`, "error");
+        errores = true;
+      }
     }
 
     if (!errores) {
       const nombres = pendientes
         .map(id => patrulleros.find(p => p.id_patrullero === Number(id))?.placa || `PAT-${id}`)
         .join(", ");
-      showToast(`📢 NOTIFICACIÓN ENVIADA A: ${nombres}`);
+      showToast(`📢 NOTIFICACIÓN ENVIADA A: ${nombres}`, "success");
     }
 
     setPendingAsignaciones({});
@@ -502,20 +537,20 @@ const CentroDespacho = () => {
     await cargarPatrulleros();
   };
 
-  // ✅ Nueva función para enviar a tabulación (ATENDIDO)
   const enviarATabulacion = async () => {
     const idAlerta = intervencionSeleccionada;
     if (!idAlerta) return;
 
-    // Cambiar estado a 3 (ATENDIDO) para que aparezca en tabulación
     const { error } = await supabase
       .from("alerta")
       .update({ id_estado_actual: 3 })
       .eq("id_alerta", idAlerta);
 
-    if (error) { showToast("Error al enviar a tabulación"); return; }
+    if (error) {
+      showToast("Error al enviar a tabulación", "error");
+      return;
+    }
 
-    // Liberar patrulleros asignados
     const { data: asigs } = await supabase
       .from("asignacion_patrulla")
       .select("id_patrullero")
@@ -535,7 +570,7 @@ const CentroDespacho = () => {
         .eq("id_patrullero", asig.id_patrullero);
     }
 
-    showToast("✅ Caso enviado a tabulación");
+    showToast("✅ Caso enviado a tabulación", "success");
     setIntervencionSeleccionada(null);
     setDetalleVisible(false);
     setRouteGeometry(null);
@@ -552,7 +587,10 @@ const CentroDespacho = () => {
       .from("alerta")
       .update({ id_estado_actual: 3 })
       .eq("id_alerta", idAlerta);
-    if (errAlerta) { showToast("Error al finalizar la alerta"); return; }
+    if (errAlerta) {
+      showToast("Error al finalizar la alerta", "error");
+      return;
+    }
 
     const { data: asigs } = await supabase
       .from("asignacion_patrulla")
@@ -569,7 +607,7 @@ const CentroDespacho = () => {
         .eq("id_patrullero", asig.id_patrullero);
     }
 
-    showToast(`Caso finalizado: ${tipoCierre === "derivar" ? `DERIVADO A ${derivacionDestino}` : "ATENDIDO"}`);
+    showToast(`Caso finalizado: ${tipoCierre === "derivar" ? `DERIVADO A ${derivacionDestino}` : "ATENDIDO"}`, "success");
     if (tabActiva === "nuevas") setAlertaSeleccionada(null);
     else setIntervencionSeleccionada(null);
     setDetalleVisible(false);
@@ -614,14 +652,8 @@ const CentroDespacho = () => {
 
   return (
     <div className="-mt-2 w-full px-1 min-h-screen py-3 font-sans flex gap-6 items-stretch">
-      {toast.visible && (
-        <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-4 py-2 rounded-lg shadow-xl text-xs font-bold">
-          {toast.message}
-        </div>
-      )}
-
-      {/* SIDEBAR - CON LÍNEA DIVISORIA MÁS NOTORIA */}
-      <div className="w-[320px] shrink-0 flex flex-col bg-white rounded-2xl shadow-md overflow-hidden">
+      {/* SIDEBAR - altura fija con scroll interno */}
+      <div className="w-[320px] shrink-0 flex flex-col bg-white rounded-2xl shadow-md overflow-hidden h-[1170px]">
         <div className="p-3 bg-white border-b border-slate-100">
           <div className="mt-1 flex bg-slate-50 p-1 rounded-xl border border-slate-200">
             <button
@@ -648,7 +680,7 @@ const CentroDespacho = () => {
             <>
               {/* Emergencias */}
               <div className="flex-1 flex flex-col min-h-0 py-3">
-                <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3">
+                <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3 shrink-0">
                   <span className="w-1.5 h-1.5 bg-[#C90A0A] rounded-full animate-pulse" />
                   Alertas de Emergencia
                 </h3>
@@ -667,12 +699,12 @@ const CentroDespacho = () => {
                 </div>
               </div>
 
-              {/* LÍNEA DIVISORIA MÁS GRUESA Y NOTORIA */}
-              <div className="border-t-2 border-slate-100 mx-3 my-1 mt-4" />
+              {/* Línea divisoria */}
+              <div className="border-t-2 border-slate-100 mx-3 my-1 mt-4 shrink-0" />
 
               {/* Ciudadanas */}
               <div className="flex-1 flex flex-col min-h-0 py-3">
-                <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3">
+                <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3 shrink-0">
                   <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
                   Alertas Ciudadanas
                 </h3>
@@ -695,7 +727,7 @@ const CentroDespacho = () => {
         </div>
       </div>
 
-      {/* PANEL CENTRAL - resto del código sin cambios */}
+      {/* PANEL CENTRAL */}
       <div className="flex-1 flex flex-col gap-4 pb-6">
         <div className="w-full h-[380px] shrink-0 bg-white rounded-2xl shadow-md overflow-hidden">
           {!isLoaded ? (
@@ -735,6 +767,18 @@ const CentroDespacho = () => {
                 } else if (p.id_estado === ESTADO_DISPONIBLE) {
                   color  = COLOR_DISPONIBLE;
                   titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (DISPONIBLE)`;
+                } else if (p.id_estado === ESTADO_NOTIFICADO) {
+                  color  = COLOR_OCUPADO;
+                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (NOTIFICADO)`;
+                } else if (p.id_estado === ESTADO_EN_CAMINO) {
+                  color  = COLOR_OCUPADO;
+                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (EN CAMINO)`;
+                } else if (p.id_estado === ESTADO_EN_LUGAR) {
+                  color  = COLOR_OCUPADO;
+                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (EN LUGAR)`;
+                } else if (p.id_estado === ESTADO_REVISION) {
+                  color  = COLOR_REVISION;
+                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (REVISIÓN)`;
                 } else {
                   color  = COLOR_OCUPADO;
                   titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (${p.estado_disponibilidad})`;
@@ -767,6 +811,7 @@ const CentroDespacho = () => {
             { hex: COLOR_DISPONIBLE, label: "Patrulla Disponible" },
             { hex: COLOR_OCUPADO,    label: "Patrulla Ocupada" },
             { hex: COLOR_INACTIVO,   label: "Patrulla Inactiva" },
+            { hex: COLOR_REVISION,   label: "Patrulla Revisión" },
           ].map(({ hex, label }) => (
             <span key={label} className="flex items-center gap-1.5">
               <span style={{ background: hex }} className="w-2.5 h-2.5 rounded-full inline-block" />

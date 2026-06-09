@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { FaTruck, FaCheckCircle, FaRoute, FaFileAlt, FaImage, FaFile, FaEye } from "react-icons/fa";
+import { FaTruck, FaCheckCircle, FaRoute, FaFileImage, FaFile, FaEye } from "react-icons/fa";
 import { supabase } from "../services/supabase";
+import { useToast } from "../context/ToastContext";
+
+//cambios actualizados
 
 const ESTADO_DISPONIBLE = 1;
 const ESTADO_NOTIFICADO = 2;
 const ESTADO_EN_CAMINO  = 3;
 const ESTADO_EN_LUGAR   = 4;
+const ESTADO_REVISION   = 5;
 
 export const GestionPatrullas = ({
   tabActiva,
@@ -21,6 +25,7 @@ export const GestionPatrullas = ({
   onDerivar,
   onEnviarATabulacion,
 }) => {
+  const { showToast } = useToast();
   const isNuevas = tabActiva === "nuevas";
   const [instituciones, setInstituciones] = useState([]);
   const [Derivacion, setDerivacion] = useState("");
@@ -64,13 +69,11 @@ export const GestionPatrullas = ({
     if (!alertaSeleccionada) return;
     setEnviando(true);
     try {
-      // 1. Cambiar estado de la alerta a ATENDIDO (3)
       await supabase
         .from("alerta")
         .update({ id_estado_actual: 3 })
         .eq("id_alerta", alertaSeleccionada);
 
-      // 2. Liberar patrulleros (cambiar estados a disponible)
       for (const p of patrullasAsignadas) {
         await supabase
           .from("asignacion_patrulla")
@@ -83,7 +86,6 @@ export const GestionPatrullas = ({
           .eq("id_patrullero", p.id_patrullero);
       }
 
-      // 3. GUARDAR DERIVACIÓN si se seleccionó alguna
       if (Derivacion) {
         await supabase
           .from("asignacion_patrulla")
@@ -91,11 +93,11 @@ export const GestionPatrullas = ({
           .eq("id_alerta", alertaSeleccionada);
       }
 
-      // 4. Notificar al padre si es necesario
-      if (Derivacion && onDerivar) onDerivar(Derivacion);
+      showToast("✅ Alerta enviada a tabulación correctamente", "success");
       if (onEnviarATabulacion) onEnviarATabulacion();
     } catch (err) {
       console.error("Error enviando a tabulación:", err);
+      showToast("Error al enviar a tabulación", "error");
     } finally {
       setEnviando(false);
     }
@@ -172,6 +174,30 @@ export const GestionPatrullas = ({
     );
   };
 
+  // Función para obtener el color y texto del estado (para el botón y para el borde)
+  const getEstadoInfo = (p) => {
+    if (!p.activo) return { texto: "NO CONECTADO", claseBtn: "bg-gray-300 text-gray-500 cursor-not-allowed", borde: "border-gray-300", deshab: true };
+    switch (p.id_estado) {
+      case ESTADO_DISPONIBLE:
+        return {
+          texto: pendingAsignaciones[p.id_patrullero] === alertaSeleccionada ? "SELECCIONADA" : "DESPACHAR",
+          claseBtn: alertaSeleccionada ? "bg-green-700 hover:bg-green-800 text-white" : "bg-slate-300 text-white cursor-not-allowed",
+          borde: "border-green-500",
+          deshab: !alertaSeleccionada
+        };
+      case ESTADO_NOTIFICADO:
+        return { texto: "NOTIFICADO", claseBtn: "bg-blue-500 text-white cursor-not-allowed", borde: "border-blue-500", deshab: true };
+      case ESTADO_EN_CAMINO:
+        return { texto: "EN CAMINO", claseBtn: "bg-orange-600 text-white cursor-not-allowed", borde: "border-orange-500", deshab: true };
+      case ESTADO_EN_LUGAR:
+        return { texto: "EN EL LUGAR", claseBtn: "bg-purple-600 text-white cursor-not-allowed", borde: "border-purple-500", deshab: true };
+      case ESTADO_REVISION:
+        return { texto: "EN REVISIÓN", claseBtn: "bg-gray-500 text-white cursor-not-allowed", borde: "border-gray-500", deshab: true };
+      default:
+        return { texto: "NO DISPONIBLE", claseBtn: "bg-slate-300 text-white cursor-not-allowed", borde: "border-slate-300", deshab: true };
+    }
+  };
+
   return (
     <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-200 mt-2 relative z-0">
       <div className="flex justify-between items-center mb-4">
@@ -198,55 +224,23 @@ export const GestionPatrullas = ({
               const asignada =
                 asignaciones[p.id_patrullero] === alertaSeleccionada;
               const resaltar = pendiente || asignada;
-              const disponible = p.activo && p.id_estado === ESTADO_DISPONIBLE;
+              const estadoInfo = getEstadoInfo(p);
               const fueraServicio = !p.activo;
-
-              let texto = "NO DISPONIBLE";
-              let clase = "bg-slate-300 text-white cursor-not-allowed";
-              let deshab = true;
-
-              if (fueraServicio) {
-                texto = "NO CONECTADO";
-                clase = "bg-gray-300 text-gray-500 cursor-not-allowed";
-              } else if (disponible) {
-                if (pendiente) {
-                  texto = "SELECCIONADA";
-                  clase = "bg-slate-400 text-white";
-                } else {
-                  texto = "DESPACHAR";
-                  clase = alertaSeleccionada
-                    ? "bg-green-700 hover:bg-green-800 text-white"
-                    : "bg-slate-300 text-white cursor-not-allowed";
-                  deshab = !alertaSeleccionada;
-                }
-              } else if (p.id_estado === ESTADO_NOTIFICADO) {
-                texto = "NOTIFICADO";
-                clase = "bg-blue-500 text-white cursor-not-allowed";
-              } else if (p.id_estado === ESTADO_EN_CAMINO) {
-                texto = "EN CAMINO";
-                clase = "bg-orange-600 text-white cursor-not-allowed";
-              } else if (p.id_estado === ESTADO_EN_LUGAR) {
-                texto = "EN LUGAR";
-                clase = "bg-purple-600 text-white cursor-not-allowed";
-              }
-
               const estadoBadge = fueraServicio
                 ? "INACTIVO"
                 : p.estado_disponibilidad || "—";
 
+              const bordeClase = estadoInfo.borde;
+
               return (
                 <div
                   key={p.id_patrullero}
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    resaltar
-                      ? "border-blue-500 bg-blue-50/30 shadow-md"
-                      : fueraServicio
-                      ? "border-slate-100 bg-slate-50/30 opacity-60"
-                      : "border-slate-100 bg-slate-50/50"
+                  className={`h-32 p-3 rounded-lg border shadow-md transition-all ${bordeClase} ${
+                    resaltar ? "bg-blue-50/30" : fueraServicio ? "bg-slate-50/30 opacity-60" : "bg-slate-50/50"
                   }`}
                 >
-                  <div className="flex justify-between items-start mb-1.5">
-                    <span className="text-[11px] font-black text-slate-300 uppercase">
+                  <div className="flex justify-between items-start mt-1">
+                    <span className="text-[11px] font-extrabold tracking-wider text-slate-400 uppercase">
                       {p.placa || "S/P"}
                     </span>
                     <div
@@ -261,39 +255,31 @@ export const GestionPatrullas = ({
                           ? "bg-yellow-500 animate-pulse"
                           : p.id_estado === ESTADO_EN_LUGAR
                           ? "bg-purple-500 animate-pulse"
-                          : "bg-gray-400"
+                          : p.id_estado === ESTADO_REVISION
+                          ? "bg-gray-500 animate-pulse"
+                          : ""
                       }`}
                     />
                   </div>
-                  <p className="text-[11px] font-bold text-[#1e293b] leading-tight truncate">
+                  <p className="text-[11px] font-bold text-[#1e293b] leading-tight truncate mt-4 tracking-wide">
                     {p.nombre_oficial}
                   </p>
                   <p
-                    className={`text-[9px] font-extrabold uppercase mt-0.5 ${
-                      fueraServicio ? "text-gray-400" : "text-slate-500"
+                    className={`text-[8px] font-bold uppercase mt-0.5 tracking-wider ${
+                      fueraServicio ? "text-gray-300" : "text-slate-400"
                     }`}
                   >
                     {estadoBadge}
                   </p>
                   <div className="flex gap-1.5 mt-2">
                     <button
-                      disabled={deshab || fueraServicio}
+                      disabled={estadoInfo.deshab || fueraServicio}
                       onClick={() => onDespachar(p.id_patrullero)}
-                      className={`flex-1 py-1.5 text-[9px] font-extrabold rounded-lg uppercase transition-all shadow active:scale-95 ${clase}`}
+                      className={`flex-1 py-1.5 text-[11px] font-bold tracking-wider rounded-md uppercase transition-all shadow active:scale-95 ${estadoInfo.claseBtn}`}
                     >
-                      {texto}
+                      {estadoInfo.texto}
                     </button>
-                    {pendiente && !fueraServicio && (
-                      <button
-                        onClick={() =>
-                          onCargarRuta(p.id_patrullero, alertaActual)
-                        }
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-1.5 py-1 rounded-lg text-[9px] font-black flex items-center gap-0.5 shadow"
-                        title="Ver ruta"
-                      >
-                        <FaRoute size={9} />
-                      </button>
-                    )}
+                    {/* Botón de ruta eliminado */}
                   </div>
                 </div>
               );
@@ -335,9 +321,16 @@ export const GestionPatrullas = ({
                 {patrullasAsignadas.length > 0 ? (
                   <div className="space-y-2">
                     {patrullasAsignadas.map((p) => {
-                      const badge = !p.activo
+                      let badge = !p.activo
                         ? "INACTIVO"
                         : p.estado_disponibilidad || "—";
+                      let estadoColor = "";
+                      if (!p.activo) estadoColor = "text-gray-400";
+                      else if (p.id_estado === ESTADO_EN_LUGAR) estadoColor = "text-purple-600";
+                      else if (p.id_estado === ESTADO_EN_CAMINO) estadoColor = "text-yellow-600";
+                      else if (p.id_estado === ESTADO_NOTIFICADO) estadoColor = "text-blue-600";
+                      else if (p.id_estado === ESTADO_REVISION) estadoColor = "text-gray-500";
+                      else estadoColor = "text-slate-400";
                       return (
                         <div
                           key={p.id_patrullero}
@@ -349,19 +342,7 @@ export const GestionPatrullas = ({
                                 ? `PAT-${p.placa}`
                                 : `PAT-${p.id_patrullero}`}
                             </p>
-                            <p
-                              className={`text-[11px] font-extrabold uppercase ${
-                                !p.activo
-                                  ? "text-gray-400"
-                                  : p.id_estado === ESTADO_EN_LUGAR
-                                  ? "text-purple-600"
-                                  : p.id_estado === ESTADO_EN_CAMINO
-                                  ? "text-yellow-600"
-                                  : p.id_estado === ESTADO_NOTIFICADO
-                                  ? "text-blue-600"
-                                  : "text-slate-400"
-                              }`}
-                            >
+                            <p className={`text-[11px] font-extrabold uppercase ${estadoColor}`}>
                               {badge}
                             </p>
                           </div>
@@ -373,7 +354,9 @@ export const GestionPatrullas = ({
                                 ? "bg-yellow-500 animate-pulse"
                                 : p.id_estado === ESTADO_NOTIFICADO
                                 ? "bg-blue-500 animate-pulse"
-                                : "bg-gray-400"
+                                : p.id_estado === ESTADO_REVISION
+                                ? "bg-gray-500 animate-pulse"
+                                : ""
                             }`}
                           />
                         </div>
@@ -386,6 +369,9 @@ export const GestionPatrullas = ({
                   </p>
                 )}
               </div>
+
+              {/* 🧵 LÍNEA HORIZONTAL ENTRE LAS DOS FILAS PRINCIPALES */}
+              <div className="border-t border-slate-100 my-4"></div>
 
               <div className="mt-0">
                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-2">
@@ -428,17 +414,13 @@ export const GestionPatrullas = ({
                     className="mt-4 w-full h-11 py-2.5 bg-[#113e27] hover:bg-[#164a2f] text-white rounded-lg font-bold text-[11px] uppercase tracking-wider shadow-md flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                   >
                     <FaCheckCircle size={11} />
-                    {enviando
-                      ? "Enviando..."
-                      : Derivacion
-                      ? "ENVIAR ALERTA A TABULACIÓN"
-                      : "ENVIAR ALERTA A TABULACIÓN"}
+                    {enviando ? "Enviando..." : "ENVIAR ALERTA A TABULACIÓN"}
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="mx-6 flex flex-col gap-5 border border-slate-100 "></div>
+            <div className="mx-6 flex flex-col gap-5 border border-slate-100"></div>
 
             {/* COLUMNA DERECHA (evidencias) */}
             <div className="w-72 shrink-0">
@@ -453,13 +435,12 @@ export const GestionPatrullas = ({
               ) : (
                 <div className="h-[400px] flex items-center justify-center bg-slate-50 rounded-md border border-slate-200 border-dashed">
                   <div className="text-center text-slate-400">
-                    <FaImage size={24} className="mx-auto mb-2 opacity-50" />
+                    <FaFileImage size={24} className="mx-auto mb-2 opacity-50" />
                     <p className="text-[11px] font-bold uppercase">Sin evidencias</p>
                   </div>
                 </div>
               )}
             </div>
-            
           </div>
         ) : (
           <p className="text-center text-slate-400 text-[11px] py-6">

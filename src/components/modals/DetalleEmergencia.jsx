@@ -49,9 +49,58 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
   const [transcribiendoAudio, setTranscribiendoAudio] = useState(false);
   const [showDescripciones, setShowDescripciones] = useState(false);
 
+  // --- NUEVAS REFERENCIAS Y FUNCIONES PARA AUTO-GUARDADO ---
+  const debounceTimeout = useRef(null);
+
+  const guardarCambios = async (camposActualizados) => {
+    if (!datos?.id_alerta) return;
+    try {
+      const { error } = await supabase
+        .from("alerta")
+        .update(camposActualizados)
+        .eq("id_alerta", datos.id_alerta);
+      if (error) throw error;
+      setDatos(prev => ({ ...prev, ...camposActualizados }));
+    } catch (err) {
+      console.error("Error guardando cambios:", err);
+      showToast("Error al guardar cambios", "error");
+    }
+  };
+
+  const handleDescripcionChange = (texto) => {
+    setRelatoEditado(texto);
+    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    debounceTimeout.current = setTimeout(() => {
+      guardarCambios({ descripcion: texto });
+    }, 800);
+  };
+
+  const handleContravencionChange = async (valor) => {
+    setContravencion(valor);
+    setDelito("");
+    await guardarCambios({ contravenciones: valor, delitos: null });
+  };
+
+  const handleDelitoChange = async (valor) => {
+    setDelito(valor);
+    setContravencion("");
+    await guardarCambios({ delitos: valor, contravenciones: null });
+  };
+
+  const handlePrioridadChange = async (valor) => {
+    setPrioridad(valor);
+    await guardarCambios({ prioridad: valor });
+  };
+  // --- FIN DE LAS NUEVAS FUNCIONES ---
+
   useEffect(() => {
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = "unset"; };
+    return () => {
+      document.body.style.overflow = "unset";
+      if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+      if (audioInterval.current) clearInterval(audioInterval.current);
+    };
   }, []);
 
   const obtenerNombreEstado = async (idEstado) => {
@@ -90,6 +139,8 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
       setDatos(alertaData);
       setRelatoEditado(alertaData.descripcion || "");
       setPrioridad(alertaData.prioridad || "");
+      setContravencion(alertaData.contravenciones || "");
+      setDelito(alertaData.delitos || "");
 
       const estadoNombre = await obtenerNombreEstado(alertaData.id_estado_actual);
       let estadoMostrado = "EMERGENCIA";
@@ -104,7 +155,6 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
           .select("nombre_completo, ci, celular, selfie")
           .eq("id_usuario", alertaData.id_usuario)
           .single();
-
         if (!ciudadanoError) setCiudadano(ciudadanoData);
       }
 
@@ -223,6 +273,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
       if (!data?.texto) throw new Error("La respuesta no contiene texto transcrito");
 
       setRelatoEditado(data.texto);
+      handleDescripcionChange(data.texto); // Guarda automáticamente
       showToast("Audio transcrito correctamente", "success");
     } catch (err) {
       console.error("Error en transcripción:", err);
@@ -249,7 +300,6 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
     setShowDesestimoPanel(false);
   };
 
-  // ✅ CORREGIDO: Envía objeto con clasificacion, esContravencion y prioridad
   const handleEnviarDespacho = () => {
     if (!contravencion && !delito) {
       showToast("Seleccione un Delito o Contravención", "error");
@@ -349,7 +399,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
           <div className="overflow-y-auto p-6 bg-white">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
               
-              {/* COLUMNA IZQUIERDA */}
+              {/* COLUMNA IZQUIERDA (sin cambios) */}
               <div className="flex flex-col gap-5">
                 <section>
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
@@ -450,14 +500,14 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                       className="w-full pl-7 pr-12 h-full text-[13px] font-medium text-slate-600 bg-transparent border-none focus:outline-none resize-y min-h-[60px]"
                       placeholder="Sin descripción del hecho..."
                       value={relatoEditado}
-                      onChange={(e) => setRelatoEditado(e.target.value)}
+                      onChange={(e) => handleDescripcionChange(e.target.value)}
                     />
                     
                     <div className="absolute top-3.5 right-3 flex items-center">
                       {relatoEditado && (
                         <button
                           type="button"
-                          onClick={() => setRelatoEditado("")}
+                          onClick={() => handleDescripcionChange("")}
                           className="text-slate-400 hover:text-slate-600 transition-colors"
                           title="Limpiar texto"
                         >
@@ -469,7 +519,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                 </section>
               </div>
 
-              {/* COLUMNA DERECHA */}
+              {/* COLUMNA DERECHA (modificada para auto‑guardado) */}
               <div className="flex flex-col gap-5 border-l border-slate-100 lg:pl-6">
                 
                 <div>
@@ -541,7 +591,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                             <select
                               className="w-full h-12 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
                               value={contravencion}
-                              onChange={(e) => { setContravencion(e.target.value); setDelito(""); }}
+                              onChange={(e) => handleContravencionChange(e.target.value)}
                               disabled={!!delito}
                             >
                               <option value="">Seleccionar Contravención</option>
@@ -553,7 +603,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                             <select
                               className="w-full h-12 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
                               value={delito}
-                              onChange={(e) => { setDelito(e.target.value); setContravencion(""); }}
+                              onChange={(e) => handleDelitoChange(e.target.value)}
                               disabled={!!contravencion}
                             >
                               <option value="">Seleccionar Delito</option>
@@ -573,7 +623,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                             <button
                               key={p}
                               type="button"
-                              onClick={() => setPrioridad(p)}
+                              onClick={() => handlePrioridadChange(p)}
                               className={`py-2.5 rounded-xl border-2 font-extrabold text-[10px] tracking-wider transition-all flex items-center justify-center h-10 shadow-sm cursor-pointer ${
                                 prioridad === p
                                   ? p === "ALTA" 
@@ -599,7 +649,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
           </div>
         )}
 
-        {/* BARRA DE BOTONES */}
+        {/* BARRA DE BOTONES (sin cambios) */}
         <div className="p-4 bg-slate-50 border-t flex gap-3 w-full shrink-0">
           <button
             type="button"

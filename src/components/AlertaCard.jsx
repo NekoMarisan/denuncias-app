@@ -5,13 +5,9 @@ export const AlertaCard = ({ alerta, seleccionada, onClick }) => {
   const nombre = alerta?.nombre || "Usuario";
   const partes = nombre.split(" ");
 
-  // Clases base para el efecto de tarjeta
   const baseClasses = "p-3 rounded-xl border cursor-pointer transition-all duration-300";
-  
-  // Sombra base y sombra al hacer hover
   const shadowClasses = "shadow hover:shadow-lg";
 
-  // Lógica de colores según el estado (seleccionada o normal)
   const stateClasses = seleccionada
     ? alerta.tipo === "EMERGENCIA"
       ? "border-red-300 bg-red-100/20 shadow-md"
@@ -45,7 +41,7 @@ export const AlertaCard = ({ alerta, seleccionada, onClick }) => {
       </div>
       <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-white/50 p-1.5 rounded-lg border border-slate-100">
         <FaCircle className="text-[6px]" />
-        <span>{alerta.clasificacionHecho}</span>
+        <span>{alerta.clasificacionHecho || "—"}</span>
       </div>
     </div>
   );

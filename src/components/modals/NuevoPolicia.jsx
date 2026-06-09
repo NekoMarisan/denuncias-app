@@ -103,35 +103,97 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
   const esPatrullero = formData.rol === "Patrullero";
 
   useEffect(() => {
-    if (editandoPolicia) {
-      setFormData({
-        nombre_completo:  editandoPolicia.nombre_completo  || "",
-        ci:               editandoPolicia.ci               || "",
-        celular:          editandoPolicia.celular          || "",
-        cargo:            editandoPolicia.cargo            || "",
-        rol:              editandoPolicia.rol              || "",
-        numero_escalafon: editandoPolicia.numero_escalafon || "",
-        contrasena:       "",
-        acceso:           editandoPolicia.acceso           || "FUERA DE SERVICIO",
-        placa:            editandoPolicia.placa            || "",
-        epi:              editandoPolicia.epi              || ""
-      });
-      setDisabledAccess(false);
-    } else {
-      setFormData({
-        nombre_completo: "", ci: "", celular: "", cargo: "",
-        rol: "", numero_escalafon: "", contrasena: "",
-        acceso: "FUERA DE SERVICIO",
-        placa: "", epi: ""
-      });
-      setDisabledAccess(true);
+    const loadPoliciaData = async () => {
+      if (editandoPolicia) {
+        setFormData({
+          nombre_completo:  editandoPolicia.nombre_completo  || "",
+          ci:               editandoPolicia.ci               || "",
+          celular:          editandoPolicia.celular          || "",
+          cargo:            editandoPolicia.cargo            || "",
+          rol:              editandoPolicia.rol              || "",
+          numero_escalafon: editandoPolicia.numero_escalafon || "",
+          contrasena:       "",
+          acceso:           editandoPolicia.acceso           || "FUERA DE SERVICIO",
+          placa:            "",
+          epi:              ""
+        });
+        setDisabledAccess(false);
+
+        if (editandoPolicia.rol === "Patrullero") {
+          const { data, error } = await supabase
+            .from("patrullero")
+            .select("placa, epi")
+            .eq("id_oficial", editandoPolicia.id_oficial)
+            .maybeSingle();
+
+          if (!error && data) {
+            setFormData(prev => ({
+              ...prev,
+              placa: data.placa || "",
+              epi: data.epi || ""
+            }));
+          }
+        }
+      } else {
+        setFormData({
+          nombre_completo: "", ci: "", celular: "", cargo: "",
+          rol: "", numero_escalafon: "", contrasena: "",
+          acceso: "FUERA DE SERVICIO",
+          placa: "", epi: ""
+        });
+        setDisabledAccess(true);
+      }
+      setNombreWarning(false);
+      setCiWarning(false);
+      setCelularWarning(false);
+      setEscalafonWarning(false);
+      setShowPassword(false);
+    };
+
+    if (isOpen) {
+      loadPoliciaData();
     }
-    setNombreWarning(false);
-    setCiWarning(false);
-    setCelularWarning(false);
-    setEscalafonWarning(false);
-    setShowPassword(false);
   }, [editandoPolicia, isOpen]);
+
+  // Función para verificar unicidad de numero_escalafon (y opcional ci)
+  const verificarUnicidad = async () => {
+    // Verificar número de escalafón
+    const { data: escalafonExistente, error: errEsc } = await supabase
+      .from("oficial")
+      .select("id_oficial, numero_escalafon")
+      .eq("numero_escalafon", formData.numero_escalafon)
+      .maybeSingle();
+
+    if (errEsc) throw errEsc;
+
+    if (escalafonExistente) {
+      // Si estamos editando y el id_oficial es el mismo, no hay conflicto
+      if (editandoPolicia && escalafonExistente.id_oficial === editandoPolicia.id_oficial) {
+        // ok, es el mismo registro
+      } else {
+        return "El número de escalafón ya está registrado. Use otro.";
+      }
+    }
+
+    // Verificar cédula (si también tiene restricción única)
+    const { data: ciExistente, error: errCi } = await supabase
+      .from("oficial")
+      .select("id_oficial, ci")
+      .eq("ci", formData.ci)
+      .maybeSingle();
+
+    if (errCi) throw errCi;
+
+    if (ciExistente) {
+      if (editandoPolicia && ciExistente.id_oficial === editandoPolicia.id_oficial) {
+        // ok
+      } else {
+        return "La cédula ya está registrada. Use otra.";
+      }
+    }
+
+    return null; // sin errores
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -150,24 +212,29 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
     }
 
     setGuardando(true);
-    
-    // Lógica de acceso y estado
-    const nuevoAcceso = editandoPolicia ? formData.acceso : "FUERA DE SERVICIO";
-    let nuevoEstado = false;
-    
-    if (editandoPolicia) {
-      if (nuevoAcceso === "EN SERVICIO") {
-        // Conserva el estado anterior (true si ya estaba conectado, false si no)
-        nuevoEstado = editandoPolicia.estado;
-      } else {
-        // FUERA DE SERVICIO o DE BAJA → forzar desconexión
-        nuevoEstado = false;
+
+    // Validar unicidad de campos únicos
+    try {
+      const errorUnicidad = await verificarUnicidad();
+      if (errorUnicidad) {
+        alert(errorUnicidad);
+        setGuardando(false);
+        return;
       }
-    } else {
-      nuevoEstado = false; // nuevos oficiales siempre desconectados
+    } catch (err) {
+      console.error("Error verificando unicidad:", err);
+      alert("Error al validar datos únicos. Intente de nuevo.");
+      setGuardando(false);
+      return;
     }
 
-    const datos = {
+    const nuevoAcceso = editandoPolicia ? formData.acceso : "FUERA DE SERVICIO";
+    let nuevoEstado = false;
+    if (editandoPolicia) {
+      nuevoEstado = nuevoAcceso === "EN SERVICIO" ? editandoPolicia.estado : false;
+    }
+
+    const datosOficial = {
       nombre_completo:  formData.nombre_completo,
       ci:               formData.ci,
       celular:          formData.celular,
@@ -175,30 +242,72 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
       rol:              formData.rol,
       numero_escalafon: formData.numero_escalafon,
       acceso:           nuevoAcceso,
-      placa:            esPatrullero ? formData.placa : null,
-      epi:              esPatrullero ? formData.epi : null,
-      estado:           nuevoEstado   // true = conectado, false = desconectado
+      estado:           nuevoEstado,
     };
-    
     if (formData.contrasena && formData.contrasena.trim() !== "") {
-      datos.contrasena = formData.contrasena;
+      datosOficial.contrasena = formData.contrasena;
     }
 
     try {
+      let id_oficial;
+
       if (editandoPolicia) {
         const { error } = await supabase
           .from("oficial")
-          .update(datos)
+          .update(datosOficial)
           .eq("id_oficial", editandoPolicia.id_oficial);
         if (error) throw error;
+        id_oficial = editandoPolicia.id_oficial;
       } else {
-        const { error } = await supabase.from("oficial").insert([datos]);
+        const { data, error } = await supabase
+          .from("oficial")
+          .insert([datosOficial])
+          .select("id_oficial");
         if (error) throw error;
+        id_oficial = data[0].id_oficial;
       }
+
+      if (esPatrullero) {
+        const datosPatrullero = {
+          id_oficial: id_oficial,
+          placa: formData.placa,
+          epi: formData.epi,
+        };
+
+        console.log("🔹 Guardando en patrullero:", datosPatrullero); // 👈 Verifica en consola
+
+        if (editandoPolicia) {
+          const { data: existing } = await supabase
+            .from("patrullero")
+            .select("id_oficial")
+            .eq("id_oficial", id_oficial)
+            .maybeSingle();
+
+          if (existing) {
+            const { error } = await supabase
+              .from("patrullero")
+              .update(datosPatrullero)
+              .eq("id_oficial", id_oficial);
+            if (error) throw new Error(`Error al actualizar patrullero: ${error.message}`);
+          } else {
+            const { error } = await supabase
+              .from("patrullero")
+              .insert([datosPatrullero]);
+            if (error) throw new Error(`Error al insertar patrullero: ${error.message}`);
+          }
+        } else {
+          const { error } = await supabase
+            .from("patrullero")
+            .insert([datosPatrullero]);
+          if (error) throw new Error(`Error al insertar patrullero: ${error.message}`);
+        }
+        console.log("✅ Patrullero guardado correctamente");
+      }
+
       onGuardado();
       onClose();
     } catch (err) {
-      console.error(err);
+      console.error("❌ Error en handleSubmit:", err);
       alert(`Error: ${err.message}`);
     } finally {
       setGuardando(false);

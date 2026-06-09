@@ -2,23 +2,29 @@ import React, { useState } from 'react';
 import { 
   FaEye, FaFilePdf, FaSearch, 
   FaFileExcel, FaDownload, FaFileDownload,
-  FaCheckCircle, FaTimesCircle, FaClipboardCheck, FaBan
+  FaClipboardCheck, FaBan
 } from 'react-icons/fa';
-import { supabase } from '../services/supabase'
 
 const ArchivoHistorico = ({ alertas, onBack }) => {
   const [busqueda, setBusqueda] = useState("");
   const [tabActiva, setTabActiva] = useState("TABULADO");
   const [filtroTiempo, setFiltroTiempo] = useState("TODO");
 
+  // Filtrado robusto: verifica que existan las propiedades antes de llamar a toLowerCase
   const alertasFiltradas = alertas.filter(a => {
-    const cumpleEstado = a.estado === tabActiva;
-    const cumpleBusqueda = 
-      a.ciudadano.toLowerCase().includes(busqueda.toLowerCase()) || 
-      a.id.toLowerCase().includes(busqueda.toLowerCase());
+    const estadoAlerta = a.estado || "TABULADO";
+    const cumpleEstado = estadoAlerta === tabActiva;
+    
+    // Protección contra undefined en ciudadano o id
+    const ciudadano = a.ciudadano ? a.ciudadano.toLowerCase() : "";
+    const idAlerta = a.id ? a.id.toLowerCase() : "";
+    const busquedaLower = busqueda.toLowerCase();
+    const cumpleBusqueda = ciudadano.includes(busquedaLower) || idAlerta.includes(busquedaLower);
+    
     return cumpleEstado && cumpleBusqueda;
   });
 
+  // Filtro por tiempo (a implementar según necesidad, por ahora solo placeholder)
   const exportarExcel = () => console.log("Exportando a Excel...");
   const exportarPDF = () => console.log("Exportando a PDF...");
 
@@ -106,15 +112,21 @@ const ArchivoHistorico = ({ alertas, onBack }) => {
       {/* CUADRICULA DE ALERTAS - TAMAÑO REDUCIDO */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-6">
         {alertasFiltradas.map((alerta) => {
-          const esDesestimado = alerta.estado === "DESESTIMADO";
+          const esDesestimado = (alerta.estado || "") === "DESESTIMADO";
+          // Valores por defecto para evitar errores
+          const idMostrar = alerta.id || "SIN ID";
+          const ciudadanoMostrar = alerta.ciudadano || "Desconocido";
+          const fechaMostrar = alerta.fecha || "—";
+          const incidenteMostrar = alerta.incidente || "Sin clasificar";
+          const motivoMostrar = alerta.motivoDesestimacion || "SIN ESPECIFICAR";
 
           return (
-            <div key={alerta.id} className="bg-white rounded-xl border border-gray-100 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md overflow-hidden flex flex-col">
+            <div key={idMostrar} className="bg-white rounded-xl border border-gray-100 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md overflow-hidden flex flex-col">
               <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${esDesestimado ? 'bg-orange-500' : 'bg-green-700'}`} />
               
               <div className="p-3 flex-1 flex flex-col">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-[8px] font-black text-slate-300 uppercase tracking-wider">{alerta.id}</span>
+                  <span className="text-[8px] font-black text-slate-300 uppercase tracking-wider">{idMostrar}</span>
                   <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-tighter border ${
                     esDesestimado 
                       ? "bg-orange-50 text-orange-600 border-orange-100" 
@@ -126,11 +138,11 @@ const ArchivoHistorico = ({ alertas, onBack }) => {
 
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-7 h-7 rounded-lg bg-slate-50 text-slate-400 flex items-center justify-center font-black text-xs border border-gray-50">
-                    {alerta.ciudadano.charAt(0)}
+                    {ciudadanoMostrar.charAt(0)}
                   </div>
                   <div className="flex flex-col">
-                    <h3 className="text-[11px] font-black text-slate-700 leading-tight">{alerta.ciudadano}</h3>
-                    <p className="text-[7px] font-bold text-slate-400">{alerta.fecha}</p>
+                    <h3 className="text-[11px] font-black text-slate-700 leading-tight">{ciudadanoMostrar}</h3>
+                    <p className="text-[7px] font-bold text-slate-400">{fechaMostrar}</p>
                   </div>
                 </div>
 
@@ -139,7 +151,7 @@ const ArchivoHistorico = ({ alertas, onBack }) => {
                     {esDesestimado ? 'Motivo' : 'Categoría'}
                   </p>
                   <p className="text-[8px] font-black text-slate-600 uppercase leading-tight truncate">
-                    {esDesestimado ? (alerta.motivoDesestimacion || "SIN ESPECIFICAR") : alerta.incidente}
+                    {esDesestimado ? motivoMostrar : incidenteMostrar}
                   </p>
                 </div>
 
