@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import {
   FaUser, FaFileAlt, FaMapMarkerAlt,
-  FaShieldAlt, FaBriefcase, FaTimes, FaHistory, FaSpinner
+  FaShieldAlt, FaBriefcase, FaTimes, FaHistory, FaSpinner, FaCheckCircle
 } from 'react-icons/fa';
 import { supabase } from "../../services/supabase";
 import { contravenciones, delitos } from "../../constants/CategoriasDelitos";
@@ -38,7 +38,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
   const [epi, setEpi] = useState('—');
   const [reportePatrullero, setReportePatrullero] = useState('');
 
-  // Clasificación original (de la alerta, del operador)
   const [clasificacionOriginal, setClasificacionOriginal] = useState('—');
   const [tipoClasificacionOriginal, setTipoClasificacionOriginal] = useState('CLASIFICACIÓN');
 
@@ -47,13 +46,29 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
   const isLoadingRef = useRef(false);
   const idAlerta = alerta?.id_alerta ?? alerta?.id;
 
+  const [isDerivacionLocked, setIsDerivacionLocked] = useState(false);
+  const [latitudFinal, setLatitudFinal] = useState('');
+  const [longitudFinal, setLongitudFinal] = useState('');
+  
+  const [fechaTabulacion, setFechaTabulacion] = useState(null);
+
   // --------------------------------------------------------------
-  // Cuando es readOnly, cargamos los nombres y los campos guardados
+  // Cuando es readOnly, cargamos todos los campos guardados
   // --------------------------------------------------------------
   useEffect(() => {
     if (readOnly && isOpen && alerta) {
-      const loadReadOnlyNames = async () => {
-        // Operador Receptor
+      const loadReadOnlyData = async () => {
+        if (alerta.fecha_tabulacion) {
+          setFechaTabulacion(alerta.fecha_tabulacion);
+        } else {
+          const { data: tabData } = await supabase
+            .from('tabulacion_caso')
+            .select('fecha_tabulacion')
+            .eq('id_alerta', idAlerta)
+            .maybeSingle();
+          if (tabData?.fecha_tabulacion) setFechaTabulacion(tabData.fecha_tabulacion);
+        }
+
         if (alerta.id_operador_receptor) {
           const { data } = await supabase
             .from('oficial')
@@ -62,7 +77,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
             .maybeSingle();
           if (data) setNombreOperador(data.nombre_completo);
         }
-        // Despachador
         if (alerta.id_despachador) {
           const { data } = await supabase
             .from('oficial')
@@ -71,7 +85,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
             .maybeSingle();
           if (data) setNombreDespachador(data.nombre_completo);
         }
-        // Patrullero
         if (alerta.id_patrullero) {
           const { data: patData } = await supabase
             .from('patrullero')
@@ -94,39 +107,54 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
             }
           }
         }
-        // Cargar datos de dirección (texto literal)
         if (alerta.comuna !== undefined) setComuna(alerta.comuna || '');
         if (alerta.distrito !== undefined) setDistrito(alerta.distrito || '');
         if (alerta.subdistrito !== undefined) setSubdistrito(alerta.subdistrito || '');
-        // area_urbana y area_rural: son texto, no booleano
         if (alerta.area_urbana !== undefined) setAreaUrbana(alerta.area_urbana || '');
         if (alerta.area_rural !== undefined) setAreaRural(alerta.area_rural || '');
         if (alerta.protagonistas !== undefined) setProtagonistas(alerta.protagonistas || '');
         if (alerta.resumen_administrativo !== undefined) setResumenAdministrativo(alerta.resumen_administrativo || '');
         if (alerta.remision_caso !== undefined) setRemisionCaso(alerta.remision_caso || '');
         
-        // Clasificación del tabulador (resultado_final)
+        if (alerta.latitud !== undefined && alerta.latitud !== null) setLatitudFinal(alerta.latitud.toString());
+        else if (alerta.ubicacion && alerta.ubicacion.includes(',')) {
+          const [lat, lng] = alerta.ubicacion.split(',').map(s => s.trim());
+          setLatitudFinal(lat);
+          setLongitudFinal(lng);
+        }
+        if (alerta.longitud !== undefined && alerta.longitud !== null) setLongitudFinal(alerta.longitud.toString());
+        else if (alerta.ubicacion && alerta.ubicacion.includes(',')) {
+          const [lat, lng] = alerta.ubicacion.split(',').map(s => s.trim());
+          setLatitudFinal(lat);
+          setLongitudFinal(lng);
+        }
+
         if (clasificacionTabulador) {
-          const esContra = contravenciones.some(c => c === clasificacionTabulador);
+          const valorNormalizado = clasificacionTabulador.trim();
+          const esContra = contravenciones.some(c => c.trim().toLowerCase() === valorNormalizado.toLowerCase());
           if (esContra) {
-            setContravencionValue(clasificacionTabulador);
+            setContravencionValue(valorNormalizado);
             setDelitoValue('');
             setTipoSeleccion('contravencion');
           } else {
-            setDelitoValue(clasificacionTabulador);
+            setDelitoValue(valorNormalizado);
             setContravencionValue('');
             setTipoSeleccion('delito');
           }
+        } else {
+          setContravencionValue('');
+          setDelitoValue('');
+          setTipoSeleccion(null);
         }
-        // Derivación (desde asignacion_patrulla)
+
         if (derivacion) setRemisionCaso(derivacion);
       };
-      loadReadOnlyNames();
+      loadReadOnlyData();
     }
-  }, [readOnly, isOpen, alerta, clasificacionTabulador, derivacion]);
+  }, [readOnly, isOpen, alerta, clasificacionTabulador, derivacion, idAlerta]);
 
   // --------------------------------------------------------------
-  // Carga normal (cuando no es readOnly) – sin cambios en area_urbana/rural
+  // Carga normal (cuando no es readOnly)
   // --------------------------------------------------------------
   useEffect(() => {
     if (!isOpen || !idAlerta || readOnly) return;
@@ -138,10 +166,9 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
     const cargar = async () => {
       setCargandoDatos(true);
       try {
-        // Datos de la alerta (ciudadano, operador receptor)
         const { data: alertaRow, error: errorAlerta } = await supabase
           .from("alerta")
-          .select(`id_usuario, id_operador_receptor, bloqueado_por`)
+          .select(`id_usuario, id_operador_receptor, bloqueado_por, ubicacion`)
           .eq("id_alerta", idAlerta)
           .maybeSingle();
         if (errorAlerta) throw errorAlerta;
@@ -165,9 +192,13 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
               .maybeSingle();
             setNombreOperador(operador?.nombre_completo || `Operador #${idOper}`);
           }
+          if (alertaRow.ubicacion && alertaRow.ubicacion.includes(',')) {
+            const [lat, lng] = alertaRow.ubicacion.split(',').map(s => s.trim());
+            setLatitudFinal(lat);
+            setLongitudFinal(lng);
+          }
         }
 
-        // Obtener asignación de patrulla (incluyendo derivación)
         let idPatrulleroEncontrado = null;
         let idAsignacionEncontrada = null;
         let idDespachadorEncontrado = null;
@@ -189,7 +220,14 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
         setIdAsignacion(idAsignacionEncontrada);
         setIdPatrullero(idPatrulleroEncontrado);
         setIdDespachador(idDespachadorEncontrado);
-        setRemisionCaso(derivacionEncontrada);
+        
+        if (derivacionEncontrada && derivacionEncontrada.trim() !== "") {
+          setRemisionCaso(derivacionEncontrada);
+          setIsDerivacionLocked(true);
+        } else {
+          setRemisionCaso("SIN DERIVACIÓN");
+          setIsDerivacionLocked(false);
+        }
 
         if (idDespachadorEncontrado) {
           const { data: despachador } = await supabase
@@ -200,7 +238,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
           setNombreDespachador(despachador?.nombre_completo || `Oficial #${idDespachadorEncontrado}`);
         }
 
-        // Datos del patrullero
         if (idPatrulleroEncontrado) {
           const { data: patrulleroData, error: errPat } = await supabase
             .from("patrullero")
@@ -224,7 +261,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
           }
         }
 
-        // Reporte del patrullero
         if (idPatrulleroEncontrado) {
           const { data: reporteData } = await supabase
             .from("reporte_alerta")
@@ -237,7 +273,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
           if (reporteData?.descripcion_reporte) setReportePatrullero(reporteData.descripcion_reporte);
         }
 
-        // Obtener la clasificación original de la alerta
         const contraOriginal = alerta?.contravenciones || null;
         const delitoOriginal = alerta?.delitos || null;
         if (contraOriginal) {
@@ -250,11 +285,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
           setClasificacionOriginal("NO CLASIFICADA");
           setTipoClasificacionOriginal("CLASIFICACIÓN");
         }
-
-        // NOTA: area_urbana, area_rural, comuna, distrito, subdistrito, protagonistas, resumen_administrativo
-        // NO se precargan en modo edición porque el tabulador los escribe desde cero.
-        // (Si se quisiera editar una tabulación existente, habría que traerlos de tabulacion_caso,
-        // pero por ahora no se usa edición.)
 
       } catch (err) {
         if (err.name !== 'AbortError') console.error("Error cargando datos:", err);
@@ -299,6 +329,10 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
       setReportePatrullero('');
       setClasificacionOriginal('—');
       setTipoClasificacionOriginal('CLASIFICACIÓN');
+      setIsDerivacionLocked(false);
+      setLatitudFinal('');
+      setLongitudFinal('');
+      setFechaTabulacion(null);
     };
   }, [isOpen]);
 
@@ -340,7 +374,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
 
     setGuardando(true);
     try {
-      const [latStr, lngStr] = (alerta?.ubicacion || "").split(",").map(s => s?.trim());
       const idTabulador = user?.id_oficial || alerta?.id_tabulador || null;
 
       let clasificacionFinal = contravencionValue || delitoValue;
@@ -358,16 +391,15 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
           id_despachador: idDespachador ?? null,
           id_tabulador: idTabulador,
           id_reporte: null,
-          latitud: latStr ? parseFloat(latStr) : null,
-          longitud: lngStr ? parseFloat(lngStr) : null,
+          latitud: latitudFinal ? parseFloat(latitudFinal) : null,
+          longitud: longitudFinal ? parseFloat(longitudFinal) : null,
           comuna: comuna || null,
           distrito: distrito || null,
           subdistrito: subdistrito || null,
-          // 🟢 Guardar el texto literal (sin convertir a booleano)
           area_urbana: areaUrbana || null,
           area_rural: areaRural || null,
           protagonistas: protagonistas || null,
-          remision_caso: remisionCaso || null,
+          remision_caso: remisionCaso,
           resumen_administrativo: resumenAdministrativo,
           resultado_final: clasificacionFinal,
           id_estado_final: null,
@@ -392,9 +424,15 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
   };
 
   const cardStyle = "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full";
-  const [latStr, lngStr] = (alerta?.ubicacion || "").split(",").map(s => s?.trim());
 
   const mostrarClasificacionElegida = () => {
+    if (readOnly && clasificacionTabulador) {
+      const esContra = contravenciones.some(c => c.trim().toLowerCase() === clasificacionTabulador.trim().toLowerCase());
+      return {
+        texto: clasificacionTabulador,
+        tipo: esContra ? "CONTRAVENCIÓN" : "DELITO"
+      };
+    }
     if (contravencionValue || delitoValue) {
       return {
         texto: contravencionValue || delitoValue,
@@ -411,30 +449,73 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
   };
 
   const clasificacionActual = mostrarClasificacionElegida();
+  
+  const formatFechaHora = (isoString) => {
+    if (!isoString) return "—";
+    const date = new Date(isoString);
+    return date.toLocaleString('es-BO', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  // Función para dividir nombre en dos líneas (primera palabra arriba, resto abajo)
+  const splitNameLines = (fullName) => {
+    if (!fullName || fullName === '—') return { first: fullName, last: '' };
+    const parts = fullName.trim().split(' ');
+    if (parts.length === 1) return { first: parts[0], last: '' };
+    return { first: parts[0], last: parts.slice(1).join(' ') };
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-2">
-      <form onSubmit={handleSubmit} className="bg-white w-full max-w-[1400px] h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white">
-        <div className="bg-[#1a5336] p-4 flex justify-between items-center text-white shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 bg-white/10 rounded-lg flex items-center justify-center border border-white/20">
-              <FaShieldAlt size={14} />
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+      
+      <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[85vh]">
+        {/* BARRA SUPERIOR - con botón cerrar (X) */}
+        <div className="bg-[#113e27] py-4 px-6 text-white w-full shrink-0">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/10 p-2 rounded-md flex items-center justify-center shrink-0">
+                <FaShieldAlt className="text-white" size={30} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <h2 className="text-[18px] font-bold uppercase tracking-wide leading-none mt-0.5">
+                  {readOnly ? "ALERTA TABULADA · REPORTE FINAL" : "TABULACIÓN DE ALERTAS"}
+                </h2>
+                {readOnly && (
+                  <div className="flex flex-wrap gap-3 text-[11px] font-bold text-white/70 mt-0.5">
+                    <span>
+                      ID: {alerta?.id || alerta?.codigo_alerta || idAlerta || "—"}
+                    </span>
+                    <span className='ml-3'>
+                      Concluido: {formatFechaHora(fechaTabulacion || alerta?.fecha_tabulacion)}
+                    </span>
+                  </div>
+                )}
+                {!readOnly && alerta?.id && (
+                  <div className="flex flex-wrap gap-2 text-[10px] font-medium text-white/70 mt-0.5">
+                    <span>{alerta.id}</span>
+                  </div>
+                )}
+              </div>
             </div>
-            <h1 className="text-lg font-black uppercase tracking-wider">
-              {readOnly ? "VER TABULACIÓN" : "TABULACIÓN DE ALERTAS"}
-            </h1>
-            {alerta?.id && (
-              <span className="px-2 py-0.5 bg-white/10 rounded-lg text-[10px] font-black tracking-widest">
-                {alerta.id}
-              </span>
-            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="hover:bg-white/20 p-1.5 rounded-md transition-colors shrink-0 mt-1"
+            >
+              <FaTimes size={16} />
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="hover:bg-white/10 p-2 rounded-full transition-colors">
-            <FaTimes size={18} />
-          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50/30 min-h-0">
+        {/* CUERPO CON SCROLL */}
+        <div className="overflow-y-auto p-6 bg-white">
           {cargandoDatos && (
             <div className="flex items-center justify-center py-4 gap-2 text-slate-400">
               <FaSpinner className="animate-spin" size={14} />
@@ -442,10 +523,10 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 rounded-md">
             {/* DATOS DE LA ALERTA */}
             <section className={cardStyle}>
-              <HeaderSection icon={<FaFileAlt className="text-blue-600 text-sm"/>} title="DATOS DE LA ALERTA" bgColor="bg-blue-50" />
+              <HeaderSection icon={<FaFileAlt className="text-[#0C3DC2] text-[14px]"/>} title="DATOS DE LA ALERTA" bgColor="bg-blue-50 rounded-sm" />
               <div className="grid grid-cols-2 gap-3 flex-1">
                 <div className="col-span-2">
                   <Field label="NOMBRE DEL CIUDADANO" value={ciudadanoData?.nombre_completo || alerta?.ciudadano || "—"} readOnly required />
@@ -469,7 +550,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
 
             {/* DIRECCIÓN */}
             <section className={cardStyle}>
-              <HeaderSection icon={<FaMapMarkerAlt className="text-green-600 text-sm"/>} title="DIRECCIÓN Y DESCRIPCIÓN" bgColor="bg-green-50" />
+              <HeaderSection icon={<FaMapMarkerAlt className="text-green-900 text-sm"/>} title="DIRECCIÓN Y DESCRIPCIÓN" bgColor="bg-green-50" />
               <div className="grid grid-cols-2 gap-3 flex-1">
                 <div className="space-y-0.5">
                   <label className="text-xs font-medium text-slate-500 ml-1.5">ÁREA URBANA</label>
@@ -501,8 +582,8 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs font-semibold text-slate-500"
                     disabled={readOnly} />
                 </div>
-                <Field label="LATITUD" value={latStr || alerta?.lat || "—"} readOnly />
-                <Field label="LONGITUD" value={lngStr || alerta?.lng || "—"} readOnly />
+                <Field label="LATITUD" value={latitudFinal || "—"} readOnly />
+                <Field label="LONGITUD" value={longitudFinal || "—"} readOnly />
               </div>
             </section>
 
@@ -524,18 +605,18 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
                   onChange={handleDelitoChange}
                   disabled={readOnly}
                 />
-                <div className="mt-2 p-2 bg-slate-100 rounded-xl text-center">
-                  <p className="text-[9px] font-black text-slate-500 uppercase">
-                    {contravencionValue || delitoValue ? "CLASIFICACIÓN ELEGIDA" : "CLASIFICACIÓN A GUARDAR"}
+                <div className="mt-2 p-2 bg-slate-50 rounded-xl text-center">
+                  <p className="text-[11px] font-bold text-slate-400 tracking-wider uppercase">
+                    {contravencionValue || delitoValue || (readOnly && clasificacionTabulador) ? "CLASIFICACIÓN FINAL" : "CLASIFICACIÓN A GUARDAR"}
                   </p>
-                  <p className="text-xs font-bold text-green-700 uppercase">
+                  <p className="mt-1 tracking-wide text-[11px] font-bold text-slate-700 uppercase">
                     {clasificacionActual ? (
                       `${clasificacionActual.tipo}: ${clasificacionActual.texto}`
                     ) : (
                       "SIN CLASIFICACIÓN"
                     )}
                   </p>
-                  {!contravencionValue && !delitoValue && clasificacionOriginal !== "NO CLASIFICADA" && (
+                  {!readOnly && !contravencionValue && !delitoValue && clasificacionOriginal !== "NO CLASIFICADA" && (
                     <p className="text-[8px] text-amber-600 mt-1">(Se usará la clasificación original del operador)</p>
                   )}
                 </div>
@@ -564,7 +645,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
           </div>
 
           {/* SECRETARÍA */}
-          <section className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <section className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mt-8">
             <HeaderSection icon={<FaBriefcase className="text-purple-600 text-sm"/>} title="TABULACIÓN PARA SECRETARÍA" bgColor="bg-purple-50" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-3">
@@ -576,9 +657,13 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
                 </div>
                 <div className="space-y-0.5">
                   <label className="text-xs font-medium text-slate-500 ml-2">REMISIÓN DEL CASO (DERIVACIÓN)</label>
-                  <input value={remisionCaso} onChange={e => !readOnly && setRemisionCaso(e.target.value)} placeholder="Ej: FELCC, Fiscalía, Bomberos..."
+                  <input
+                    value={remisionCaso}
+                    onChange={e => !readOnly && !isDerivacionLocked && setRemisionCaso(e.target.value)}
+                    placeholder="Ej: FELCC, Fiscalía, Bomberos..."
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs font-semibold text-slate-500"
-                    disabled={readOnly} />
+                    disabled={readOnly || isDerivacionLocked}
+                  />
                 </div>
               </div>
               <div className="flex flex-col">
@@ -591,21 +676,42 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
             </div>
           </section>
 
-          {/* HISTORIAL */}
-          <div className="pt-3 px-2">
+          {/* HISTORIAL DE PROCESO - estilo tarjetas en una sola fila */}
+          <div className="pt-6 px-2 mt-4">
             <h2 className="flex items-center gap-1.5 font-black text-slate-500 uppercase text-[9px] tracking-wider mb-5">
               <FaHistory className="text-[#1a5336] text-xs" /> HISTORIAL DE PROCESO
             </h2>
-            <div className="relative flex justify-between items-start max-w-4xl mx-auto">
-              <div className="absolute top-2 left-0 w-full h-[1px] bg-slate-200 -z-10" />
-              <HistoryItem role="OPERADOR RECEPTOR" name={nombreOperador} />
-              <HistoryItem role="DESPACHADOR" name={nombreDespachador} />
-              <HistoryItem role="PATRULLERO" name={nombrePatrullero} />
-              <HistoryItem role="TABULADOR" name={user?.nombre_completo || "EN CURSO"} highlight />
+            <div className="flex flex-wrap md:flex-nowrap justify-center gap-3">
+              <HistoryCard 
+                role="OPERADOR RECEPTOR" 
+                name={nombreOperador} 
+                icon={<FaUser size={12} />} 
+                splitName={splitNameLines(nombreOperador)}
+              />
+              <HistoryCard 
+                role="DESPACHADOR" 
+                name={nombreDespachador} 
+                icon={<FaShieldAlt size={12} />} 
+                splitName={splitNameLines(nombreDespachador)}
+              />
+              <HistoryCard 
+                role="PATRULLERO" 
+                name={nombrePatrullero} 
+                icon={<FaUser size={12} />} 
+                splitName={splitNameLines(nombrePatrullero)}
+              />
+              <HistoryCard 
+                role="TABULADOR" 
+                name={user?.nombre_completo || "EN CURSO"} 
+                icon={<FaCheckCircle size={12} />} 
+                highlight 
+                splitName={splitNameLines(user?.nombre_completo || "EN CURSO")}
+              />
             </div>
           </div>
 
-          <div className="flex justify-end gap-4 pt-4 border-t border-slate-100">
+          {/* BOTONES */}
+          <div className="flex justify-end gap-4 pt-4 border-t border-slate-100 mt-6">
             <button type="button" onClick={onClose}
               className="px-6 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-400 font-black rounded-xl uppercase text-[9px] tracking-[0.15em] transition-all">
               {readOnly ? "CERRAR" : "DESCARTAR"}
@@ -619,12 +725,12 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
             )}
           </div>
         </div>
-      </form>
+      </div>
     </div>
   );
 };
 
-// Componentes memoizados (sin cambios)
+// Componentes auxiliares
 const HeaderSection = memo(({ icon, title, bgColor }) => (
   <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-4 shrink-0">
     <div className={`w-7 h-7 ${bgColor} rounded-lg flex items-center justify-center`}>{icon}</div>
@@ -656,16 +762,26 @@ const Field = memo(({ label, value, readOnly = true, required = false }) => (
   </div>
 ));
 
-const HistoryItem = memo(({ role, name, highlight }) => (
-  <div className="flex flex-col items-center bg-transparent z-10 px-2">
-    <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 mb-1 shadow-sm ${highlight ? 'bg-green-600 border-green-600 text-white scale-105' : 'bg-white border-slate-200 text-slate-400'}`}>
-      <FaUser size={11} />
+// Nuevo componente HistoryCard con nombre en dos líneas
+const HistoryCard = memo(({ role, name, icon, highlight, splitName }) => {
+  return (
+    <div className={`flex-1 flex flex-col items-center min-w-[80px] rounded-xl p-2 transition-all ${highlight ? 'bg-green-50 border border-green-200 shadow-md' : 'bg-white border border-slate-100 shadow-sm'}`}>
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${highlight ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+        {icon}
+      </div>
+      <p className="text-[9px] font-black text-slate-500 uppercase text-center">{role}</p>
+      <div className="text-center mt-0.5">
+        <p className={`text-[9px] font-bold uppercase leading-tight ${highlight ? 'text-green-700' : 'text-slate-600'}`}>
+          {splitName.first}
+        </p>
+        {splitName.last && (
+          <p className={`text-[9px] font-bold uppercase leading-tight ${highlight ? 'text-green-700' : 'text-slate-600'}`}>
+            {splitName.last}
+          </p>
+        )}
+      </div>
     </div>
-    <div className="text-center bg-white px-1">
-      <p className="text-[8px] font-black text-slate-400 uppercase leading-none mb-0.5">{role}</p>
-      <p className={`text-[9px] font-black uppercase ${highlight ? 'text-green-700' : 'text-slate-600'}`}>{name}</p>
-    </div>
-  </div>
-));
+  );
+});
 
 export default FormularioTabulacion;

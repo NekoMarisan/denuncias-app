@@ -1,91 +1,362 @@
-import React, { useState } from 'react';
-import { 
-  FaEye, FaFilePdf, FaSearch, 
+import React, { useState, useEffect } from 'react';
+//actualizado Mai
+import {
+  FaEye, FaFilePdf, FaSearch,
   FaFileExcel, FaDownload, FaFileDownload,
-  FaClipboardCheck, FaBan
+  FaClipboardCheck, FaBan, FaSpinner
 } from 'react-icons/fa';
+import { supabase } from '../services/supabase';
+import FormularioDesestimados from '../components/modals/FormularioDesestimados';
+import FormularioTabulacion from '../components/modals/FormularioTabulacion';
 
-const ArchivoHistorico = ({ alertas, onBack }) => {
+const ArchivoHistorico = ({
+  alertasTabuladas,
+  tabuladasCompletas = [],
+  onGenerarPDFTabulada,
+  onBack
+}) => {
   const [busqueda, setBusqueda] = useState("");
   const [tabActiva, setTabActiva] = useState("TABULADO");
   const [filtroTiempo, setFiltroTiempo] = useState("TODO");
+  const [desestimadas, setDesestimadas] = useState([]);
+  const [cargandoDesestimadas, setCargandoDesestimadas] = useState(true);
+  const [selectedDesestimada, setSelectedDesestimada] = useState(null);
+  const [showModalDesestimada, setShowModalDesestimada] = useState(false);
+  const [selectedTabulada, setSelectedTabulada] = useState(null);
+  const [showModalTabulada, setShowModalTabulada] = useState(false);
+  const [clasificacionTabuladorModal, setClasificacionTabuladorModal] = useState(null);
+  const [derivacionModal, setDerivacionModal] = useState(null);
 
-  // Filtrado robusto: verifica que existan las propiedades antes de llamar a toLowerCase
-  const alertasFiltradas = alertas.filter(a => {
-    const estadoAlerta = a.estado || "TABULADO";
-    const cumpleEstado = estadoAlerta === tabActiva;
-    
-    // Protección contra undefined en ciudadano o id
-    const ciudadano = a.ciudadano ? a.ciudadano.toLowerCase() : "";
-    const idAlerta = a.id ? a.id.toLowerCase() : "";
+  // Cargar desestimadas desde Supabase (sin cambios)
+  useEffect(() => {
+    const cargarDesestimadas = async () => {
+      setCargandoDesestimadas(true);
+      try {
+        const { data, error } = await supabase
+          .from('alerta_desestimada')
+          .select(`
+            id_desestimado,
+            id_alerta,
+            motivo,
+            justificacion_adicional,
+            fecha_hora,
+            id_operador,
+            alerta:alerta (
+              id_alerta,
+              codigo_alerta,
+              fecha_hora,
+              descripcion,
+              ubicacion,
+              contravenciones,
+              delitos,
+              id_operador_receptor,
+              usuario_ciudadano (
+                nombre_completo,
+                ci,
+                celular
+              )
+            )
+          `)
+          .order('fecha_hora', { ascending: false });
+        if (error) throw error;
+
+        const desestimadasConAsignacion = await Promise.all((data || []).map(async (item) => {
+          const alertaData = item.alerta;
+          let id_despachador = null, id_patrullero = null;
+          if (alertaData?.id_alerta) {
+            const { data: asigData } = await supabase
+              .from('asignacion_patrulla')
+              .select('id_despachador, id_patrullero')
+              .eq('id_alerta', alertaData.id_alerta)
+              .order('id_asignacion', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (asigData) {
+              id_despachador = asigData.id_despachador;
+              id_patrullero = asigData.id_patrullero;
+            }
+          }
+          return {
+            id_alerta: alertaData?.id_alerta,
+            id: alertaData?.codigo_alerta || `DES-${item.id_alerta}`,
+            ciudadano: alertaData?.usuario_ciudadano?.nombre_completo || "Desconocido",
+            fecha: new Date(item.fecha_hora).toLocaleDateString('es-BO'),
+            incidente: item.motivo,
+            estado: "DESESTIMADO",
+            motivoDesestimacion: item.motivo,
+            justificacion: item.justificacion_adicional,
+            fecha_desestimo: new Date(item.fecha_hora).toLocaleString('es-BO'),
+            id_operador_desestimo: item.id_operador,
+            alerta_completa: alertaData,
+            ci: alertaData?.usuario_ciudadano?.ci,
+            celular: alertaData?.usuario_ciudadano?.celular,
+            id_operador_receptor: alertaData?.id_operador_receptor,
+            id_despachador,
+            id_patrullero
+          };
+        }));
+
+        const ids = new Set();
+        desestimadasConAsignacion.forEach(d => {
+          if (d.id_operador_receptor) ids.add(d.id_operador_receptor);
+          if (d.id_despachador) ids.add(d.id_despachador);
+          if (d.id_patrullero) ids.add(d.id_patrullero);
+          if (d.id_operador_desestimo) ids.add(d.id_operador_desestimo);
+        });
+        const { data: oficiales } = await supabase
+          .from('oficial')
+          .select('id_oficial, nombre_completo')
+          .in('id_oficial', [...ids]);
+        const nombresMap = {};
+        oficiales?.forEach(o => { nombresMap[o.id_oficial] = o.nombre_completo; });
+
+        const formateadas = desestimadasConAsignacion.map(d => ({
+          ...d,
+          nombre_operador_receptor: nombresMap[d.id_operador_receptor] || "—",
+          nombre_despachador: nombresMap[d.id_despachador] || "—",
+          nombre_patrullero: nombresMap[d.id_patrullero] || "—",
+          nombre_operador_desestimo: nombresMap[d.id_operador_desestimo] || "—"
+        }));
+        setDesestimadas(formateadas);
+      } catch (err) {
+        console.error("Error cargando desestimadas:", err);
+      } finally {
+        setCargandoDesestimadas(false);
+      }
+    };
+    cargarDesestimadas();
+  }, []);
+
+  // Combinar alertas
+  const alertasTabuladasConFormato = (alertasTabuladas || []).map(a => ({
+    ...a,
+    estado: "TABULADO"
+  }));
+  const todasLasAlertas = [...alertasTabuladasConFormato, ...desestimadas];
+
+  // Filtros
+  const alertasFiltradas = todasLasAlertas.filter(a => {
+    const cumpleEstado = (a.estado || "TABULADO") === tabActiva;
+    const ciudadano = (a.ciudadano || "").toLowerCase();
+    const idAlerta = (a.id || "").toLowerCase();
     const busquedaLower = busqueda.toLowerCase();
     const cumpleBusqueda = ciudadano.includes(busquedaLower) || idAlerta.includes(busquedaLower);
-    
+    if (filtroTiempo !== "TODO") {
+      let fechaComparar;
+      if (a.estado === "DESESTIMADO") {
+        fechaComparar = new Date(a.fecha_desestimo);
+      } else {
+        fechaComparar = new Date(a.fecha);
+      }
+      const hoy = new Date();
+      if (filtroTiempo === "HOY") {
+        if (fechaComparar.toDateString() !== hoy.toDateString()) return false;
+      } else if (filtroTiempo === "ESTE MES") {
+        if (fechaComparar.getMonth() !== hoy.getMonth() || fechaComparar.getFullYear() !== hoy.getFullYear()) return false;
+      }
+    }
     return cumpleEstado && cumpleBusqueda;
   });
 
-  // Filtro por tiempo (a implementar según necesidad, por ahora solo placeholder)
-  const exportarExcel = () => console.log("Exportando a Excel...");
-  const exportarPDF = () => console.log("Exportando a PDF...");
+  // Funciones para tabuladas
+  const abrirDetalleTabulada = (alerta) => {
+    const idAlertaCard = String(alerta.id_alerta);
+    const tabuladaCompleta = tabuladasCompletas.find(t => String(t.id_alerta) === idAlertaCard);
+    if (tabuladaCompleta) {
+      const ciudadano = tabuladaCompleta.alerta?.usuario_ciudadano?.nombre_completo || "Ciudadano";
+      let clasificacion = tabuladaCompleta.alerta?.contravenciones || tabuladaCompleta.alerta?.delitos;
+      if (!clasificacion) clasificacion = tabuladaCompleta.resultado_final || "Sin clasificar";
+
+      const alertaDetalle = {
+        id_alerta: tabuladaCompleta.id_alerta,
+        ciudadano: ciudadano,
+        ci: tabuladaCompleta.alerta?.usuario_ciudadano?.ci,
+        celular: tabuladaCompleta.alerta?.usuario_ciudadano?.celular,
+        incidente: clasificacion,
+        descripcion: tabuladaCompleta.alerta?.descripcion,
+        ubicacion: tabuladaCompleta.alerta?.ubicacion,
+        contravenciones: tabuladaCompleta.alerta?.contravenciones,
+        delitos: tabuladaCompleta.alerta?.delitos,
+        id_patrullero: tabuladaCompleta.id_patrullero,
+        id_despachador: tabuladaCompleta.id_despachador,
+        id_operador_receptor: tabuladaCompleta.id_operador_receptor,
+        placa: tabuladaCompleta.placa,
+        epi: tabuladaCompleta.epi,
+        numero_escalafon: tabuladaCompleta.numero_escalafon,
+        comuna: tabuladaCompleta.comuna,
+        distrito: tabuladaCompleta.distrito,
+        subdistrito: tabuladaCompleta.subdistrito,
+        area_urbana: tabuladaCompleta.area_urbana,
+        area_rural: tabuladaCompleta.area_rural,
+        protagonistas: tabuladaCompleta.protagonistas,
+        remision_caso: tabuladaCompleta.remision_caso,
+        resumen_administrativo: tabuladaCompleta.resumen_administrativo,
+        resultado_final: tabuladaCompleta.resultado_final
+      };
+      setSelectedTabulada(alertaDetalle);
+      setClasificacionTabuladorModal(tabuladaCompleta.resultado_final || null);
+      setDerivacionModal(tabuladaCompleta.remision_caso || null);
+      setShowModalTabulada(true);
+    } else {
+      console.warn("No se encontraron datos completos para esta tabulación", idAlertaCard);
+    }
+  };
+
+  const generarPDFTabulada = (alerta) => {
+    const idAlertaCard = String(alerta.id_alerta);
+    const tabuladaCompleta = tabuladasCompletas.find(t => String(t.id_alerta) === idAlertaCard);
+    if (tabuladaCompleta && onGenerarPDFTabulada) {
+      onGenerarPDFTabulada(tabuladaCompleta);
+    } else {
+      console.log("PDF para tabulada (sin datos completos)", alerta);
+    }
+  };
+
+  // Funciones para desestimadas
+  const generarPDFDesestimada = (alerta) => {
+    // ... (sin cambios, igual que original)
+    const fechaHoraAlerta = alerta.alerta_completa?.fecha_hora 
+      ? new Date(alerta.alerta_completa.fecha_hora).toLocaleString('es-BO')
+      : "—";
+    const clasificacionOriginal = alerta.alerta_completa?.contravenciones || alerta.alerta_completa?.delitos || "—";
+
+    const contenidoHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Reporte de Alerta Desestimada - ${alerta.id}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 30px; line-height: 1.4; }
+          h1 { color: #1a5336; font-size: 22px; border-bottom: 2px solid #1a5336; padding-bottom: 8px; }
+          h2 { color: #2d6a4f; font-size: 18px; margin-top: 20px; border-left: 4px solid #2d6a4f; padding-left: 10px; }
+          .seccion { margin-bottom: 25px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+          .campo { margin-bottom: 8px; }
+          .label { font-weight: bold; width: 180px; display: inline-block; color: #333; }
+          .valor { display: inline-block; color: #555; }
+          .rojo { background-color: #ffefef; border-left: 4px solid #c13100; padding: 10px; }
+          .firma { margin-top: 40px; border-top: 1px solid #ccc; padding-top: 20px; text-align: center; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <h1>REPORTE DE ALERTA DESESTIMADA</h1>
+        <p><strong>Fecha de emisión:</strong> ${new Date().toLocaleString()}</p>
+
+        <div class="seccion">
+          <h2>DATOS DE LA ALERTA</h2>
+          <div class="grid">
+            <div><span class="label">Código Alerta:</span> <span class="valor">${alerta.id}</span></div>
+            <div><span class="label">Fecha y Hora:</span> <span class="valor">${fechaHoraAlerta}</span></div>
+            <div><span class="label">Ciudadano:</span> <span class="valor">${alerta.ciudadano}</span></div>
+            <div><span class="label">CI / Celular:</span> <span class="valor">${alerta.ci || "—"} / ${alerta.celular || "—"}</span></div>
+            <div><span class="label">Ubicación:</span> <span class="valor">${alerta.alerta_completa?.ubicacion || "—"}</span></div>
+            <div><span class="label">Clasificación Original:</span> <span class="valor">${clasificacionOriginal}</span></div>
+          </div>
+          <div class="campo"><span class="label">Descripción del Hecho:</span><br><span class="valor">${alerta.alerta_completa?.descripcion || "Sin descripción"}</span></div>
+        </div>
+
+        <div class="seccion">
+          <h2 style="color:#C13100">INFORMACIÓN DE DESESTIMACIÓN</h2>
+          <div class="rojo">
+            <div><span class="label">Motivo:</span> <span class="valor">${alerta.motivoDesestimacion}</span></div>
+            <div><span class="label">Fecha de Desestimación:</span> <span class="valor">${alerta.fecha_desestimo}</span></div>
+            <div><span class="label">Justificación Adicional:</span><br><span class="valor">${alerta.justificacion || "No especificada"}</span></div>
+            <div><span class="label">Operador que desestimó:</span> <span class="valor">${alerta.nombre_operador_desestimo || "—"}</span></div>
+          </div>
+        </div>
+
+        <div class="firma">
+          Documento generado automáticamente por el Sistema de Tabulación<br>
+          ${new Date().toLocaleDateString()}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const ventana = window.open();
+    ventana.document.write(contenidoHTML);
+    ventana.document.close();
+    ventana.print();
+  };
+
+  const abrirDetalleDesestimada = (alerta) => {
+    setSelectedDesestimada({
+      codigo_alerta: alerta.id,
+      ciudadano: alerta.ciudadano,
+      fecha_hora: alerta.alerta_completa?.fecha_hora ? new Date(alerta.alerta_completa.fecha_hora).toLocaleString('es-BO') : "—",
+      ubicacion: alerta.alerta_completa?.ubicacion,
+      descripcion: alerta.alerta_completa?.descripcion,
+      contravenciones: alerta.alerta_completa?.contravenciones,
+      delitos: alerta.alerta_completa?.delitos,
+      motivo_desestimo: alerta.motivoDesestimacion,
+      justificacion: alerta.justificacion,
+      fecha_desestimo: alerta.fecha_desestimo,
+      ci: alerta.ci,
+      celular: alerta.celular,
+      nombre_operador_desestimo: alerta.nombre_operador_desestimo
+    });
+    setShowModalDesestimada(true);
+  };
+
+  const exportarExcel = () => console.log("Exportar Excel", alertasFiltradas);
+  const exportarPDF = () => console.log("Exportar PDF general", alertasFiltradas);
+
+  if (cargandoDesestimadas && alertasTabuladasConFormato.length === 0) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <FaSpinner className="animate-spin text-green-800 text-3xl" />
+        <span className="ml-2 text-slate-600">Cargando historial...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="-mt-4 w-full px-1 py-4 space-y-4 animate-fadeIn pb-6 bg-gray-50/30">
-      
-      {/* BARRA DE HERRAMIENTAS - TAMAÑO REDUCIDO */}
-      <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4 flex-1">
-          {/* Selector de Pestañas */}
-          <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100 shrink-0">
+      {/* Barra de herramientas */}
+      <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4 flex-1 min-w-[200px]">
+          <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200 shrink-0">
             <button 
               onClick={() => setTabActiva("TABULADO")} 
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg font-extrabold text-[10px] transition-all ${
-                tabActiva === "TABULADO" 
-                ? "bg-green-800 text-white shadow-sm" 
-                : "text-slate-400 hover:text-slate-600"
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${
+                tabActiva === "TABULADO" ? "bg-[#113e27] text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
               }`}
             >
               <FaClipboardCheck size={12} /> FINALIZADOS
             </button>
             <button 
               onClick={() => setTabActiva("DESESTIMADO")} 
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg font-extrabold text-[10px] transition-all ${
-                tabActiva === "DESESTIMADO" 
-                ? "bg-orange-600 text-white shadow-sm" 
-                : "text-slate-400 hover:text-slate-600"
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${
+                tabActiva === "DESESTIMADO" ? "bg-[#113e27] text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
               }`}
             >
               <FaBan size={12} /> DESESTIMADOS
             </button>
           </div>
 
-          {/* Buscador */}
           <div className="relative flex-1">
-            <FaSearch className={`absolute left-3 top-1/2 -translate-y-1/2 text-xs ${
-              tabActiva === "TABULADO" ? "text-green-700" : "text-orange-600"
-            }`} />
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
             <input 
               type="text" 
               placeholder={`Buscar en ${tabActiva === "TABULADO" ? 'finalizados' : 'desestimados'}...`} 
-              className={`w-full pl-8 pr-3 py-2 bg-gray-50/50 border rounded-xl outline-none text-[11px] font-bold text-slate-700 transition-all focus:bg-white ${
-                tabActiva === "TABULADO" ? "border-gray-300 focus:border-green-600" : "border-gray-300 focus:border-orange-600"
-              }`} 
+              className="w-full h-10 pl-8 pr-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[11px] font-bold text-slate-700 transition-all focus:bg-white focus:border-[#113e27]" 
               value={busqueda} 
               onChange={(e) => setBusqueda(e.target.value)} 
             />
           </div>
         </div>
 
-        {/* Filtros de Tiempo y Exportación */}
-        <div className="flex items-center gap-2">
-          <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100">
+        <div className="flex items-center gap-4">
+          <div className="flex bg-gray-50 px-1 py-1 rounded-lg border border-gray-200">
             {["TODO", "ESTE MES", "HOY"].map((f) => (
               <button 
                 key={f} 
                 onClick={() => setFiltroTiempo(f)} 
-                className={`px-4 py-1.5 rounded-lg font-extrabold text-[9px] uppercase transition-all ${
+                className={`px-6 py-2.5 rounded-lg font-bold text-[11px] uppercase transition-all ${
                   filtroTiempo === f 
-                  ? (tabActiva === "TABULADO" ? "bg-green-800 text-white" : "bg-orange-600 text-white") 
-                  : "text-gray-400 hover:text-gray-600"
+                    ? (tabActiva === "TABULADO" ? "bg-[#113e27] text-white" : "bg-[#113e27] text-white")
+                    : "text-gray-400 hover:text-gray-600"
                 }`}
               >
                 {f}
@@ -94,74 +365,88 @@ const ArchivoHistorico = ({ alertas, onBack }) => {
           </div>
 
           <div className="relative group">
-            <button className="flex items-center gap-1.5 p-2 bg-white border-2 border-gray-200 text-slate-700 rounded-xl font-black uppercase text-[9px] hover:border-blue-600 transition-all">
-              <FaFileDownload size={12} /> <span>Exportar</span>
+            <button className="flex items-center gap-2 px-3 py-2.5 bg-white border-2 border-gray-200 text-slate-700 rounded-lg font-bold uppercase text-[11px] hover:border-slate-300 transition-all">
+              <FaFileDownload size={11} /> <span>Exportar</span>
             </button>
             <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-              <button onClick={exportarExcel} className="w-full px-3 py-2 text-left hover:bg-green-50 text-slate-600 font-bold text-[10px] flex items-center gap-2 transition-colors">
+              <button onClick={exportarExcel} className="w-full px-3 py-2 text-left hover:bg-green-50 text-slate-600 font-bold text-[10px] flex items-center gap-2">
                 <FaFileExcel className="text-green-600" size={12} /> Excel (.xls)
               </button>
-              <button onClick={exportarPDF} className="w-full px-3 py-2 text-left hover:bg-red-50 text-slate-600 font-bold text-[10px] flex items-center gap-2 transition-colors">
-                <FaFilePdf className="text-red-600" size={12} /> Guardar PDF
+              <button onClick={exportarPDF} className="w-full px-3 py-2 text-left hover:bg-red-50 text-slate-700 font-bold text-[10px] flex items-center gap-2">
+                <FaFilePdf className="text-red-700" size={12} /> Guardar PDF
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* CUADRICULA DE ALERTAS - TAMAÑO REDUCIDO */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-6">
+      {/* Cuadrícula de tarjetas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-6">
         {alertasFiltradas.map((alerta) => {
-          const esDesestimado = (alerta.estado || "") === "DESESTIMADO";
-          // Valores por defecto para evitar errores
+          const esDesestimado = alerta.estado === "DESESTIMADO";
           const idMostrar = alerta.id || "SIN ID";
           const ciudadanoMostrar = alerta.ciudadano || "Desconocido";
-          const fechaMostrar = alerta.fecha || "—";
-          const incidenteMostrar = alerta.incidente || "Sin clasificar";
-          const motivoMostrar = alerta.motivoDesestimacion || "SIN ESPECIFICAR";
+          const fechaMostrar = esDesestimado 
+            ? new Date(alerta.fecha_desestimo).toLocaleDateString('es-BO')
+            : (alerta.fecha || "—");
+          const incidenteMostrar = esDesestimado 
+            ? (alerta.motivoDesestimacion || "Sin motivo")
+            : (alerta.incidente || "Sin clasificar");
 
           return (
-            <div key={idMostrar} className="bg-white rounded-xl border border-gray-100 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md overflow-hidden flex flex-col">
-              <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${esDesestimado ? 'bg-orange-500' : 'bg-green-700'}`} />
-              
+            <div key={idMostrar} className="p-2 mt-2 bg-white rounded-xl border border-slate-200 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md overflow-hidden flex flex-col">
+              {/* Barra lateral izquierda según estado */}
+              <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${esDesestimado ? 'bg-[#113e27]' : 'bg-[#113e27]'}`} />
               <div className="p-3 flex-1 flex flex-col">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-[8px] font-black text-slate-300 uppercase tracking-wider">{idMostrar}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-tighter border ${
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{idMostrar}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wider ${
                     esDesestimado 
-                      ? "bg-orange-50 text-orange-600 border-orange-100" 
-                      : "bg-green-50 text-green-700 border-green-100"
+                      ? "bg-slate-200 text-[#113e27] rounded-md" 
+                      : "bg-slate-200 text-[#113e27] rounded-md"
                   }`}>
                     {esDesestimado ? 'Desestimado' : 'Finalizado'}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-lg bg-slate-50 text-slate-400 flex items-center justify-center font-black text-xs border border-gray-50">
+                <div className="flex items-center gap-2 mb-3 mt-2">
+                  <div className="w-6 h-8 rounded-md bg-blue-50 text-[#0C3DC2] flex items-center justify-center font-black text-xs shadow-inner">
                     {ciudadanoMostrar.charAt(0)}
                   </div>
                   <div className="flex flex-col">
-                    <h3 className="text-[11px] font-black text-slate-700 leading-tight">{ciudadanoMostrar}</h3>
-                    <p className="text-[7px] font-bold text-slate-400">{fechaMostrar}</p>
+                    <h3 className="text-[11px] font-extrabold text-slate-700 leading-tight">{ciudadanoMostrar}</h3>
+                    <p className="text-[9px] font-bold text-slate-400">{fechaMostrar}</p>
                   </div>
                 </div>
 
-                <div className={`mb-3 p-1.5 rounded-lg border ${esDesestimado ? 'bg-orange-50/50 border-orange-100' : 'bg-green-50/30 border-green-100'}`}>
-                  <p className={`text-[6px] font-black uppercase tracking-wider mb-0.5 ${esDesestimado ? 'text-orange-400' : 'text-green-700'}`}>
+                <div className={`mb-3 p-1.5 rounded-md border ${
+                  esDesestimado 
+                    ? 'bg-[#e6f4ea]/50 border-[#113e27]/20' 
+                    : 'bg-[#e6f4ea]/50 border-[#113e27]/20'
+                }`}>
+                  <p className={`text-[8px] font-bold uppercase tracking-wider mb-0.5 ${
+                    esDesestimado ? 'text-[#113e27]' : 'text-[#113e27]'
+                  }`}>
                     {esDesestimado ? 'Motivo' : 'Categoría'}
                   </p>
-                  <p className="text-[8px] font-black text-slate-600 uppercase leading-tight truncate">
-                    {esDesestimado ? motivoMostrar : incidenteMostrar}
+                  <p className="text-[9px] font-extrabold text-slate-600 uppercase  tracking-wider leading-tight truncate">
+                    {incidenteMostrar}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 mt-auto">
-                  <button className="flex items-center justify-center gap-1 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg border border-gray-100 transition-colors text-[8px] font-black uppercase">
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <button 
+                    onClick={() => esDesestimado ? abrirDetalleDesestimada(alerta) : abrirDetalleTabulada(alerta)}
+                    className="flex items-center justify-center gap-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-md transition-colors text-[11px] font-bold uppercase"
+                  >
                     <FaEye size={9} /> Ver
                   </button>
-                  <button className={`flex items-center justify-center gap-1 py-1.5 text-white rounded-lg shadow-md transition-all text-[8px] font-black uppercase ${
-                    esDesestimado ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-800 hover:bg-green-900'
-                  }`}>
+                  <button 
+                    onClick={() => esDesestimado ? generarPDFDesestimada(alerta) : generarPDFTabulada(alerta)}
+                    className={`flex items-center justify-center gap-1 py-1.5 text-white rounded-md shadow-sm transition-all text-[11px] font-bold uppercase ${
+                      esDesestimado ? 'bg-[#113e27] hover:bg-[#164a2f] ' : 'bg-[#113e27] hover:bg-[#164a2f] '
+                    }`}
+                  >
                     <FaFilePdf size={9} /> PDF
                   </button>
                 </div>
@@ -178,6 +463,26 @@ const ArchivoHistorico = ({ alertas, onBack }) => {
           </div>
         )}
       </div>
+
+      {/* Modales */}
+      {showModalDesestimada && (
+        <FormularioDesestimados
+          alerta={selectedDesestimada}
+          onClose={() => setShowModalDesestimada(false)}
+          onGenerarPDF={() => generarPDFDesestimada(selectedDesestimada)}
+        />
+      )}
+      {showModalTabulada && (
+        <FormularioTabulacion
+          isOpen={showModalTabulada}
+          onClose={() => setShowModalTabulada(false)}
+          alerta={selectedTabulada}
+          readOnly={true}
+          onConfirm={() => {}}
+          clasificacionTabulador={clasificacionTabuladorModal}
+          derivacion={derivacionModal}
+        />
+      )}
     </div>
   );
 };

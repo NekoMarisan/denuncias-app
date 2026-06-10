@@ -12,8 +12,7 @@ import {
   FaFilePdf,
   FaFileExcel,
   FaPowerOff,
-  FaUserSlash,
-  FaSyncAlt
+  FaUserSlash
 } from "react-icons/fa";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -42,7 +41,6 @@ function Usuarios() {
     if (error) console.error("Error oficiales:", error);
     else {
       setOficiales(data || []);
-      // Log para depuración (puedes eliminarlo)
       console.log("Oficiales cargados:", data?.map(o => ({ id: o.id_oficial, estado: o.estado })));
     }
   }, []);
@@ -108,7 +106,6 @@ function Usuarios() {
 
   // Funciones de exportación (sin cambios)
   const exportarPDF = () => {
-    // ... (igual que antes)
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const titulo = tabActiva === "oficiales" ? "REPORTE DE PERSONAL POLICIAL" : "REPORTE DE REGISTRO DE CIUDADANOS";
     const fechaActual = new Date().toLocaleString("es-ES", {
@@ -223,7 +220,6 @@ function Usuarios() {
 
     if (tabActiva === "ciudadanos") return cumpleBusqueda;
 
-    // Aseguramos la comparación booleana
     const estaConectado = item.estado === true;
     const cumpleFiltro =
       filtroActivo === "Todos" ||
@@ -243,30 +239,30 @@ function Usuarios() {
 
   return (
     <div className="-mt-4 w-full px-1 py-4 space-y-5 animate-fadeIn pb-6 bg-gray-50/30">
-      {/* Barra de herramientas con indicador de refresco */}
+      {/* Barra de herramientas SIN botón de refresco manual */}
       <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 flex-1">
           <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100 shrink-0">
             <button
               onClick={() => { setTabActiva("oficiales"); setFiltroActivo("Todos"); }}
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg font-extrabold text-[10px] transition-all ${tabActiva === "oficiales" ? "bg-green-800 text-white shadow-sm" : "text-slate-400"}`}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${tabActiva === "oficiales" ? "bg-[#113e27] text-white shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
             >
               <FaUserTie size={12} /> OFICIALES
             </button>
             <button
               onClick={() => { setTabActiva("ciudadanos"); setFiltroActivo("Todos"); }}
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg font-extrabold text-[10px] transition-all ${tabActiva === "ciudadanos" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400"}`}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${tabActiva === "ciudadanos" ? "bg-[#113e27] text-white shadow-sm" : "hover:text-slate-600"}`}
             >
               <FaUsers size={12} /> CIUDADANOS
             </button>
           </div>
 
           <div className="relative flex-1">
-            <FaSearch className={`absolute left-3 top-1/2 -translate-y-1/2 text-xs ${tabActiva === "oficiales" ? "text-green-700" : "text-blue-600"}`} />
+            <FaSearch className={`absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400${tabActiva === "oficiales" ? "text-green-700" : "text-blue-600"}`} />
             <input
               type="text"
               placeholder="Buscar por nombre, ID o CI..."
-              className={`w-full pl-8 pr-3 py-2 bg-gray-50/50 border rounded-xl outline-none text-[11px] font-bold text-slate-700 transition-all focus:bg-white ${tabActiva === "oficiales" ? "border-gray-300 focus:border-green-600" : "border-gray-300 focus:border-blue-600"}`}
+              className={`w-full h-10 pl-8 pr-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[11px] font-bold text-slate-700 transition-all focus:bg-white focus:border-[#113e27] ${tabActiva === "oficiales" ? "border-gray-300 focus:border-green-600" : "border-gray-300 focus:border-blue-600"}`}
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
             />
@@ -275,7 +271,7 @@ function Usuarios() {
           {tabActiva === "oficiales" && (
             <button
               onClick={() => { setEditandoPolicia(null); setMostrarModalPolicia(true); }}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-xl font-extrabold text-[9px] uppercase shadow text-white bg-green-800 hover:bg-green-900 transition-all shrink-0"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-bold text-[11px] uppercase shadow text-white bg-[#113e27] hover:bg-[#164a2f] transition-all shrink-0"
             >
               <FaPlus size={10} /> Nuevo oficial
             </button>
@@ -289,7 +285,7 @@ function Usuarios() {
                 <button
                   key={f}
                   onClick={() => setFiltroActivo(f)}
-                  className={`px-3 py-1 rounded-lg font-extrabold text-[9px] uppercase transition-all ${filtroActivo === f ? "bg-green-800 text-white shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                  className={`px-6 py-2.5 rounded-lg font-bold text-[11px] uppercase transition-all ${filtroActivo === f ? "bg-[#113e27] text-white" : "text-gray-400 hover:text-gray-600"}`}
                 >
                   {f === "conectado" ? "Conectado" : f === "desconectado" ? "Desconectado" : "Todos"}
                 </button>
@@ -298,28 +294,18 @@ function Usuarios() {
           )}
 
           <div className="relative group">
-            <button className="flex items-center gap-1.5 p-2 bg-white border-2 border-gray-200 text-slate-700 rounded-xl font-black uppercase text-[9px] hover:border-blue-600 transition-all">
+            <button className="flex items-center gap-2 px-3 py-2.5 bg-white border-2 border-gray-200 text-slate-700 rounded-lg font-bold uppercase text-[11px] hover:border-slate-300 transition-all">
               <FaFileDownload size={11} /> <span>Exportar</span>
             </button>
-            <div className="absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-              <button onClick={exportarExcel} className="w-full px-3 py-1.5 text-left hover:bg-green-50 text-slate-600 font-bold text-[9px] flex items-center gap-2 transition-colors">
-                <FaFileExcel className="text-green-600" size={11} /> Excel (.xls)
+            <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+              <button onClick={exportarExcel} className="w-full px-3 py-2 text-left hover:bg-green-50 text-slate-600 font-bold text-[10px] flex items-center gap-2">
+                <FaFileExcel className="text-green-700" size={11} /> Excel (.xls)
               </button>
-              <button onClick={exportarPDF} className="w-full px-3 py-1.5 text-left hover:bg-red-50 text-slate-600 font-bold text-[9px] flex items-center gap-2 transition-colors">
-                <FaFilePdf className="text-red-600" size={11} /> Guardar PDF
+              <button onClick={exportarPDF} className="w-full px-3 py-2 text-left hover:bg-red-50 text-slate-700 font-bold text-[10px] flex items-center gap-2">
+                <FaFilePdf className="text-red-700" size={11} /> Guardar PDF
               </button>
             </div>
           </div>
-
-          {/* Botón de recarga manual con indicador de refresco */}
-          <button
-            onClick={recargarTodo}
-            disabled={refrescando}
-            className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
-            title="Recargar datos"
-          >
-            <FaSyncAlt className={`text-gray-600 text-xs ${refrescando ? "animate-spin" : ""}`} />
-          </button>
         </div>
       </div>
 

@@ -60,7 +60,7 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose }, ref) => {
                 </div>
                 <button 
                   onClick={onClose} 
-                  className="text-slate-400 hover:text-slate-600 text-xs font-bold uppercase tracking-wide transition-colors"
+                  className="text-slate-400 hover:text-slate-600 text-[10px] font-bold uppercase tracking-wider transition-colors"
                 >
                   Cerrar
                 </button>

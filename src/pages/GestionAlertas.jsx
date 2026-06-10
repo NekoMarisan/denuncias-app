@@ -5,11 +5,11 @@ import { FaLock } from "react-icons/fa";
 import DetalleAlertaModal from "../components/modals/DetalleAlerta";
 import DetalleEmergencia from "../components/modals/DetalleEmergencia";
 import { supabase } from "../services/supabase";
-import { useAuth } from "../context/AuthContext"; // 👈 necesario para saber quién es el operador
+import { useAuth } from "../context/AuthContext";
 
 function GestionAlertas() {
   const location = useLocation();
-  const { user } = useAuth(); // 👈 obtener el oficial autenticado
+  const { user } = useAuth();
 
   const [tabActiva, setTabActiva] = useState("emergencia");
   const [mostrarModal, setMostrarModal] = useState(false);
@@ -30,26 +30,25 @@ function GestionAlertas() {
 
     data.forEach((item) => {
       const base = {
-        id:           item.id_alerta,
-        ciudadano:    item.usuario_ciudadano?.nombre_completo || `Usuario #${item.id_usuario}`,
-        ubicacion:    item.ubicacion  || "Sin ubicación",
-        fecha:        item.fecha_hora
-                        ? new Date(item.fecha_hora).toLocaleDateString("es-BO")
-                        : "—",
-        hora:         item.fecha_hora
-                        ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", {
-                            hour:   "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "—",
-        descripcion:  item.descripcion  || "",
-        categoria:    item.categoria    || "",
-        audio_30s:    item.audio_30s    || null,
-        prioridad:    item.prioridad    || "Media",
-        codigo:       item.codigo_alerta || "",
-        // ✅ AGREGADO: campos de bloqueo
-        bloqueadoPor: item.bloqueado_por  || null,
-        bloqueadoRol: item.bloqueado_rol  || null,
+        id: item.id_alerta,
+        ciudadano: item.usuario_ciudadano?.nombre_completo || `Usuario #${item.id_usuario}`,
+        ubicacion: item.ubicacion || "Sin ubicación",
+        fecha: item.fecha_hora
+          ? new Date(item.fecha_hora).toLocaleDateString("es-BO")
+          : "—",
+        hora: item.fecha_hora
+          ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "—",
+        descripcion: item.descripcion || "",
+        categoria: item.categoria || "",
+        audio_30s: item.audio_30s || null,
+        prioridad: item.prioridad || "Media",
+        codigo: item.codigo_alerta || "",
+        bloqueadoPor: item.bloqueado_por || null,
+        bloqueadoRol: item.bloqueado_rol || null,
       };
 
       if (item.categoria === "Panico") {
@@ -68,12 +67,14 @@ function GestionAlertas() {
     try {
       const { data, error } = await supabase
         .from("alerta")
-        .select(`
+        .select(
+          `
           *,
           usuario_ciudadano (
             nombre_completo
           )
-        `)
+        `,
+        )
         .eq("id_estado_actual", 1)
         .order("fecha_hora", { ascending: false });
 
@@ -106,7 +107,9 @@ function GestionAlertas() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "alerta" },
-        () => { cargarAlertas(); }
+        () => {
+          cargarAlertas();
+        },
       )
       .subscribe();
     return () => supabase.removeChannel(canal);
@@ -128,33 +131,69 @@ function GestionAlertas() {
     }
   }, [location.state]);
 
-  // ✅ MODIFICADO: abrirModal ahora intenta tomar el bloqueo antes de abrir
+  // Función para limpiar bloqueos muy antiguos (opcional, se puede ejecutar al inicio)
+  // No se usa por defecto para no interferir.
+  // const limpiarBloqueosHuérfanos = async () => {
+  //   const haceUnaHora = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  //   await supabase
+  //     .from("alerta")
+  //     .update({ bloqueado_por: null, bloqueado_en: null, bloqueado_rol: null })
+  //     .lt("bloqueado_en", haceUnaHora);
+  // };
+
   const abrirModal = async (alerta) => {
     const idOficial = user?.id_oficial;
-
     if (!idOficial) {
       alert("Error: No se pudo identificar al operador");
       return;
     }
 
-    // Intentar bloquear la alerta (operación atómica)
-// Intentar bloquear la alerta (operación atómica)
-    const { data, error } = await supabase
+    // Primero consultar el estado actual del bloqueo
+    const { data: alertaActual, error: fetchError } = await supabase
       .from("alerta")
-      .update({
-        bloqueado_por: idOficial,
-        bloqueado_en:  new Date().toISOString(),
-        bloqueado_rol: "operador",
-        // ESTA ES LA LÍNEA QUE FALTA PARA QUE EL NOMBRE APAREZCA
-        id_operador_receptor: idOficial 
-      })
+      .select("bloqueado_por")
       .eq("id_alerta", alerta.id)
-      .is("bloqueado_por", null) // solo si nadie la tiene
-      .select()
-      .single();
+      .maybeSingle();
 
-    if (!data || error) {
-      // Alguien más ya la tiene abierta
+    if (fetchError) {
+      console.error("Error al verificar bloqueo:", fetchError);
+      alert("Error al verificar el estado de la alerta");
+      return;
+    }
+
+    const bloqueadoPor = alertaActual?.bloqueado_por;
+    if (bloqueadoPor && bloqueadoPor !== idOficial) {
+      alert("🔒 Esta alerta ya está siendo atendida por otro operador");
+      return;
+    }
+
+    // Si está bloqueada por el mismo usuario, permitimos reabrir (renovamos el bloqueo)
+    // Si está libre, la bloqueamos.
+    const updateFields = {
+      bloqueado_por: idOficial,
+      bloqueado_en: new Date().toISOString(),
+      bloqueado_rol: "operador",
+      id_operador_receptor: idOficial,
+    };
+
+    // Condición: si no está bloqueada por nadie, o si ya la tiene el mismo usuario
+    let updateQuery = supabase
+      .from("alerta")
+      .update(updateFields)
+      .eq("id_alerta", alerta.id);
+
+    if (!bloqueadoPor) {
+      // Si no hay bloqueo, aseguramos que nadie más la haya tomado entre la consulta y la actualización
+      updateQuery = updateQuery.is("bloqueado_por", null);
+    } else {
+      // Si ya la tiene el mismo usuario, simplemente actualizamos (no hay riesgo de conflicto)
+      updateQuery = updateQuery.eq("bloqueado_por", idOficial);
+    }
+
+    const { data, error } = await updateQuery.select().single();
+
+    if (error || !data) {
+      // Si falló la actualización (porque otro operador la tomó justo antes), mostramos mensaje
       alert("🔒 Esta alerta ya está siendo atendida por otro operador");
       return;
     }
@@ -163,14 +202,13 @@ function GestionAlertas() {
     setMostrarModal(true);
   };
 
-  // ✅ MODIFICADO: cerrarModal libera el bloqueo
   const cerrarModal = async () => {
     if (alertaSeleccionada && user?.id_oficial) {
       await supabase
         .from("alerta")
         .update({
           bloqueado_por: null,
-          bloqueado_en:  null,
+          bloqueado_en: null,
           bloqueado_rol: null,
         })
         .eq("id_alerta", alertaSeleccionada.id)
@@ -180,15 +218,13 @@ function GestionAlertas() {
     setAlertaSeleccionada(null);
   };
 
-  // DESESTIMAR → cambia estado a 4 y libera bloqueo
   const manejarDesestimar = async (idAlerta, motivo) => {
     const { error } = await supabase
       .from("alerta")
       .update({
         id_estado_actual: 4,
-        // ✅ AGREGADO: liberar bloqueo al desestimar
         bloqueado_por: null,
-        bloqueado_en:  null,
+        bloqueado_en: null,
         bloqueado_rol: null,
       })
       .eq("id_alerta", idAlerta);
@@ -201,12 +237,15 @@ function GestionAlertas() {
     const listaOrigen = tabActiva === "emergencia" ? alertasPanico : alertasCiudadanas;
     const alertaEncontrada = listaOrigen.find((a) => a.id === idAlerta);
     if (alertaEncontrada) {
-      setAlertasArchivadas((prev) => [...prev, {
-        ...alertaEncontrada,
-        estado: "DESESTIMADO",
-        motivoDesestimacion: motivo || "Sin motivo especificado",
-        fechaArchivo: new Date().toLocaleDateString(),
-      }]);
+      setAlertasArchivadas((prev) => [
+        ...prev,
+        {
+          ...alertaEncontrada,
+          estado: "DESESTIMADO",
+          motivoDesestimacion: motivo || "Sin motivo especificado",
+          fechaArchivo: new Date().toLocaleDateString(),
+        },
+      ]);
       if (tabActiva === "emergencia") {
         setAlertasPanico(alertasPanico.filter((a) => a.id !== idAlerta));
       } else {
@@ -216,15 +255,13 @@ function GestionAlertas() {
     cerrarModal();
   };
 
-  // TRANSFERIR A DESPACHO → libera bloqueo al enviar
   const manejarTransferencia = async (idAlerta) => {
     const { error } = await supabase
       .from("alerta")
       .update({
         id_estado_actual: 2,
-        // ✅ AGREGADO: liberar bloqueo al transferir
         bloqueado_por: null,
-        bloqueado_en:  null,
+        bloqueado_en: null,
         bloqueado_rol: null,
       })
       .eq("id_alerta", idAlerta);
@@ -259,7 +296,10 @@ function GestionAlertas() {
         <div className="bg-red-100 border-l-4 border-red-600 p-4 rounded shadow-md mx-4">
           <p className="text-red-700 font-bold">Error al cargar las alertas</p>
           <p className="text-sm text-red-600">{errorCarga}</p>
-          <button onClick={cargarAlertas} className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition">
+          <button
+            onClick={cargarAlertas}
+            className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition"
+          >
             Reintentar
           </button>
         </div>
@@ -269,20 +309,27 @@ function GestionAlertas() {
 
   return (
     <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
-
       {/* SELECTOR DE TABS */}
       <div className="px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2">
         <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
           <button
             onClick={() => setTabActiva("emergencia")}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${tabActiva === "emergencia" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"}`}
+            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${
+              tabActiva === "emergencia"
+                ? "bg-[#113e27] text-white shadow-md"
+                : "text-slate-400"
+            }`}
           >
             <span className="hidden sm:inline">ALERTAS DE PÁNICO</span>
             <span className="sm:hidden">PÁNICO</span>
           </button>
           <button
             onClick={() => setTabActiva("ciudadana")}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg font-bold text-xs transition-all tracking-wider ${tabActiva === "ciudadana" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"}`}
+            className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg font-bold text-xs transition-all tracking-wider ${
+              tabActiva === "ciudadana"
+                ? "bg-[#113e27] text-white shadow-md"
+                : "text-slate-400"
+            }`}
           >
             <span className="hidden sm:inline">ALERTAS CIUDADANAS</span>
             <span className="sm:hidden">CIUDADANAS</span>
@@ -313,7 +360,6 @@ function GestionAlertas() {
             </thead>
             <tbody>
               {dataActual.map((item) => {
-                // ✅ AGREGADO: calcular si está bloqueada por otro
                 const bloqueadaPorOtro =
                   item.bloqueadoPor && item.bloqueadoPor !== user?.id_oficial;
 
@@ -325,7 +371,6 @@ function GestionAlertas() {
                       filaResaltada === item.id
                         ? "ring-2 bg-slate-50"
                         : bloqueadaPorOtro
-                          // ✅ AGREGADO: fila atenuada si está bloqueada
                           ? "opacity-50"
                           : "hover:shadow-lg hover:-translate-y-0.5"
                     }`}
@@ -350,20 +395,27 @@ function GestionAlertas() {
                     </td>
                     <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle">
                       <div className="px-1 md:px-2">
-                        <span className="truncate block max-w-[100px] md:max-w-none">{item.ubicacion}</span>
+                        <span className="truncate block max-w-[100px] md:max-w-none">
+                          {item.ubicacion}
+                        </span>
                       </div>
                     </td>
                     <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle whitespace-nowrap">
                       {item.fecha} {item.hora}
                     </td>
                     <td className="py-5 md:py-6 align-middle">
-                      <span className={`inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-extrabold text-white tracking-wide ${item.estado.toUpperCase() === "EMERGENCIA" ? "bg-red-600" : "bg-[#EBB615]"}`}>
+                      <span
+                        className={`inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-bold text-white tracking-wider ${
+                          item.estado.toUpperCase() === "EMERGENCIA"
+                            ? "bg-[#C90A0A]"
+                            : "bg-[#EBB615]"
+                        }`}
+                      >
                         {item.estado.toUpperCase()}
                       </span>
                     </td>
                     <td className="px-3 md:px-4 py-5 md:py-6 align-middle">
                       {bloqueadaPorOtro ? (
-                        // ✅ AGREGADO: candado si está bloqueada por otro operador
                         <div
                           title="En uso por otro operador"
                           className="p-1.5 md:p-2 bg-slate-300 text-white rounded-lg flex items-center justify-center cursor-not-allowed"

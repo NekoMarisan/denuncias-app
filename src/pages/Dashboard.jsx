@@ -214,7 +214,8 @@ function Dashboard() {
         <div className="bg-white p-2 rounded-2xl shadow-md">
           <div className="flex justify-between items-start px-6 py-5 flex-col md:flex-row md:items-center mb-2">
             <h2 className="text-xl font-extrabold uppercase text-[#1e293b]">Emergencias Recientes</h2>
-            <button onClick={() => navigate("/gestion-alertas", { state: { activeTab: "emergencia" } })} className="text-[10px] font-extrabold text-slate-400 flex items-center gap-1.5 uppercase">Ver todo <FaChevronRight size={8} /></button>
+            
+            <button onClick={() => navigate("/gestion-alertas", { state: { activeTab: "emergencia" } })} className="font-bold flex items-center gap-1.5 uppercase text-slate-400 hover:text-slate-500 text-[10px] tracking-wider transition-colors">Ver todo <FaChevronRight size={8} /></button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full border-separate border-spacing-y-3">
@@ -238,7 +239,7 @@ function Dashboard() {
         <div className="bg-white p-2 rounded-2xl shadow-md">
           <div className="flex justify-between items-start px-6 py-5 flex-col md:flex-row md:items-center mb-2">
             <h2 className="text-xl font-extrabold uppercase text-[#1e293b]">Alertas Recibidas</h2>
-            <button onClick={() => navigate("/gestion-alertas", { state: { activeTab: "ciudadana" } })} className="text-[10px] font-extrabold text-slate-400 flex items-center gap-1.5 uppercase">Ver todo <FaChevronRight size={8} /></button>
+            <button onClick={() => navigate("/gestion-alertas", { state: { activeTab: "ciudadana" } })} className="font-bold flex items-center gap-1.5 uppercase text-slate-400 hover:text-slate-500 text-[10px] tracking-wider transition-colors">Ver todo <FaChevronRight size={8} /></button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full border-separate border-spacing-y-3">

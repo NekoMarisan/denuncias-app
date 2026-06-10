@@ -112,7 +112,7 @@ function Tabulacion() {
 
       const idsTabulados = new Set((tabData || []).map(t => t.id_alerta));
 
-      // 2. Obtener asignaciones activas con alerta (pendientes)
+      // 2. Obtener asignaciones activas con alerta (pendientes) incluyendo el número de escalafón
       const { data: asigData, error: asigErr } = await supabase
         .from("asignacion_patrulla")
         .select(`
@@ -135,6 +135,11 @@ function Tabulacion() {
               ci,
               celular
             )
+          ),
+          patrullero:patrullero!id_patrullero (
+            oficial:oficial (
+              numero_escalafon
+            )
           )
         `)
         .order("id_asignacion", { ascending: false });
@@ -156,6 +161,9 @@ function Tabulacion() {
           let clasificacion = a.alerta.contravenciones || a.alerta.delitos;
           if (!clasificacion) clasificacion = a.alerta.categoria || a.alerta.descripcion || "Sin clasificar";
           
+          // ✅ Obtener el número de escalafón del oficial asociado al patrullero
+          const numeroEscalafon = a.patrullero?.oficial?.numero_escalafon || '—';
+          
           return {
             id: a.alerta.codigo_alerta || `ALT-${String(a.alerta.id_alerta).padStart(4, "0")}`,
             id_alerta: a.alerta.id_alerta,
@@ -166,7 +174,8 @@ function Tabulacion() {
             contravenciones: a.alerta.contravenciones,
             delitos: a.alerta.delitos,
             descripcion: a.alerta.descripcion || "",
-            patrulla: `PAT-${a.id_patrullero}`,
+            // ✅ Cambio: mostrar número de escalafón en lugar de PAT-{id}
+            patrulla: numeroEscalafon,
             estado: "ATENDIDO",
             ciudadano: a.alerta.usuario_ciudadano?.nombre_completo || "Ciudadano desconocido",
             ci: a.alerta.usuario_ciudadano?.ci || "—",
@@ -363,20 +372,28 @@ function Tabulacion() {
   };
 
   // Preparar datos para ArchivoHistorico
-  const historicoAlertas = useMemo(() => {
-    return tabuladas.map(t => ({
-      id: t.alerta?.codigo_alerta || `ALT-${String(t.id_alerta).padStart(4, "0")}`,
-      ciudadano: t.alerta?.usuario_ciudadano?.nombre_completo || "Anónimo",
-      fecha: t.fecha_tabulacion?.split("T")[0] || "—",
-      incidente: t.alerta?.contravenciones || t.alerta?.delitos || t.resultado_final || "Sin clasificar",
-      estado: "TABULADO",
-      motivoDesestimacion: null
-    }));
-  }, [tabuladas]);
+const historicoAlertas = useMemo(() => {
+  return tabuladas.map(t => ({
+    id_alerta: t.id_alerta,   // ← AGREGAR ESTA LÍNEA
+    id: t.alerta?.codigo_alerta || `ALT-${String(t.id_alerta).padStart(4, "0")}`,
+    ciudadano: t.alerta?.usuario_ciudadano?.nombre_completo || "Anónimo",
+    fecha: t.fecha_tabulacion?.split("T")[0] || "—",
+    incidente: t.alerta?.contravenciones || t.alerta?.delitos || t.resultado_final || "Sin clasificar",
+    estado: "TABULADO",
+    motivoDesestimacion: null
+  }));
+}, [tabuladas]);
 
-  if (verTodo) {
-    return <ArchivoHistorico alertas={historicoAlertas} onBack={() => setVerTodo(false)} />;
-  }
+if (verTodo) {
+  return (
+    <ArchivoHistorico
+      alertasTabuladas={historicoAlertas}
+      tabuladasCompletas={tabuladas}             // ← datos completos de tabulación
+      onGenerarPDFTabulada={handleGenerarPDF}    // ← función PDF existente
+      onBack={() => setVerTodo(false)}
+    />
+  );
+}
 
   return (
     <div key={renderKey} className="-mt-4 px-1 min-h-screen bg-slate-50/50 font-sans text-left w-full py-4 space-y-5 animate-fadeIn pb-6">
@@ -386,95 +403,105 @@ function Tabulacion() {
         </div>
       ) : (
         <>
-          <div className="flex flex-col lg:flex-row gap-4 mb-4">
-            <div className="lg:w-3/4 flex flex-col gap-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between px-5">
+          <div className="flex flex-col lg:flex-row gap-6 mb-4">
+            <div className="lg:w-3/4 flex flex-col gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-4 rounded-2xl shadow-md border border-gray-100 flex items-center justify-between px-5">
                   <div className="flex items-center gap-4">
-                    <div className="w-9 h-9 bg-green-50 rounded-xl flex items-center justify-center text-green-600">
+                    <div className="w-9 h-9 bg-green-50 rounded-md flex items-center justify-center text-[#088226]">
                       <FaChartLine size={18} />
                     </div>
                     <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Tabuladas Hoy</p>
+                      <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Tabuladas Hoy</p>
                       <p className="text-2xl font-black text-slate-800">{metricas.tabuladasHoy}</p>
                     </div>
                   </div>
-                  <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse shadow-[0_0_6px_rgba(22,163,74,0.7)]" />
+                  <div className="w-2 h-2 bg-[#088226] rounded-full animate-pulse shadow-[0_0_6px_rgba(22,163,74,0.7)]" />
                 </div>
 
-                <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between px-5">
+                <div className="bg-white p-4 rounded-2xl shadow-md border border-gray-100 flex items-center justify-between px-5">
                   <div className="flex items-center gap-4">
-                    <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
+                    <div className="w-9 h-9 bg-amber-50 rounded-md flex items-center justify-center text-[#e9b301]">
                       <FaClock size={18} />
                     </div>
                     <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Pendientes</p>
+                      <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Pendientes</p>
                       <p className="text-2xl font-black text-slate-800">{metricas.pendientes}</p>
                     </div>
                   </div>
-                  <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+                  <div className="w-2 h-2 bg-[#e9b301] rounded-full animate-pulse" />
                 </div>
               </div>
 
-              {/* Tabla de pendientes (sin cambios) */}
-              <div className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-50">
-                <div className="mb-4">
-                  <h2 className="text-xl font-black uppercase tracking-tight text-[#1e293b]">Tabulación de Alertas</h2>
-                </div>
-                <div className="overflow-y-auto max-h-[450px] pr-1">
-                  <table className="w-full border-separate border-spacing-y-3">
-                    <thead>
-                      <tr className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wide">
-                        <th className="pb-2 text-left">ID</th>
-                        <th className="pb-2 text-left pl-6">Ciudadano</th>
-                        <th className="pb-2 text-left">Incidente</th>
-                        <th className="pb-2 text-left">Patrulla</th>
-                        <th className="pb-2 text-left">Estado</th>
-                        <th className="pb-2 text-left">Acciones</th>
+              {/* Contenedor con el estilo del primer componente */}
+              <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col max-h-[618px]">
+                <h2 className="text-lg font-extrabold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wide flex-shrink-0">
+                  Tabulación de Alertas
+                </h2>
+
+                {/* Scroll interno - igual que el primer componente */}
+                <div className="overflow-auto flex-1 min-h-0 -mx-4 md:mx-0 px-4 md:px-0">
+                  {/* ---------- TABLA CON LÍNEAS (estilo primer componente) ---------- */}
+                  <table className="min-w-full border-collapse text-left">
+                    <thead className="sticky top-0 bg-white z-10 shadow-sm">
+                      <tr className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">
+                        <th className="pl-3 md:pl-4 pr-1 md:pr-2 py-2 w-[12%] md:w-[15%]">ID</th>
+                        <th className="py-2 w-[28%] md:w-[30%]">Ciudadano</th>
+                        <th className="px-1 md:px-2 py-2 w-[20%]">Incidente</th>
+                        <th className="py-2 w-[18%] md:w-[15%]">Patrulla</th>
+                        <th className="py-2 w-[12%] md:w-[15%]">Estado</th>
+                        <th className="px-3 md:px-4 py-2 w-[10%]">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {alertasPendientes.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="text-center py-12 text-slate-300 text-[11px] font-black uppercase tracking-widest">
+                          <td colSpan="6" className="text-center py-12 text-gray-400 font-medium">
                             No hay alertas atendidas pendientes de tabulación
                           </td>
                         </tr>
                       ) : (
                         alertasPendientes.map((alerta) => (
-                          <tr key={alerta.id_alerta} className="bg-white group transition-all duration-150 hover:shadow-lg hover:-translate-y-0.5">
-                            <td className="px-0 py-3 text-[11px] font-bold text-slate-400 border-y border-l rounded-l-xl border-gray-50 uppercase">
+                          <tr
+                            key={alerta.id_alerta}
+                            className="bg-white group transition-all duration-200 border-b border-gray-100 hover:shadow-lg hover:-translate-y-0.5"
+                          >
+                            <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-5 md:py-6 text-[11px] font-bold text-slate-400 uppercase align-middle">
                               {alerta.id}
                             </td>
-                            <td className="py-3 border-y border-gray-50 pl-6">
-                              <div className="flex items-center gap-3">
-                                <div className="w-7 h-8 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm shrink-0">
+                            <td className="py-5 md:py-6 align-middle">
+                              <div className="flex items-center gap-2 md:gap-3">
+                                <div className="w-6 h-8 rounded-md flex items-center justify-center font-black text-xs shadow-inner shrink-0 bg-blue-50 text-[#0C3DC2]">
                                   {alerta.ciudadano.charAt(0)}
                                 </div>
                                 <div className="flex flex-col min-w-0">
-                                  <span className="text-xs font-bold text-[#1e293b] leading-tight block w-[130px] truncate">
+                                  <span className="text-[12px] font-bold text-[#1e293b] leading-tight truncate max-w-[120px] md:max-w-none">
                                     {alerta.ciudadano}
                                   </span>
-                                  <span className="text-[8px] text-slate-400 font-semibold uppercase mt-0.5">Verificado</span>
+                                  <span className="mt-0.5 text-[8px] text-gray-400 font-semibold uppercase tracking-wider">
+                                    Verificado
+                                  </span>
                                 </div>
                               </div>
                             </td>
-                            <td className="py-3 border-y border-gray-50">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase leading-tight block w-[140px] truncate">
-                                {alerta.incidente}
+                            <td className="py-5 md:py-6 align-middle">
+                              <div className="px-1 md:px-2">
+                                <span className="truncate block max-w-[100px] md:max-w-none text-[11px] font-bold text-slate-500 tracking-wider uppercase">
+                                  {alerta.incidente}
+                                </span>
+                              </div>
+                            </td>
+                           <td className="py-5 md:py-6 align-middle text-left">
+  <span className="font-bold text-[11px] tracking-wider text-slate-500 uppercase">
+    {alerta.patrulla}
+  </span>
+</td>
+                            <td className="py-5 md:py-6 align-middle">
+                              <span className="inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-bold text-white tracking-wider bg-[#088226]">
+                                ATENDIDO
                               </span>
                             </td>
-                            <td className="py-3 border-y border-gray-50">
-                              <span className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg font-black text-[10px] border border-gray-200 uppercase">
-                                {alerta.patrulla}
-                              </span>
-                            </td>
-                            <td className="py-3 border-y border-gray-50">
-                              <span className="inline-flex justify-center w-20 py-1.5 rounded-lg text-[9px] font-extrabold uppercase text-white shadow-sm bg-[#00a65a]">
-                                Atendido
-                              </span>
-                            </td>
-                            <td className="px-3 py-3 border-y border-r rounded-r-xl border-gray-50 text-left">
+                            <td className="px-3 md:px-4 py-5 md:py-6 align-middle">
                               <button
                                 onClick={() => {
                                   setAlertaSeleccionada({
@@ -483,9 +510,9 @@ function Tabulacion() {
                                   });
                                   setIsModalOpen(true);
                                 }}
-                                className="p-2 bg-amber-500 text-white rounded-lg shadow shadow-amber-100 hover:scale-105 transition-all"
+                                className="p-1.5 md:p-2 bg-amber-500 text-white rounded-lg shadow hover:scale-105 active:scale-95 transition-all flex items-center justify-center"
                               >
-                                <FaClipboardList size={12} />
+                                <FaClipboardList size={14} />
                               </button>
                             </td>
                           </tr>
@@ -497,43 +524,49 @@ function Tabulacion() {
               </div>
             </div>
 
-            {/* Panel derecho de estadísticas (sin cambios) */}
-            <div className="lg:w-1/4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
-              <div className="mb-5">
-                <h2 className="text-base font-black text-slate-800 uppercase">Reportes Comunes</h2>
-                <p className="text-[8px] font-bold text-slate-300 uppercase mt-1">Estadísticas</p>
-              </div>
-              {metricas.ranking.length === 0 ? (
-                <p className="text-[10px] text-slate-300 font-black uppercase text-center mt-6">Sin datos aún</p>
-              ) : (
-                <div className="space-y-3">
-                  {metricas.ranking.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2.5 bg-slate-50/50 rounded-xl border border-transparent hover:border-slate-100 transition-all">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className={`w-2 h-2 rounded-full ${item.color} shrink-0`} />
-                        <span className="text-[9px] font-black text-slate-600 uppercase leading-tight break-words">
-                          {item.nombre}
-                        </span>
-                      </div>
-                      <span className="text-base font-black text-slate-800 ml-2 shrink-0">{item.total}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+          {/* Panel derecho de estadísticas - MEJORADO */}
+<div className="lg:w-1/4 bg-white p-5 rounded-2xl shadow-md border border-gray-100 flex flex-col h-[729px]">
+  <div className="mb-3">
+    <h2 className="text-base font-extrabold text-slate-800 uppercase">Alertas Comunes</h2>
+    <p className="text-[9px] font-bold text-slate-300 uppercase mt-1">Clasificaciones del hecho</p>
+    {/* Línea divisoria */}
+    <div className="border-b border-gray-100 mt-2"></div>
+  </div>
+  {metricas.ranking.length === 0 ? (
+    <p className="text-[10px] text-slate-300 font-black uppercase text-center mt-6">Sin datos aún</p>
+  ) : (
+    <div className="space-y-4 mt-2">
+      {metricas.ranking.slice(0, 10).map((item, idx) => {
+        const coloresVivos = [
+          "bg-red-500", "bg-blue-500", "bg-green-500", "bg-yellow-500",
+          "bg-purple-500", "bg-pink-500", "bg-indigo-500", "bg-teal-500",
+          "bg-orange-500", "bg-cyan-500"
+        ];
+        const colorClass = coloresVivos[idx % coloresVivos.length];
+        return (
+          <div key={idx} className="flex items-center justify-between p-2.5 h-12 bg-slate-50/50 rounded-md border border-transparent hover:border-slate-100 transition-all ">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-1 h-1 rounded-full ${colorClass} shrink-0 shadow-sm`} />
+              <span className="text-[11px] font-extrabold text-slate-600 uppercase leading-tight break-words">
+                {item.nombre}
+              </span>
             </div>
+            <span className="text-[14px] font-black text-slate-800 ml-2 shrink-0 tracking-wider">{item.total}</span>
           </div>
-
-          {/* Sección Alertas Tabuladas - 4 tarjetas (sin cambios en el JSX) */}
-          <div className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-50 relative">
+        );
+      })}
+    </div>
+  )}
+</div>
+</div>
+{/* Sección Alertas Tabuladas - 4 tarjetas (sin cambios) */}          
+          <div className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-50 relative !mt-6">
             <button
               onClick={() => setVerTodo(true)}
-              className="absolute top-4 right-5 flex items-center gap-1 transition-all"
-            >
-              <span className="text-green-600 font-black text-[9px] uppercase tracking-wider">Ver todo</span>
-              <FaChevronRight className="text-green-600 text-[8px]" />
+              className="absolute top-4 right-5 font-bold flex items-center gap-1.5 uppercase text-slate-400 hover:text-slate-500 text-[10px] tracking-wider transition-colors"> Ver todo <FaChevronRight size={8} />
             </button>
             <div className="mb-4">
-              <h2 className="text-lg font-black uppercase tracking-tight text-[#1e293b]">Alertas Tabuladas</h2>
+              <h2 className="text-lg font-extrabold uppercase tracking-tight text-[#1e293b]">Alertas Tabuladas</h2>
             </div>
             {ultimasTabuladas.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/30">
@@ -543,7 +576,7 @@ function Tabulacion() {
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sin alertas tabuladas</h3>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-fadeIn">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fadeIn">
                 {ultimasTabuladas.map((tab) => {
                   const ciudadano = tab.alerta?.usuario_ciudadano?.nombre_completo || "Ciudadano";
                   const codigo = tab.alerta?.codigo_alerta || `TAB-${String(tab.id_tabulacion).padStart(4, "0")}`;
@@ -551,28 +584,28 @@ function Tabulacion() {
                   if (!clasificacion) clasificacion = tab.resultado_final || "Sin clasificar";
                   const fecha = tab.fecha_tabulacion?.split("T")[0] || "—";
                   return (
-                    <div key={tab.id_tabulacion} className="bg-white rounded-2xl p-4 border border-gray-100 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md group overflow-hidden">
-                      <div className="absolute left-0 top-0 bottom-0 w-2 bg-[#00a65a] rounded-l-2xl" />
+                    <div key={tab.id_tabulacion} className="h-60 bg-white rounded-lg p-4 border border-slate-200 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md group overflow-hidden">
+                      <div className="absolute left-0 top-0 bottom-0 w-2 bg-[#113e27] rounded-l-2xl" />
                       <div className="flex justify-between items-center mb-3 pl-3">
-                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-wider">{codigo}</span>
-                        <span className="bg-green-50 text-green-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase border border-green-100">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{codigo}</span>
+                        <span className="bg-slate-200 text-[#113e27] px-2 py-0.5 rounded-md text-[8px] font-black uppercase border border-green-100">
                           Archivado
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mb-4 pl-3">
-                        <div className="w-9 h-9 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center font-black text-base border border-gray-50 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors shrink-0">
+                        <div className="w-6 h-8 rounded-md bg-blue-50 text-[#0C3DC2] flex items-center justify-center font-black text-[12px] border border-gray-50 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors shrink-0 shadow-inner mt-2">
                           {ciudadano.charAt(0)}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <h3 className="text-xs font-black text-slate-700 leading-tight mb-0.5 truncate w-[110px]">{ciudadano}</h3>
-                          <p className="text-[8px] font-bold text-slate-400">{fecha}</p>
+                          <h3 className="text-[12px] font-extrabold text-slate-700 leading-tight mb-0.5 truncate block max-w-[200px] tracking-wider">{ciudadano}</h3>
+                          <p className="text-[10px] font-bold text-slate-400">{fecha}</p>
                         </div>
                       </div>
-                      <div className="mb-4 p-2.5 bg-slate-50/50 rounded-xl border border-slate-100 ml-3">
-                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Clasificación</p>
-                        <p className="text-[9px] font-black text-slate-600 uppercase leading-relaxed">{clasificacion}</p>
+                      <div className="mb-6 p-2.5 bg-slate-50/50 rounded-xl border border-slate-100 ml-3">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Clasificación</p>
+                        <p className="text-[10px] font-black text-slate-600 uppercase leading-relaxed">{clasificacion}</p>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 ml-3">
+                      <div className="grid grid-cols-2 gap-4 ml-3 mb-2">
                         <button
                           onClick={() => {
                             setAlertaVista({
@@ -602,17 +635,17 @@ function Tabulacion() {
                             });
                             setIsViewModalOpen(true);
                           }}
-                          className="flex items-center justify-center gap-1 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-gray-100 transition-colors"
+                          className="flex items-center justify-center gap-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-md border border-gray-300 transition-colors"
                         >
                           <FaEye size={10} />
-                          <span className="text-[8px] font-black uppercase tracking-wider">Ver</span>
+                          <span className="text-[11px] font-bold uppercase tracking-wider">Ver</span>
                         </button>
                         <button
                           onClick={() => handleGenerarPDF(tab)}
-                          className="flex items-center justify-center gap-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-sm transition-all"
+                          className="flex items-center justify-center gap-1 py-2 bg-[#113e27] hover:bg-[#164a2f] text-white rounded-md shadow-sm transition-all"
                         >
                           <FaFilePdf size={10} />
-                          <span className="text-[8px] font-black uppercase tracking-wider">PDF</span>
+                          <span className="text-[11px] font-bold uppercase tracking-wider">PDF</span>
                         </button>
                       </div>
                     </div>
@@ -621,6 +654,10 @@ function Tabulacion() {
               </div>
             )}
           </div>
+          
+
+          
+          
         </>
       )}
 

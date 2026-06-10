@@ -1,31 +1,31 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  FaUser, FaPhone, FaPlay, FaPause, FaExclamationTriangle,
-  FaTimes, FaShieldAlt, FaCheckCircle, FaAddressCard,
-  FaSpinner, FaChevronDown
+  FaUser,
+  FaPhone,
+  FaPlay,
+  FaPause,
+  FaExclamationTriangle,
+  FaTimes,
+  FaShieldAlt,
+  FaCheckCircle,
+  FaAddressCard,
+  FaSpinner,
+  FaChevronDown,
 } from "react-icons/fa";
 import { contravenciones, delitos } from "../../constants/CategoriasDelitos";
 import { useToast } from "../../context/ToastContext";
 import { supabase } from "../../services/supabase";
+import DesestimarAlerta from "../../components/DesestimarAlerta";
+import { useAuth } from "../../context/AuthContext";
 
-// Plantillas de texto rápido para descripciones de incidentes
-const descripcionesRapidas = [
-  "Ciudadano reporta accidente de tránsito con heridos en vía pública.",
-  "Alerta de alteración del orden público y consumo de bebidas alcohólicas.",
-  "Sospechoso merodeando la zona con actitud evasiva.",
-  "Robo en proceso a local comercial / vivienda.",
-  "Llamada colgada o interferencia sin respuesta del usuario.",
-];
-
-const motivosDesestimo = [
-  "Falsa alarma",
-  "Información duplicada",
-  "Datos insuficientes",
-  "Otro",
-];
-
-const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
+const DetalleEmergencia = ({
+  alerta,
+  onBack,
+  onEnviarDespacho,
+  onDesestimar,
+}) => {
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   const [datos, setDatos] = useState(null);
   const [ciudadano, setCiudadano] = useState(null);
@@ -43,13 +43,12 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
   const [contravencion, setContravencion] = useState("");
   const [delito, setDelito] = useState("");
   const [prioridad, setPrioridad] = useState("");
-  
+
   const [showDesestimoPanel, setShowDesestimoPanel] = useState(false);
-  const [motivosSeleccionados, setMotivosSeleccionados] = useState([]);
+  const [desestimando, setDesestimando] = useState(false);
   const [transcribiendoAudio, setTranscribiendoAudio] = useState(false);
   const [showDescripciones, setShowDescripciones] = useState(false);
 
-  // --- NUEVAS REFERENCIAS Y FUNCIONES PARA AUTO-GUARDADO ---
   const debounceTimeout = useRef(null);
 
   const guardarCambios = async (camposActualizados) => {
@@ -60,7 +59,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
         .update(camposActualizados)
         .eq("id_alerta", datos.id_alerta);
       if (error) throw error;
-      setDatos(prev => ({ ...prev, ...camposActualizados }));
+      setDatos((prev) => ({ ...prev, ...camposActualizados }));
     } catch (err) {
       console.error("Error guardando cambios:", err);
       showToast("Error al guardar cambios", "error");
@@ -91,14 +90,39 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
     setPrioridad(valor);
     await guardarCambios({ prioridad: valor });
   };
-  // --- FIN DE LAS NUEVAS FUNCIONES ---
+
+  // Confirmar desestimación con justificación
+  const confirmarDesestimo = async (motivoTexto, justificacion) => {
+    setDesestimando(true);
+    try {
+      const { error } = await supabase.from("alerta_desestimada").insert({
+        id_alerta: datos?.id_alerta,
+        id_operador: user?.id_oficial || user?.id,
+        motivo: motivoTexto,
+        justificacion_adicional: justificacion || null,
+      });
+      if (error) throw error;
+      showToast("Alerta desestimada correctamente", "success");
+      if (onDesestimar) onDesestimar(datos?.id_alerta, motivoTexto);
+      else onBack();
+      setShowDesestimoPanel(false);
+    } catch (err) {
+      console.error("Error guardando desestimación:", err);
+      showToast("Error al desestimar la alerta", "error");
+    } finally {
+      setDesestimando(false);
+    }
+  };
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "unset";
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
       if (audioInterval.current) clearInterval(audioInterval.current);
     };
   }, []);
@@ -119,30 +143,28 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
 
   useEffect(() => {
     if (!alerta?.id_alerta && !alerta?.id) return;
-
     const cargar = async () => {
       setCargando(true);
       const idAlerta = alerta?.id_alerta ?? alerta?.id;
-
       const { data: alertaData, error: alertaError } = await supabase
         .from("alerta")
         .select("*")
         .eq("id_alerta", idAlerta)
         .single();
-
       if (alertaError) {
         console.error("Error al cargar alerta:", alertaError);
         setCargando(false);
         return;
       }
-
       setDatos(alertaData);
       setRelatoEditado(alertaData.descripcion || "");
       setPrioridad(alertaData.prioridad || "");
       setContravencion(alertaData.contravenciones || "");
       setDelito(alertaData.delitos || "");
 
-      const estadoNombre = await obtenerNombreEstado(alertaData.id_estado_actual);
+      const estadoNombre = await obtenerNombreEstado(
+        alertaData.id_estado_actual,
+      );
       let estadoMostrado = "EMERGENCIA";
       if (alertaData.categoria !== "Panico" && estadoNombre) {
         estadoMostrado = estadoNombre.toUpperCase();
@@ -157,10 +179,8 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
           .single();
         if (!ciudadanoError) setCiudadano(ciudadanoData);
       }
-
       setCargando(false);
     };
-
     cargar();
   }, [alerta?.id_alerta, alerta?.id]);
 
@@ -168,9 +188,9 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
     if (datos?.audio_30s) {
       if (!audioRef.current) {
         audioRef.current = new Audio(datos.audio_30s);
-        audioRef.current.addEventListener("loadedmetadata", () => {
-          setAudioDuration(audioRef.current.duration);
-        });
+        audioRef.current.addEventListener("loadedmetadata", () =>
+          setAudioDuration(audioRef.current.duration),
+        );
         audioRef.current.addEventListener("timeupdate", () => {
           const current = audioRef.current.currentTime;
           setAudioProgress((current / audioRef.current.duration) * 100);
@@ -190,6 +210,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
         setPlaying(true);
       }
     } else {
+      if (audioInterval.current) clearInterval(audioInterval.current);
       if (!playing) {
         setPlaying(true);
         setAudioDuration(30);
@@ -220,9 +241,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
       setAudioCurrentTime(newTime);
       setAudioProgress((newTime / audioDuration) * 100);
     } else {
-      if (audioInterval.current) {
-        clearInterval(audioInterval.current);
-      }
+      if (audioInterval.current) clearInterval(audioInterval.current);
       setAudioCurrentTime(newTime);
       setAudioProgress((newTime / 30) * 100);
       if (playing) {
@@ -255,25 +274,27 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
       showToast("No hay audio disponible para transcribir", "error");
       return;
     }
-
     setTranscribiendoAudio(true);
     try {
       const response = await fetch(datos.audio_30s);
-      if (!response.ok) throw new Error(`HTTP ${response.status}: No se pudo descargar el audio`);
+      if (!response.ok)
+        throw new Error(
+          `HTTP ${response.status}: No se pudo descargar el audio`,
+        );
       const audioBlob = await response.blob();
-
       const formData = new FormData();
       formData.append("audio", audioBlob, "audio.mp3");
-
-      const { data, error } = await supabase.functions.invoke("transcribe-audio", {
-        body: formData,
-      });
-
+      const { data, error } = await supabase.functions.invoke(
+        "transcribe-audio",
+        {
+          body: formData,
+        },
+      );
       if (error) throw new Error(`Error en la función edge: ${error.message}`);
-      if (!data?.texto) throw new Error("La respuesta no contiene texto transcrito");
-
+      if (!data?.texto)
+        throw new Error("La respuesta no contiene texto transcrito");
       setRelatoEditado(data.texto);
-      handleDescripcionChange(data.texto); // Guarda automáticamente
+      handleDescripcionChange(data.texto);
       showToast("Audio transcrito correctamente", "success");
     } catch (err) {
       console.error("Error en transcripción:", err);
@@ -283,43 +304,29 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
     }
   };
 
-  const toggleMotivo = (motivo) => {
-    setMotivosSeleccionados(prev =>
-      prev.includes(motivo) ? prev.filter(m => m !== motivo) : [...prev, motivo]
-    );
-  };
-
-  const confirmarDesestimo = () => {
-    if (motivosSeleccionados.length === 0) {
-      showToast("Debe seleccionar al menos un motivo para desestimar", "error");
-      return;
-    }
-    const motivoTexto = motivosSeleccionados.join(", ");
-    if (onDesestimar) onDesestimar(datos?.id_alerta, motivoTexto);
-    else onBack();
-    setShowDesestimoPanel(false);
-  };
-
   const handleEnviarDespacho = () => {
     if (!contravencion && !delito) {
       showToast("Seleccione un Delito o Contravención", "error");
       return;
     }
     if (!prioridad) {
-      showToast("Seleccione un nivel de prioridad (Alta, Media o Baja)", "error");
+      showToast(
+        "Seleccione un nivel de prioridad (Alta, Media o Baja)",
+        "error",
+      );
       return;
     }
     if (onEnviarDespacho) {
-      onEnviarDespacho(
-        datos?.id_alerta,
-        {
-          clasificacion: contravencion || delito,
-          esContravencion: !!contravencion,
-          prioridad: prioridad
-        }
-      );
+      onEnviarDespacho(datos?.id_alerta, {
+        clasificacion: contravencion || delito,
+        esContravencion: !!contravencion,
+        prioridad: prioridad,
+      });
     }
-    showToast(`Alerta ${datos?.codigo_alerta || datos?.id_alerta} enviada al despacho`, "success");
+    showToast(
+      `Alerta ${datos?.codigo_alerta || datos?.id_alerta} enviada al despacho`,
+      "success",
+    );
   };
 
   const formatoFechaHoraBolivia = (fechaISO) => {
@@ -327,16 +334,21 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
     const date = new Date(fechaISO);
     return {
       fecha: date.toLocaleDateString("es-BO", {
-        day: "2-digit", month: "short", year: "numeric",
-        timeZone: "America/La_Paz"
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "America/La_Paz",
       }),
       hora: date.toLocaleTimeString("es-BO", {
-        hour: "2-digit", minute: "2-digit",
-        timeZone: "America/La_Paz"
-      })
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "America/La_Paz",
+      }),
     };
   };
-  const { fecha: fechaFormateada, hora: horaFormateada } = formatoFechaHoraBolivia(datos?.fecha_hora);
+
+  // ✅ Línea modificada con valores por defecto
+  const { fecha: fechaFormateada = "—", hora: horaFormateada = "—" } = datos?.fecha_hora ? formatoFechaHoraBolivia(datos.fecha_hora) : { fecha: "—", hora: "—" };
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -358,10 +370,8 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
       </style>
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
 
-      {/* TARJETA PRINCIPAL */}
       <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[85vh]">
-
-        {/* BARRA SUPERIOR VERDE */}
+        {/* BARRA SUPERIOR */}
         <div className="bg-[#113e27] py-4 px-6 text-white w-full shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -373,16 +383,15 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                   Detalle de Emergencia
                 </h2>
                 <div className="flex flex-wrap gap-2 text-[10px] font-medium text-white/70 mt-0.5">
-                  {datos?.codigo_alerta && (
-                    <span>{datos.codigo_alerta}</span>
-                  )}
-                  <span>{fechaFormateada} - {horaFormateada}</span>
+                  {datos?.codigo_alerta && <span>{datos.codigo_alerta}</span>}
+                  <span>
+                    {fechaFormateada} - {horaFormateada}
+                  </span>
                 </div>
               </div>
             </div>
-            <button 
-              type="button" 
-              onClick={onBack} 
+            <button
+              onClick={onBack}
               className="hover:bg-white/20 p-1.5 rounded-md transition-colors shrink-0 mt-1"
             >
               <FaTimes size={16} />
@@ -395,12 +404,11 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
             <FaSpinner className="animate-spin text-green-800 text-3xl" />
           </div>
         ) : (
-          /* CONTENIDO DEL MODAL */
           <div className="overflow-y-auto p-6 bg-white">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
-              
-              {/* COLUMNA IZQUIERDA (sin cambios) */}
+              {/* COLUMNA IZQUIERDA (sin estiramiento forzado) */}
               <div className="flex flex-col gap-5">
+                {/* Ciudadano */}
                 <section>
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
                     Datos del Ciudadano
@@ -420,18 +428,25 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                       )}
                       <div className="flex-1">
                         <div className="font-bold text-slate-700 text-[16px] capitalize">
-                          {ciudadano?.nombre_completo 
-                            ? ciudadano.nombre_completo.toLowerCase() 
+                          {ciudadano?.nombre_completo
+                            ? ciudadano.nombre_completo.toLowerCase()
                             : "Usuario Desconocido"}
                         </div>
                         <div className="mt-1 space-y-1">
                           <div className="flex items-center gap-2 text-[11px]">
-                            <FaAddressCard className="text-slate-400" size={12} />
-                            <span className="font-medium text-slate-600">CI: {ciudadano?.ci || "—"}</span>
+                            <FaAddressCard
+                              className="text-slate-400"
+                              size={12}
+                            />
+                            <span className="font-medium text-slate-600">
+                              CI: {ciudadano?.ci || "—"}
+                            </span>
                           </div>
                           <div className="flex items-center gap-2 text-[11px]">
                             <FaPhone className="text-green-700" size={12} />
-                            <span className="font-medium text-slate-600">{ciudadano?.celular || "—"}</span>
+                            <span className="font-medium text-slate-600">
+                              {ciudadano?.celular || "—"}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -439,6 +454,7 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                   </div>
                 </section>
 
+                {/* Audio */}
                 <section>
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none">
                     Audio de la Alerta
@@ -447,16 +463,26 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                     <div className="bg-[#113e27] rounded-xl p-4 flex flex-col gap-3 shadow-md">
                       <div className="flex items-center gap-4">
                         <button
-                          type="button"
                           onClick={toggleAudio}
                           className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-[#113e27] shrink-0"
                         >
-                          {playing ? <FaPause size={12} /> : <FaPlay size={12} className="ml-0.5" />}
+                          {playing ? (
+                            <FaPause size={12} />
+                          ) : (
+                            <FaPlay size={12} className="ml-0.5" />
+                          )}
                         </button>
                         <div className="flex-1">
                           <div className="flex justify-between text-[9px] font-semibold text-white/60 mt-1.5 uppercase">
-                            <span>{playing ? "Reproduciendo..." : "Audio del ciudadano"}</span>
-                            <span>{formatTime(audioCurrentTime)} / {formatTime(audioDuration)}</span>
+                            <span>
+                              {playing
+                                ? "Reproduciendo..."
+                                : "Audio del ciudadano"}
+                            </span>
+                            <span>
+                              {formatTime(audioCurrentTime)} /{" "}
+                              {formatTime(audioDuration)}
+                            </span>
                           </div>
                           <input
                             type="range"
@@ -466,16 +492,21 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                             value={audioCurrentTime}
                             onChange={handleSeek}
                             className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
-                            style={{ background: `linear-gradient(to right, white 0%, white ${audioProgress}%, rgba(255,255,255,0.2) ${audioProgress}%, rgba(255,255,255,0.2) 100%)` }}
+                            style={{
+                              background: `linear-gradient(to right, white 0%, white ${audioProgress}%, rgba(255,255,255,0.2) ${audioProgress}%, rgba(255,255,255,0.2) 100%)`,
+                            }}
                           />
                         </div>
                         <button
-                          type="button"
                           onClick={transcribirAudio}
                           disabled={transcribiendoAudio}
                           className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white transition-all flex items-center gap-1 disabled:opacity-50"
                         >
-                          {transcribiendoAudio ? <FaSpinner className="animate-spin" size={10} /> : "Transcribir"}
+                          {transcribiendoAudio ? (
+                            <FaSpinner className="animate-spin" size={10} />
+                          ) : (
+                            "Transcribir"
+                          )}
                         </button>
                       </div>
                     </div>
@@ -486,42 +517,37 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                   )}
                 </section>
 
-                <section className="flex flex-col flex-1 relative">
+                {/* Descripción */}
+                <section className="flex flex-col relative">
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 leading-none">
                     Descripción del hecho
                   </h3>
-                  
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 relative shadow-md flex-1 min-h-[70px]">
-                    <div className="absolute top-4 left-3 text-[#195838] pointer-events-none">
+                    <div className="absolute top-4 left-3 text-[#195838] pointer-events-none mt-0.5">
                       <FaExclamationTriangle size={14} />
                     </div>
-                    
                     <textarea
-                      className="w-full pl-7 pr-12 h-full text-[13px] font-medium text-slate-600 bg-transparent border-none focus:outline-none resize-y min-h-[60px]"
+                      className="space-y-3 mt-1 w-full pl-7 pr-8 h-16 min-h-16 text-[12px] font-medium text-slate-600 bg-transparent border-none focus:outline-none resize-y"
                       placeholder="Sin descripción del hecho..."
                       value={relatoEditado}
                       onChange={(e) => handleDescripcionChange(e.target.value)}
                     />
-                    
-                    <div className="absolute top-3.5 right-3 flex items-center">
-                      {relatoEditado && (
+                    {relatoEditado && (
+                      <div className="absolute top-2 right-3 text-slate-400 hover:text-slate-600 transition-colors">
                         <button
-                          type="button"
                           onClick={() => handleDescripcionChange("")}
                           className="text-slate-400 hover:text-slate-600 transition-colors"
-                          title="Limpiar texto"
                         >
                           <FaTimes size={12} />
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </section>
               </div>
 
-              {/* COLUMNA DERECHA (modificada para auto‑guardado) */}
+              {/* COLUMNA DERECHA */}
               <div className="flex flex-col gap-5 border-l border-slate-100 lg:pl-6">
-                
                 <div>
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none text-left">
                     Estado Actual
@@ -533,53 +559,12 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
 
                 <div className="w-full flex-1 flex flex-col">
                   {showDesestimoPanel ? (
-                    <section className="flex flex-col flex-1">
-                      <div className="mb-2.5">
-                        <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 leading-none">
-                          Desestimación de Alerta
-                        </h3>
-                      </div>
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-md flex-1 flex flex-col justify-between">
-                        <div>
-                          <div className="border-l-4 border-[#C13100] pl-2 text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2.5">
-                            Seleccione el motivo 
-                          </div>
-                          <div className="space-y-1.5">
-                            {motivosDesestimo.map(motivo => {
-                              const isChecked = motivosSeleccionados.includes(motivo);
-                              return (
-                                <label 
-                                  key={motivo} 
-                                  className={`flex items-center gap-3 p-2.5 rounded-xl border text-[11px] font-semibold cursor-pointer transition-all ${
-                                    isChecked 
-                                      ? "bg-white border-slate-300 text-slate-700 shadow-sm font-bold" 
-                                      : "text-slate-600 hover:bg-white hover:border-white"
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="accent-[#C13100] w-3.5 h-3.5 rounded shrink-0 cursor-pointer"
-                                    checked={isChecked}
-                                    onChange={() => {
-                                      if (isChecked) {
-                                        toggleMotivo(motivo); 
-                                      } else {
-                                        motivosSeleccionados.forEach(m => toggleMotivo(m));
-                                        toggleMotivo(motivo);
-                                      }
-                                    }}
-                                  />
-                                  <span className="truncate">{motivo}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        <p className="-mb-1 mt-3 -py-2 text-[11px] text-slate-400 font-medium leading-relaxed">
-                          Por seguridad y auditoría, seleccione el motivo oficial por el cual se desestimará esta alerta.
-                        </p>
-                      </div>
-                    </section>
+                    <DesestimarAlerta
+                      onConfirm={confirmarDesestimo}
+                      onCancel={() => setShowDesestimoPanel(false)}
+                      cargandoInicial={desestimando}
+                      showToast={showToast}
+                    />
                   ) : (
                     <div className="space-y-5 flex-1 flex flex-col mt-0 justify-start">
                       <section>
@@ -591,25 +576,45 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                             <select
                               className="w-full h-12 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
                               value={contravencion}
-                              onChange={(e) => handleContravencionChange(e.target.value)}
+                              onChange={(e) =>
+                                handleContravencionChange(e.target.value)
+                              }
                               disabled={!!delito}
                             >
-                              <option value="">Seleccionar Contravención</option>
-                              {contravenciones.map(c => <option key={c} value={c}>{c}</option>)}
+                              <option value="">
+                                Seleccionar Contravención
+                              </option>
+                              {contravenciones.map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
                             </select>
-                            <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12} />
+                            <FaChevronDown
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                              size={12}
+                            />
                           </div>
                           <div className="relative">
                             <select
                               className="w-full h-12 p-2.5 pr-8 bg-white border-2 border-slate-200 rounded-xl text-[12px] font-bold outline-none appearance-none focus:border-slate-300 transition-all text-slate-700"
                               value={delito}
-                              onChange={(e) => handleDelitoChange(e.target.value)}
+                              onChange={(e) =>
+                                handleDelitoChange(e.target.value)
+                              }
                               disabled={!!contravencion}
                             >
                               <option value="">Seleccionar Delito</option>
-                              {delitos.map(d => <option key={d} value={d}>{d}</option>)}
+                              {delitos.map((d) => (
+                                <option key={d} value={d}>
+                                  {d}
+                                </option>
+                              ))}
                             </select>
-                            <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12} />
+                            <FaChevronDown
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                              size={12}
+                            />
                           </div>
                         </div>
                       </section>
@@ -619,16 +624,16 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                           Nivel de Prioridad
                         </h3>
                         <div className="grid grid-cols-3 gap-4 mt-2">
-                          {["ALTA", "MEDIA", "BAJA"].map(p => (
+                          {["ALTA", "MEDIA", "BAJA"].map((p) => (
                             <button
                               key={p}
                               type="button"
                               onClick={() => handlePrioridadChange(p)}
                               className={`py-2.5 rounded-xl border-2 font-extrabold text-[10px] tracking-wider transition-all flex items-center justify-center h-10 shadow-sm cursor-pointer ${
                                 prioridad === p
-                                  ? p === "ALTA" 
+                                  ? p === "ALTA"
                                     ? "bg-[#C90A0A] border-red-700 text-white shadow-md hover:brightness-90"
-                                    : p === "MEDIA" 
+                                    : p === "MEDIA"
                                       ? "bg-[#0C3DC2] border-blue-600 text-white shadow-md hover:brightness-90"
                                       : "bg-[#e9b301] border-[#e9b301d9] text-white shadow-md hover:brightness-90"
                                   : "bg-white border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
@@ -642,44 +647,39 @@ const DetalleEmergencia = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) =
                     </div>
                   )}
                 </div>
-
               </div>
-
             </div>
           </div>
         )}
 
-        {/* BARRA DE BOTONES (sin cambios) */}
+        {/* BOTONES */}
         <div className="p-4 bg-slate-50 border-t flex gap-3 w-full shrink-0">
           <button
-            type="button"
-            onClick={() => {
-              setMotivosSeleccionados([]);
-              setShowDesestimoPanel(!showDesestimoPanel);
-            }}
+            onClick={() => setShowDesestimoPanel(!showDesestimoPanel)}
             className={`w-2/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[11px] tracking-wider border transition-all shadow-sm ${
-              showDesestimoPanel 
-                ? "bg-slate-500 text-white shadow-md hover:bg-slate-600" 
+              showDesestimoPanel
+                ? "bg-slate-500 text-white shadow-md hover:bg-slate-600"
                 : "bg-white text-[#C13100] border-[#C13100] hover:bg-[#fff8f5]"
             }`}
           >
             {showDesestimoPanel ? "Cancelar" : "Desestimar alerta"}
           </button>
-          
+
           <button
-            type="button"
-            onClick={showDesestimoPanel ? confirmarDesestimo : handleEnviarDespacho}
-            disabled={cargando || (showDesestimoPanel && motivosSeleccionados.length === 0)}
-            className={`w-3/5 py-3.5 px-4 rounded-xl font-bold uppercase text-[11px] tracking-wider shadow-md flex items-center justify-center gap-2 transition-all ${
-              showDesestimoPanel 
-                ? "bg-[#b43c14] hover:bg-[#9a320f] text-white disabled:opacity-40" 
-                : "bg-[#113e27] hover:bg-[#b43c14] text-white disabled:opacity-40"
+            onClick={showDesestimoPanel ? () => {} : handleEnviarDespacho}
+            disabled={cargando}
+            className={`w-3/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[9px] tracking-wider shadow-md flex items-center justify-center gap-2 transition-all ${
+              showDesestimoPanel
+                ? "bg-slate-300 cursor-not-allowed opacity-50"
+                : "bg-[#113e27] hover:bg-[#b43c14] text-white"
             }`}
           >
-            <FaCheckCircle size={12} /> {showDesestimoPanel ? "Desestimar alerta" : "Enviar a Despacho"}
+            <FaCheckCircle size={12} />{" "}
+            {showDesestimoPanel
+              ? "Confirme o cancele arriba"
+              : "Enviar a Despacho"}
           </button>
         </div>
-
       </div>
     </div>
   );
