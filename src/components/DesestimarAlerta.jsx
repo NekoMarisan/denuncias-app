@@ -3,9 +3,9 @@ import { FaTimes } from "react-icons/fa";
 
 const motivosDesestimo = [
   "Falsa alarma",
-  "Información duplicada",
   "Datos insuficientes",
   "Fuera del ámbito institucional",
+  "La alerta no corresponde a un hecho real",
 ];
 
 const DesestimarAlerta = ({
@@ -44,7 +44,7 @@ const DesestimarAlerta = ({
         </h3>
       </div>
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-md flex-1">
-        <div className="border-l-4 border-[#C13100] pl-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">
+        <div className="border-l-4 border-[#c64114] pl-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">
           Motivo de desestimación (único)
         </div>
         <div className="space-y-2 mb-2 -mt-1">
@@ -60,7 +60,7 @@ const DesestimarAlerta = ({
               <input
                 type="radio"
                 name="motivoDesestimo"
-                className="accent-[#C13100] w-3.5 h-3.5 cursor-pointer"
+                className="accent-[#c64114] w-3.5 h-3.5 cursor-pointer"
                 checked={motivoSeleccionado === motivo}
                 onChange={() => setMotivoSeleccionado(motivo)}
               />
@@ -74,6 +74,9 @@ const DesestimarAlerta = ({
             Justificación adicional
           </label>
           <div className="relative">
+
+
+            
             <textarea
               className="mt-1 w-full h-14 min-h-14 p-2 pr-8 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:border-slate-300 resize-y bg-white"
               placeholder="Agregue el detalle de la desestimación (obligatorio)"
@@ -106,8 +109,8 @@ const DesestimarAlerta = ({
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={cargando}  // ✅ solo se deshabilita mientras se envía
-            className="flex-1 py-2 bg-[#b43c14] hover:bg-[#9a320f] text-white rounded-md text-[11px] font-bold uppercase tracking-wider disabled:opacity-40 transition-all flex items-center justify-center"
+            disabled={cargando} 
+            className="flex-1 py-2 bg-[#c64114] hover:bg-[#c03e12] text-white rounded-md text-[11px] font-bold uppercase tracking-wider disabled:opacity-40 transition-all flex items-center justify-center"
           >
             {cargando ? "Desestimando..." : "Desestimar alerta"}
           </button>

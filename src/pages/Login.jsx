@@ -1,26 +1,42 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { FaShieldAlt, FaUser, FaLock, FaEye, FaEyeSlash } from "react-icons/fa";
+
+const MAX_INTENTOS = 3;
+const TIEMPO_BLOQUEO_MS = 5 * 60 * 1000;
+const STORAGE_KEY = "login_intentos_bloqueos";
+
+const obtenerEstadoIntentos = () => {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored) return {};
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return {};
+  }
+};
+
+const guardarEstadoIntentos = (estado) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+};
 
 function Login() {
   const navigate = useNavigate();
   const { login, user } = useAuth();
+  const { showToast } = useToast();
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showUserWarning, setShowUserWarning] = useState(false);
-  const [showPassWarning, setShowPassWarning] = useState(false);
   const [userWarningMessage, setUserWarningMessage] = useState("");
-  const [passWarningMessage, setPassWarningMessage] = useState("");
-
   const userWarningTimeout = useRef(null);
-  const passWarningTimeout = useRef(null);
   const errorTimeout = useRef(null);
 
-  // Redirigir si ya hay sesión activa
   useEffect(() => {
     if (user) {
       switch (user.rol) {
@@ -29,10 +45,10 @@ function Login() {
           navigate("/dashboard");
           break;
         case "despachador":
-          navigate("/centro-despacho");
+          navigate("/dashboard");
           break;
         case "tabulador":
-          navigate("/tabulacion");
+          navigate("/dashboard");
           break;
         default:
           navigate("/dashboard");
@@ -40,7 +56,6 @@ function Login() {
     }
   }, [user, navigate]);
 
-  // Limpiar error automáticamente después de 2 segundos
   useEffect(() => {
     if (error) {
       if (errorTimeout.current) clearTimeout(errorTimeout.current);
@@ -52,7 +67,6 @@ function Login() {
   useEffect(() => {
     return () => {
       if (userWarningTimeout.current) clearTimeout(userWarningTimeout.current);
-      if (passWarningTimeout.current) clearTimeout(passWarningTimeout.current);
       if (errorTimeout.current) clearTimeout(errorTimeout.current);
     };
   }, []);
@@ -92,6 +106,44 @@ function Login() {
     if (error) setError("");
   };
 
+  const verificarBloqueo = (escalafon) => {
+    const estado = obtenerEstadoIntentos();
+    const registro = estado[escalafon];
+    if (!registro) return false;
+    const { bloqueadoHasta } = registro;
+    if (bloqueadoHasta && Date.now() < bloqueadoHasta) {
+      const minutosRestantes = Math.ceil((bloqueadoHasta - Date.now()) / 60000);
+      showToast(`Cuenta bloqueada. Intente nuevamente en ${minutosRestantes} minuto(s).`, "error");
+      return true;
+    }
+    return false;
+  };
+
+  const registrarIntentoFallido = (escalafon) => {
+    const estado = obtenerEstadoIntentos();
+    const registro = estado[escalafon] || { intentos: 0, bloqueadoHasta: null };
+    if (registro.bloqueadoHasta && Date.now() < registro.bloqueadoHasta) return;
+    registro.intentos = (registro.intentos || 0) + 1;
+    if (registro.intentos >= MAX_INTENTOS) {
+      registro.bloqueadoHasta = Date.now() + TIEMPO_BLOQUEO_MS;
+      registro.intentos = 0;
+      showToast(`Demasiados intentos fallidos. Cuenta bloqueada por 5 minutos.`, "error");
+    } else {
+      const restantes = MAX_INTENTOS - registro.intentos;
+      showToast(`Credenciales incorrectas. Intento ${registro.intentos} de ${MAX_INTENTOS}. Restan ${restantes} intentos.`, "error");
+    }
+    estado[escalafon] = registro;
+    guardarEstadoIntentos(estado);
+  };
+
+  const resetearIntentos = (escalafon) => {
+    const estado = obtenerEstadoIntentos();
+    if (estado[escalafon]) {
+      delete estado[escalafon];
+      guardarEstadoIntentos(estado);
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
@@ -106,14 +158,23 @@ function Login() {
       return;
     }
 
+    if (verificarBloqueo(escalafon)) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const result = await login(escalafon, pass);
       if (!result.success) {
+        registrarIntentoFallido(escalafon);
         setError(result.error || "Credenciales incorrectas");
+      } else {
+        resetearIntentos(escalafon);
       }
     } catch (err) {
       console.error(err);
       setError("ERROR DE CONEXIÓN");
+      registrarIntentoFallido(escalafon);
     } finally {
       setLoading(false);
     }
@@ -126,7 +187,6 @@ function Login() {
     >
       <div className="absolute inset-0 bg-black/40"></div>
       <div className="relative z-10 flex w-full max-w-4xl h-auto min-h-[540px] sm:h-[540px] shadow-xl rounded-3xl overflow-hidden bg-white border-2 border-gray-200 flex-col lg:flex-row">
-        {/* Panel izquierdo */}
         <div className="hidden lg:flex flex-col justify-between w-full lg:w-1/2 p-6 relative text-white">
           <div
             className="absolute inset-0 bg-cover bg-center"
@@ -157,7 +217,6 @@ function Login() {
           </div>
         </div>
 
-        {/* Panel derecho - formulario */}
         <div className="w-full lg:w-1/2 p-5 px-6 sm:px-10 md:p-8 md:px-12 flex flex-col justify-center">
           <h2 className="text-[20px] sm:text-[23px] font-bold text-green-900 mb-6 text-center uppercase tracking-wider">
             Ingreso al Sistema
@@ -218,7 +277,7 @@ function Login() {
               }`}
             >
               <div className="w-full p-2.5 bg-red-50 border border-red-300 rounded-lg text-center">
-                <p className="text-red-600 font-extrabold text-[11px] uppercase tracking-wider">
+                <p className="text-[#C90A0A] font-bold text-[11px] uppercase tracking-wider">
                   {error}
                 </p>
               </div>

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-//actualizado Mai
 import {
   FaEye, FaFilePdf, FaSearch,
   FaFileExcel, FaDownload, FaFileDownload,
@@ -27,7 +26,7 @@ const ArchivoHistorico = ({
   const [clasificacionTabuladorModal, setClasificacionTabuladorModal] = useState(null);
   const [derivacionModal, setDerivacionModal] = useState(null);
 
-  // Cargar desestimadas desde Supabase (sin cambios)
+
   useEffect(() => {
     const cargarDesestimadas = async () => {
       setCargandoDesestimadas(true);
@@ -85,7 +84,7 @@ const ArchivoHistorico = ({
             estado: "DESESTIMADO",
             motivoDesestimacion: item.motivo,
             justificacion: item.justificacion_adicional,
-            fecha_desestimo: new Date(item.fecha_hora).toLocaleString('es-BO'),
+            fecha_desestimo: item.fecha_hora, // ✅ guardamos ISO string para comparación
             id_operador_desestimo: item.id_operador,
             alerta_completa: alertaData,
             ci: alertaData?.usuario_ciudadano?.ci,
@@ -134,23 +133,31 @@ const ArchivoHistorico = ({
   }));
   const todasLasAlertas = [...alertasTabuladasConFormato, ...desestimadas];
 
-  // Filtros
+  // Filtros (corregido para usar fechas ISO)
   const alertasFiltradas = todasLasAlertas.filter(a => {
     const cumpleEstado = (a.estado || "TABULADO") === tabActiva;
     const ciudadano = (a.ciudadano || "").toLowerCase();
     const idAlerta = (a.id || "").toLowerCase();
     const busquedaLower = busqueda.toLowerCase();
     const cumpleBusqueda = ciudadano.includes(busquedaLower) || idAlerta.includes(busquedaLower);
+    
     if (filtroTiempo !== "TODO") {
       let fechaComparar;
       if (a.estado === "DESESTIMADO") {
-        fechaComparar = new Date(a.fecha_desestimo);
+        // fecha_desestimo es ISO string
+        fechaComparar = a.fecha_desestimo ? new Date(a.fecha_desestimo) : null;
       } else {
-        fechaComparar = new Date(a.fecha);
+        // a.fecha es string "YYYY-MM-DD"
+        fechaComparar = a.fecha ? new Date(a.fecha + "T00:00:00") : null;
       }
+      if (!fechaComparar || isNaN(fechaComparar.getTime())) return true; // si no hay fecha válida, lo incluye
       const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
       if (filtroTiempo === "HOY") {
-        if (fechaComparar.toDateString() !== hoy.toDateString()) return false;
+        const inicioHoy = new Date(hoy);
+        const finHoy = new Date(hoy);
+        finHoy.setDate(finHoy.getDate() + 1);
+        if (fechaComparar < inicioHoy || fechaComparar >= finHoy) return false;
       } else if (filtroTiempo === "ESTE MES") {
         if (fechaComparar.getMonth() !== hoy.getMonth() || fechaComparar.getFullYear() !== hoy.getFullYear()) return false;
       }
@@ -214,7 +221,6 @@ const ArchivoHistorico = ({
 
   // Funciones para desestimadas
   const generarPDFDesestimada = (alerta) => {
-    // ... (sin cambios, igual que original)
     const fechaHoraAlerta = alerta.alerta_completa?.fecha_hora 
       ? new Date(alerta.alerta_completa.fecha_hora).toLocaleString('es-BO')
       : "—";
@@ -260,7 +266,7 @@ const ArchivoHistorico = ({
           <h2 style="color:#C13100">INFORMACIÓN DE DESESTIMACIÓN</h2>
           <div class="rojo">
             <div><span class="label">Motivo:</span> <span class="valor">${alerta.motivoDesestimacion}</span></div>
-            <div><span class="label">Fecha de Desestimación:</span> <span class="valor">${alerta.fecha_desestimo}</span></div>
+            <div><span class="label">Fecha de Desestimación:</span> <span class="valor">${new Date(alerta.fecha_desestimo).toLocaleString('es-BO')}</span></div>
             <div><span class="label">Justificación Adicional:</span><br><span class="valor">${alerta.justificacion || "No especificada"}</span></div>
             <div><span class="label">Operador que desestimó:</span> <span class="valor">${alerta.nombre_operador_desestimo || "—"}</span></div>
           </div>
@@ -291,7 +297,7 @@ const ArchivoHistorico = ({
       delitos: alerta.alerta_completa?.delitos,
       motivo_desestimo: alerta.motivoDesestimacion,
       justificacion: alerta.justificacion,
-      fecha_desestimo: alerta.fecha_desestimo,
+      fecha_desestimo: new Date(alerta.fecha_desestimo).toLocaleString('es-BO'),
       ci: alerta.ci,
       celular: alerta.celular,
       nombre_operador_desestimo: alerta.nombre_operador_desestimo
@@ -355,7 +361,7 @@ const ArchivoHistorico = ({
                 onClick={() => setFiltroTiempo(f)} 
                 className={`px-6 py-2.5 rounded-lg font-bold text-[11px] uppercase transition-all ${
                   filtroTiempo === f 
-                    ? (tabActiva === "TABULADO" ? "bg-[#113e27] text-white" : "bg-[#113e27] text-white")
+                    ? "bg-[#113e27] text-white shadow-sm"
                     : "text-gray-400 hover:text-gray-600"
                 }`}
               >
@@ -387,7 +393,7 @@ const ArchivoHistorico = ({
           const idMostrar = alerta.id || "SIN ID";
           const ciudadanoMostrar = alerta.ciudadano || "Desconocido";
           const fechaMostrar = esDesestimado 
-            ? new Date(alerta.fecha_desestimo).toLocaleDateString('es-BO')
+            ? (alerta.fecha_desestimo ? new Date(alerta.fecha_desestimo).toLocaleDateString('es-BO') : "—")
             : (alerta.fecha || "—");
           const incidenteMostrar = esDesestimado 
             ? (alerta.motivoDesestimacion || "Sin motivo")
@@ -395,16 +401,11 @@ const ArchivoHistorico = ({
 
           return (
             <div key={idMostrar} className="p-2 mt-2 bg-white rounded-xl border border-slate-200 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md overflow-hidden flex flex-col">
-              {/* Barra lateral izquierda según estado */}
-              <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${esDesestimado ? 'bg-[#113e27]' : 'bg-[#113e27]'}`} />
+              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#113e27]" />
               <div className="p-3 flex-1 flex flex-col">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{idMostrar}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wider ${
-                    esDesestimado 
-                      ? "bg-slate-200 text-[#113e27] rounded-md" 
-                      : "bg-slate-200 text-[#113e27] rounded-md"
-                  }`}>
+                  <span className="px-2 py-0.5 text-[8px] font-extrabold uppercase tracking-wider bg-slate-200 text-[#113e27] rounded-md">
                     {esDesestimado ? 'Desestimado' : 'Finalizado'}
                   </span>
                 </div>
@@ -419,17 +420,11 @@ const ArchivoHistorico = ({
                   </div>
                 </div>
 
-                <div className={`mb-3 p-1.5 rounded-md border ${
-                  esDesestimado 
-                    ? 'bg-[#e6f4ea]/50 border-[#113e27]/20' 
-                    : 'bg-[#e6f4ea]/50 border-[#113e27]/20'
-                }`}>
-                  <p className={`text-[8px] font-bold uppercase tracking-wider mb-0.5 ${
-                    esDesestimado ? 'text-[#113e27]' : 'text-[#113e27]'
-                  }`}>
+                <div className="mb-3 p-1.5 rounded-md border bg-[#e6f4ea]/50 border-[#113e27]/20">
+                  <p className="text-[8px] font-bold uppercase tracking-wider mb-0.5 text-[#113e27]">
                     {esDesestimado ? 'Motivo' : 'Categoría'}
                   </p>
-                  <p className="text-[9px] font-extrabold text-slate-600 uppercase  tracking-wider leading-tight truncate">
+                  <p className="text-[9px] font-extrabold text-slate-600 uppercase tracking-wider leading-tight truncate">
                     {incidenteMostrar}
                   </p>
                 </div>
@@ -443,9 +438,7 @@ const ArchivoHistorico = ({
                   </button>
                   <button 
                     onClick={() => esDesestimado ? generarPDFDesestimada(alerta) : generarPDFTabulada(alerta)}
-                    className={`flex items-center justify-center gap-1 py-1.5 text-white rounded-md shadow-sm transition-all text-[11px] font-bold uppercase ${
-                      esDesestimado ? 'bg-[#113e27] hover:bg-[#164a2f] ' : 'bg-[#113e27] hover:bg-[#164a2f] '
-                    }`}
+                    className="flex items-center justify-center gap-1 py-1.5 text-white rounded-md shadow-sm transition-all text-[11px] font-bold uppercase bg-[#113e27] hover:bg-[#164a2f]"
                   >
                     <FaFilePdf size={9} /> PDF
                   </button>

@@ -43,7 +43,7 @@ function Tabulacion() {
   const cargarDatos = useCallback(async () => {
     setCargando(true);
     try {
-      // 1. Obtener alertas ya tabuladas desde tabulacion_caso con todos los campos
+      // 1. Obtener alertas ya tabuladas
       const { data: tabData, error: tabErr } = await supabase
         .from("tabulacion_caso")
         .select(`
@@ -112,7 +112,7 @@ function Tabulacion() {
 
       const idsTabulados = new Set((tabData || []).map(t => t.id_alerta));
 
-      // 2. Obtener asignaciones activas con alerta (pendientes) incluyendo el número de escalafón
+      // 2. Obtener todas las asignaciones activas (sin filtrar por estado de alerta)
       const { data: asigData, error: asigErr } = await supabase
         .from("asignacion_patrulla")
         .select(`
@@ -150,19 +150,22 @@ function Tabulacion() {
         return;
       }
 
-      const ESTADO_ATENDIDO = 3;
+      // Obtener alertas desestimadas
+      const { data: desestimadas, error: desErr } = await supabase
+        .from("alerta_desestimada")
+        .select("id_alerta");
+      if (desErr) console.error("Error al obtener desestimadas:", desErr);
+      const idsDesestimadas = new Set((desestimadas || []).map(d => d.id_alerta));
+
+      // Pendientes: todas las alertas con asignación que NO estén tabuladas
       const pendientes = (asigData || [])
-        .filter(a =>
-          a.alerta &&
-          a.alerta.id_estado_actual === ESTADO_ATENDIDO &&
-          !idsTabulados.has(a.alerta.id_alerta)
-        )
+        .filter(a => a.alerta && !idsTabulados.has(a.alerta.id_alerta))
         .map(a => {
           let clasificacion = a.alerta.contravenciones || a.alerta.delitos;
           if (!clasificacion) clasificacion = a.alerta.categoria || a.alerta.descripcion || "Sin clasificar";
           
-          // ✅ Obtener el número de escalafón del oficial asociado al patrullero
           const numeroEscalafon = a.patrullero?.oficial?.numero_escalafon || '—';
+          const estaDesestimada = idsDesestimadas.has(a.alerta.id_alerta);
           
           return {
             id: a.alerta.codigo_alerta || `ALT-${String(a.alerta.id_alerta).padStart(4, "0")}`,
@@ -174,9 +177,8 @@ function Tabulacion() {
             contravenciones: a.alerta.contravenciones,
             delitos: a.alerta.delitos,
             descripcion: a.alerta.descripcion || "",
-            // ✅ Cambio: mostrar número de escalafón en lugar de PAT-{id}
             patrulla: numeroEscalafon,
-            estado: "ATENDIDO",
+            estado: estaDesestimada ? "DESESTIMADA" : "ATENDIDO",
             ciudadano: a.alerta.usuario_ciudadano?.nombre_completo || "Ciudadano desconocido",
             ci: a.alerta.usuario_ciudadano?.ci || "—",
             celular: a.alerta.usuario_ciudadano?.celular || "—",
@@ -199,7 +201,11 @@ function Tabulacion() {
     const subscription = supabase
       .channel('tabulacion-realtime')
       .on('postgres_changes', 
-        { event: 'UPDATE', schema: 'public', table: 'alerta', filter: 'id_estado_actual=eq.3' }, 
+        { event: '*', schema: 'public', table: 'alerta' }, 
+        () => cargarDatos()
+      )
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'alerta_desestimada' }, 
         () => cargarDatos()
       )
       .on('postgres_changes', 
@@ -214,7 +220,7 @@ function Tabulacion() {
     cargarDatos();
   }, [cargarDatos]);
 
-  // Métricas
+  // Métricas (sin cambios)
   const metricas = useMemo(() => {
     const tabuladasHoy = tabuladas.filter(t =>
       t.fecha_tabulacion?.split("T")[0] === fechaHoy
@@ -253,10 +259,8 @@ function Tabulacion() {
     await cargarDatos();
   }, [cargarDatos]);
 
-  // Mostrar 4 tarjetas
   const ultimasTabuladas = useMemo(() => tabuladas.slice(0, 4), [tabuladas]);
 
-  // 🔥 FUNCIÓN PDF MEJORADA (incluye todos los campos)
   const handleGenerarPDF = (tab) => {
     const alerta = tab.alerta || {};
     const usuario = alerta.usuario_ciudadano || {};
@@ -371,29 +375,28 @@ function Tabulacion() {
     ventana.print();
   };
 
-  // Preparar datos para ArchivoHistorico
-const historicoAlertas = useMemo(() => {
-  return tabuladas.map(t => ({
-    id_alerta: t.id_alerta,   // ← AGREGAR ESTA LÍNEA
-    id: t.alerta?.codigo_alerta || `ALT-${String(t.id_alerta).padStart(4, "0")}`,
-    ciudadano: t.alerta?.usuario_ciudadano?.nombre_completo || "Anónimo",
-    fecha: t.fecha_tabulacion?.split("T")[0] || "—",
-    incidente: t.alerta?.contravenciones || t.alerta?.delitos || t.resultado_final || "Sin clasificar",
-    estado: "TABULADO",
-    motivoDesestimacion: null
-  }));
-}, [tabuladas]);
+  const historicoAlertas = useMemo(() => {
+    return tabuladas.map(t => ({
+      id_alerta: t.id_alerta,
+      id: t.alerta?.codigo_alerta || `ALT-${String(t.id_alerta).padStart(4, "0")}`,
+      ciudadano: t.alerta?.usuario_ciudadano?.nombre_completo || "Anónimo",
+      fecha: t.fecha_tabulacion?.split("T")[0] || "—",
+      incidente: t.alerta?.contravenciones || t.alerta?.delitos || t.resultado_final || "Sin clasificar",
+      estado: "TABULADO",
+      motivoDesestimacion: null
+    }));
+  }, [tabuladas]);
 
-if (verTodo) {
-  return (
-    <ArchivoHistorico
-      alertasTabuladas={historicoAlertas}
-      tabuladasCompletas={tabuladas}             // ← datos completos de tabulación
-      onGenerarPDFTabulada={handleGenerarPDF}    // ← función PDF existente
-      onBack={() => setVerTodo(false)}
-    />
-  );
-}
+  if (verTodo) {
+    return (
+      <ArchivoHistorico
+        alertasTabuladas={historicoAlertas}
+        tabuladasCompletas={tabuladas}
+        onGenerarPDFTabulada={handleGenerarPDF}
+        onBack={() => setVerTodo(false)}
+      />
+    );
+  }
 
   return (
     <div key={renderKey} className="-mt-4 px-1 min-h-screen bg-slate-50/50 font-sans text-left w-full py-4 space-y-5 animate-fadeIn pb-6">
@@ -433,15 +436,12 @@ if (verTodo) {
                 </div>
               </div>
 
-              {/* Contenedor con el estilo del primer componente */}
               <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col max-h-[618px]">
                 <h2 className="text-lg font-extrabold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wide flex-shrink-0">
                   Tabulación de Alertas
                 </h2>
 
-                {/* Scroll interno - igual que el primer componente */}
                 <div className="overflow-auto flex-1 min-h-0 -mx-4 md:mx-0 px-4 md:px-0">
-                  {/* ---------- TABLA CON LÍNEAS (estilo primer componente) ---------- */}
                   <table className="min-w-full border-collapse text-left">
                     <thead className="sticky top-0 bg-white z-10 shadow-sm">
                       <tr className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">
@@ -457,7 +457,7 @@ if (verTodo) {
                       {alertasPendientes.length === 0 ? (
                         <tr>
                           <td colSpan="6" className="text-center py-12 text-gray-400 font-medium">
-                            No hay alertas atendidas pendientes de tabulación
+                            No hay alertas pendientes de tabulación
                           </td>
                         </tr>
                       ) : (
@@ -491,14 +491,16 @@ if (verTodo) {
                                 </span>
                               </div>
                             </td>
-                           <td className="py-5 md:py-6 align-middle text-left">
-  <span className="font-bold text-[11px] tracking-wider text-slate-500 uppercase">
-    {alerta.patrulla}
-  </span>
-</td>
+                            <td className="py-5 md:py-6 align-middle text-left">
+                              <span className="font-bold text-[11px] tracking-wider text-slate-500 uppercase">
+                                {alerta.patrulla}
+                              </span>
+                            </td>
                             <td className="py-5 md:py-6 align-middle">
-                              <span className="inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-bold text-white tracking-wider bg-[#088226]">
-                                ATENDIDO
+                              <span className={`inline-flex justify-center w-24 py-1.5 rounded-md text-[9px] font-bold text-white tracking-wider ${
+                                alerta.estado === "DESESTIMADA" ? "bg-gray-500" : "bg-[#088226]"
+                              }`}>
+                                {alerta.estado}
                               </span>
                             </td>
                             <td className="px-3 md:px-4 py-5 md:py-6 align-middle">
@@ -524,42 +526,40 @@ if (verTodo) {
               </div>
             </div>
 
-          {/* Panel derecho de estadísticas - MEJORADO */}
-<div className="lg:w-1/4 bg-white p-5 rounded-2xl shadow-md border border-gray-100 flex flex-col h-[729px]">
-  <div className="mb-3">
-    <h2 className="text-base font-extrabold text-slate-800 uppercase">Alertas Comunes</h2>
-    <p className="text-[9px] font-bold text-slate-300 uppercase mt-1">Clasificaciones del hecho</p>
-    {/* Línea divisoria */}
-    <div className="border-b border-gray-100 mt-2"></div>
-  </div>
-  {metricas.ranking.length === 0 ? (
-    <p className="text-[10px] text-slate-300 font-black uppercase text-center mt-6">Sin datos aún</p>
-  ) : (
-    <div className="space-y-4 mt-2">
-      {metricas.ranking.slice(0, 10).map((item, idx) => {
-        const coloresVivos = [
-          "bg-red-500", "bg-blue-500", "bg-green-500", "bg-yellow-500",
-          "bg-purple-500", "bg-pink-500", "bg-indigo-500", "bg-teal-500",
-          "bg-orange-500", "bg-cyan-500"
-        ];
-        const colorClass = coloresVivos[idx % coloresVivos.length];
-        return (
-          <div key={idx} className="flex items-center justify-between p-2.5 h-12 bg-slate-50/50 rounded-md border border-transparent hover:border-slate-100 transition-all ">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className={`w-1 h-1 rounded-full ${colorClass} shrink-0 shadow-sm`} />
-              <span className="text-[11px] font-extrabold text-slate-600 uppercase leading-tight break-words">
-                {item.nombre}
-              </span>
+            <div className="lg:w-1/4 bg-white p-5 rounded-2xl shadow-md border border-gray-100 flex flex-col h-[729px]">
+              <div className="mb-3">
+                <h2 className="text-base font-extrabold text-slate-800 uppercase">Alertas Comunes</h2>
+                <p className="text-[9px] font-bold text-slate-300 uppercase mt-1">Clasificaciones del hecho</p>
+                <div className="border-b border-gray-100 mt-2"></div>
+              </div>
+              {metricas.ranking.length === 0 ? (
+                <p className="text-[10px] text-slate-300 font-black uppercase text-center mt-6">Sin datos aún</p>
+              ) : (
+                <div className="space-y-4 mt-2">
+                  {metricas.ranking.slice(0, 10).map((item, idx) => {
+                    const coloresVivos = [
+                      "bg-red-500", "bg-blue-500", "bg-green-500", "bg-yellow-500",
+                      "bg-purple-500", "bg-pink-500", "bg-indigo-500", "bg-teal-500",
+                      "bg-orange-500", "bg-cyan-500"
+                    ];
+                    const colorClass = coloresVivos[idx % coloresVivos.length];
+                    return (
+                      <div key={idx} className="flex items-center justify-between p-2.5 h-12 bg-slate-50/50 rounded-md border border-transparent hover:border-slate-100 transition-all ">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`w-1 h-1 rounded-full ${colorClass} shrink-0 shadow-sm`} />
+                          <span className="text-[11px] font-extrabold text-slate-600 uppercase leading-tight break-words">
+                            {item.nombre}
+                          </span>
+                        </div>
+                        <span className="text-[14px] font-black text-slate-800 ml-2 shrink-0 tracking-wider">{item.total}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <span className="text-[14px] font-black text-slate-800 ml-2 shrink-0 tracking-wider">{item.total}</span>
           </div>
-        );
-      })}
-    </div>
-  )}
-</div>
-</div>
-{/* Sección Alertas Tabuladas - 4 tarjetas (sin cambios) */}          
+
           <div className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-50 relative !mt-6">
             <button
               onClick={() => setVerTodo(true)}
@@ -618,6 +618,7 @@ if (verTodo) {
                               ubicacion: tab.alerta?.ubicacion,
                               contravenciones: tab.alerta?.contravenciones,
                               delitos: tab.alerta?.delitos,
+                              resultado_final: tab.resultado_final,
                               id_patrullero: tab.id_patrullero,
                               id_despachador: tab.id_despachador,
                               id_operador_receptor: tab.id_operador_receptor,
@@ -654,10 +655,6 @@ if (verTodo) {
               </div>
             )}
           </div>
-          
-
-          
-          
         </>
       )}
 
@@ -671,10 +668,11 @@ if (verTodo) {
 
       <FormularioTabulacion
         isOpen={isViewModalOpen}
-        onClose={() => setIsViewModalOpen(false)}
-        alerta={alertaVista}
-        readOnly={true}
-        onConfirm={() => {}}
+  onClose={() => setIsViewModalOpen(false)}
+  alerta={alertaVista}
+  readOnly={true}
+  onConfirm={() => {}}
+  clasificacionTabulador={alertaVista?.resultado_final}
       />
     </div>
   );

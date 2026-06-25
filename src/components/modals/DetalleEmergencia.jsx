@@ -51,18 +51,19 @@ const DetalleEmergencia = ({
 
   const debounceTimeout = useRef(null);
 
-  const guardarCambios = async (camposActualizados) => {
+  // Solo guarda la descripción automáticamente
+  const guardarDescripcion = async (texto) => {
     if (!datos?.id_alerta) return;
     try {
       const { error } = await supabase
         .from("alerta")
-        .update(camposActualizados)
+        .update({ descripcion: texto })
         .eq("id_alerta", datos.id_alerta);
       if (error) throw error;
-      setDatos((prev) => ({ ...prev, ...camposActualizados }));
+      setDatos((prev) => ({ ...prev, descripcion: texto }));
     } catch (err) {
-      console.error("Error guardando cambios:", err);
-      showToast("Error al guardar cambios", "error");
+      console.error("Error guardando descripción:", err);
+      showToast("Error al guardar la descripción", "error");
     }
   };
 
@@ -70,28 +71,25 @@ const DetalleEmergencia = ({
     setRelatoEditado(texto);
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
     debounceTimeout.current = setTimeout(() => {
-      guardarCambios({ descripcion: texto });
+      guardarDescripcion(texto);
     }, 800);
   };
 
-  const handleContravencionChange = async (valor) => {
+  // Handlers sin guardado automático
+  const handleContravencionChange = (valor) => {
     setContravencion(valor);
     setDelito("");
-    await guardarCambios({ contravenciones: valor, delitos: null });
   };
 
-  const handleDelitoChange = async (valor) => {
+  const handleDelitoChange = (valor) => {
     setDelito(valor);
     setContravencion("");
-    await guardarCambios({ delitos: valor, contravenciones: null });
   };
 
-  const handlePrioridadChange = async (valor) => {
+  const handlePrioridadChange = (valor) => {
     setPrioridad(valor);
-    await guardarCambios({ prioridad: valor });
   };
 
-  // Confirmar desestimación con justificación
   const confirmarDesestimo = async (motivoTexto, justificacion) => {
     setDesestimando(true);
     try {
@@ -158,9 +156,9 @@ const DetalleEmergencia = ({
       }
       setDatos(alertaData);
       setRelatoEditado(alertaData.descripcion || "");
-      setPrioridad(alertaData.prioridad || "");
-      setContravencion(alertaData.contravenciones || "");
-      setDelito(alertaData.delitos || "");
+      setPrioridad("");
+      setContravencion("");
+      setDelito("");
 
       const estadoNombre = await obtenerNombreEstado(
         alertaData.id_estado_actual,
@@ -347,8 +345,10 @@ const DetalleEmergencia = ({
     };
   };
 
-  // ✅ Línea modificada con valores por defecto
-  const { fecha: fechaFormateada = "—", hora: horaFormateada = "—" } = datos?.fecha_hora ? formatoFechaHoraBolivia(datos.fecha_hora) : { fecha: "—", hora: "—" };
+  const { fecha: fechaFormateada = "—", hora: horaFormateada = "—" } =
+    datos?.fecha_hora
+      ? formatoFechaHoraBolivia(datos.fecha_hora)
+      : { fecha: "—", hora: "—" };
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -404,9 +404,9 @@ const DetalleEmergencia = ({
             <FaSpinner className="animate-spin text-green-800 text-3xl" />
           </div>
         ) : (
-          <div className="overflow-y-auto p-6 bg-white">
+          <div className="p-7 overflow-y-auto bg-white">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
-              {/* COLUMNA IZQUIERDA (sin estiramiento forzado) */}
+              {/* COLUMNA IZQUIERDA */}
               <div className="flex flex-col gap-5">
                 {/* Ciudadano */}
                 <section>
@@ -579,7 +579,6 @@ const DetalleEmergencia = ({
                               onChange={(e) =>
                                 handleContravencionChange(e.target.value)
                               }
-                              disabled={!!delito}
                             >
                               <option value="">
                                 Seleccionar Contravención
@@ -602,7 +601,6 @@ const DetalleEmergencia = ({
                               onChange={(e) =>
                                 handleDelitoChange(e.target.value)
                               }
-                              disabled={!!contravencion}
                             >
                               <option value="">Seleccionar Delito</option>
                               {delitos.map((d) => (
@@ -656,10 +654,10 @@ const DetalleEmergencia = ({
         <div className="p-4 bg-slate-50 border-t flex gap-3 w-full shrink-0">
           <button
             onClick={() => setShowDesestimoPanel(!showDesestimoPanel)}
-            className={`w-2/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[11px] tracking-wider border transition-all shadow-sm ${
+            className={`w-2/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[11px] tracking-wider border-2 transition-all shadow-md ${
               showDesestimoPanel
-                ? "bg-slate-500 text-white shadow-md hover:bg-slate-600"
-                : "bg-white text-[#C13100] border-[#C13100] hover:bg-[#fff8f5]"
+                ? "bg-slate-200 hover:bg-slate-300"
+                : "bg-slate-200 hover:bg-slate-300"
             }`}
           >
             {showDesestimoPanel ? "Cancelar" : "Desestimar alerta"}
@@ -668,15 +666,15 @@ const DetalleEmergencia = ({
           <button
             onClick={showDesestimoPanel ? () => {} : handleEnviarDespacho}
             disabled={cargando}
-            className={`w-3/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[9px] tracking-wider shadow-md flex items-center justify-center gap-2 transition-all ${
+            className={`w-3/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[11px] tracking-wider shadow-md flex items-center justify-center gap-2 transition-all ${
               showDesestimoPanel
                 ? "bg-slate-300 cursor-not-allowed opacity-50"
-                : "bg-[#113e27] hover:bg-[#b43c14] text-white"
+                : "bg-[#113e27] hover:bg-[#164a2f] text-white"
             }`}
           >
             <FaCheckCircle size={12} />{" "}
             {showDesestimoPanel
-              ? "Confirme o cancele arriba"
+              ? "Enviar a Despacho"
               : "Enviar a Despacho"}
           </button>
         </div>

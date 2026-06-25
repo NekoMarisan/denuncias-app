@@ -5,7 +5,7 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: window.sessionStorage,   // 🔥 clave: usa sessionStorage por pestaña
+    storage: window.sessionStorage, 
     autoRefreshToken: true,
     persistSession: true,
   },

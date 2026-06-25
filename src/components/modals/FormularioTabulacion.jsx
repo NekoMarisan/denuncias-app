@@ -6,9 +6,11 @@ import {
 import { supabase } from "../../services/supabase";
 import { contravenciones, delitos } from "../../constants/CategoriasDelitos";
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext'; 
 
 const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = false, clasificacionTabulador = null, derivacion = null }) => {
   const { user } = useAuth();
+  const { showToast } = useToast(); 
 
   const [tipoSeleccion, setTipoSeleccion] = useState(null);
   const [contravencionValue, setContravencionValue] = useState('');
@@ -142,9 +144,56 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
             setTipoSeleccion('delito');
           }
         } else {
-          setContravencionValue('');
-          setDelitoValue('');
-          setTipoSeleccion(null);
+          const { data: tabDB } = await supabase
+            .from("tabulacion_caso")
+            .select("resultado_final")
+            .eq("id_alerta", idAlerta)
+            .maybeSingle();
+          if (tabDB?.resultado_final) {
+            const val = tabDB.resultado_final.trim();
+            const esContra = contravenciones.some(c => c.trim().toLowerCase() === val.toLowerCase());
+            if (esContra) {
+              setContravencionValue(val);
+              setDelitoValue('');
+              setTipoSeleccion('contravencion');
+            } else {
+              setDelitoValue(val);
+              setContravencionValue('');
+              setTipoSeleccion('delito');
+            }
+          } else {
+            setContravencionValue('');
+            setDelitoValue('');
+            setTipoSeleccion(null);
+          }
+        }
+
+        // ✅ Cargar clasificación original desde la alerta (contravenciones/delitos)
+        const contraOriginal = alerta?.contravenciones || null;
+        const delitoOriginal = alerta?.delitos || null;
+
+        if (contraOriginal) {
+          setClasificacionOriginal(contraOriginal);
+          setTipoClasificacionOriginal("CONTRAVENCIÓN");
+        } else if (delitoOriginal) {
+          setClasificacionOriginal(delitoOriginal);
+          setTipoClasificacionOriginal("DELITO");
+        } else {
+          const { data: alertaDB } = await supabase
+            .from("alerta")
+            .select("contravenciones, delitos")
+            .eq("id_alerta", idAlerta)
+            .maybeSingle();
+          if (alertaDB?.contravenciones) {
+            setClasificacionOriginal(alertaDB.contravenciones);
+            setTipoClasificacionOriginal("CONTRAVENCIÓN");
+          } else if (alertaDB?.delitos) {
+            setClasificacionOriginal(alertaDB.delitos);
+            setTipoClasificacionOriginal("DELITO");
+          } else {
+            setClasificacionOriginal("NO CLASIFICADA");
+            setTipoClasificacionOriginal("CLASIFICACIÓN");
+          }
         }
 
         if (derivacion) setRemisionCaso(derivacion);
@@ -153,9 +202,6 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
     }
   }, [readOnly, isOpen, alerta, clasificacionTabulador, derivacion, idAlerta]);
 
-  // --------------------------------------------------------------
-  // Carga normal (cuando no es readOnly)
-  // --------------------------------------------------------------
   useEffect(() => {
     if (!isOpen || !idAlerta || readOnly) return;
     if (isLoadingRef.current) return;
@@ -275,6 +321,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
 
         const contraOriginal = alerta?.contravenciones || null;
         const delitoOriginal = alerta?.delitos || null;
+
         if (contraOriginal) {
           setClasificacionOriginal(contraOriginal);
           setTipoClasificacionOriginal("CONTRAVENCIÓN");
@@ -282,8 +329,21 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
           setClasificacionOriginal(delitoOriginal);
           setTipoClasificacionOriginal("DELITO");
         } else {
-          setClasificacionOriginal("NO CLASIFICADA");
-          setTipoClasificacionOriginal("CLASIFICACIÓN");
+          const { data: alertaDB } = await supabase
+            .from("alerta")
+            .select("contravenciones, delitos")
+            .eq("id_alerta", idAlerta)
+            .maybeSingle();
+          if (alertaDB?.contravenciones) {
+            setClasificacionOriginal(alertaDB.contravenciones);
+            setTipoClasificacionOriginal("CONTRAVENCIÓN");
+          } else if (alertaDB?.delitos) {
+            setClasificacionOriginal(alertaDB.delitos);
+            setTipoClasificacionOriginal("DELITO");
+          } else {
+            setClasificacionOriginal("NO CLASIFICADA");
+            setTipoClasificacionOriginal("CLASIFICACIÓN");
+          }
         }
 
       } catch (err) {
@@ -364,60 +424,97 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
     }
   };
 
+  // ✅ HANDLE SUBMIT con validaciones y toast
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (readOnly) return;
+
+    // Validar Resumen Administrativo
     if (!resumenAdministrativo.trim()) {
-      alert("El resumen administrativo es obligatorio.");
+      showToast("❌ Complete el campo Resumen Administrativo", "error");
       return;
+    }
+
+    // Validar que haya una clasificación final (ya sea seleccionada o la original)
+    let clasificacionFinal = contravencionValue || delitoValue;
+    if (!clasificacionFinal) {
+      if (clasificacionOriginal && clasificacionOriginal !== "NO CLASIFICADA") {
+        clasificacionFinal = clasificacionOriginal;
+      } else {
+        showToast("⚠️ Debe seleccionar una Contravención o un Delito, o asegurar que la alerta tenga una clasificación original válida.", "error");
+        return;
+      }
     }
 
     setGuardando(true);
     try {
       const idTabulador = user?.id_oficial || alerta?.id_tabulador || null;
 
-      let clasificacionFinal = contravencionValue || delitoValue;
-      if (!clasificacionFinal) {
-        clasificacionFinal = clasificacionOriginal !== "NO CLASIFICADA" ? clasificacionOriginal : null;
+      // Validar y parsear coordenadas
+      const lat = latitudFinal ? parseFloat(latitudFinal) : null;
+      const lng = longitudFinal ? parseFloat(longitudFinal) : null;
+      if (latitudFinal && isNaN(lat)) {
+        showToast("Latitud inválida", "error");
+        setGuardando(false);
+        return;
       }
+      if (longitudFinal && isNaN(lng)) {
+        showToast("Longitud inválida", "error");
+        setGuardando(false);
+        return;
+      }
+
+      const urbana = areaUrbana || null;
+      const rural = areaRural || null;
+
+      const nuevoRegistro = {
+        id_alerta: idAlerta,
+        id_asignacion: idAsignacion ?? null,
+        id_patrullero: idPatrullero ?? null,
+        id_operador_receptor: idOperadorReceptor ?? null,
+        id_despachador: idDespachador ?? null,
+        id_tabulador: idTabulador,
+        latitud: lat,
+        longitud: lng,
+        comuna: comuna || null,
+        distrito: distrito || null,
+        subdistrito: subdistrito || null,
+        area_urbana: urbana,
+        area_rural: rural,
+        protagonistas: protagonistas || null,
+        remision_caso: remisionCaso,
+        resumen_administrativo: resumenAdministrativo,
+        resultado_final: clasificacionFinal,
+        fecha_tabulacion: new Date().toISOString(),
+      };
 
       const { error } = await supabase
         .from("tabulacion_caso")
-        .insert([{
-          id_alerta: idAlerta,
-          id_asignacion: idAsignacion ?? null,
-          id_patrullero: idPatrullero ?? null,
-          id_operador_receptor: idOperadorReceptor ?? null,
-          id_despachador: idDespachador ?? null,
-          id_tabulador: idTabulador,
-          id_reporte: null,
-          latitud: latitudFinal ? parseFloat(latitudFinal) : null,
-          longitud: longitudFinal ? parseFloat(longitudFinal) : null,
-          comuna: comuna || null,
-          distrito: distrito || null,
-          subdistrito: subdistrito || null,
-          area_urbana: areaUrbana || null,
-          area_rural: areaRural || null,
-          protagonistas: protagonistas || null,
-          remision_caso: remisionCaso,
-          resumen_administrativo: resumenAdministrativo,
-          resultado_final: clasificacionFinal,
-          id_estado_final: null,
-          fecha_tabulacion: new Date().toISOString(),
-        }]);
+        .insert([nuevoRegistro]);
 
       if (error) throw error;
 
-      await supabase
+      // Actualizar estado de la alerta a 4 (TABULADA / CERRADA)
+      const { error: updateError } = await supabase
         .from("alerta")
         .update({ id_estado_actual: 4 })
         .eq("id_alerta", idAlerta);
 
+      if (updateError) throw updateError;
+
+      await supabase.from("log_actividad").insert([{
+        id_oficial: idTabulador,
+        id_alerta: idAlerta,
+        accion: "TABULACIÓN",
+        descripcion: `Tabuló caso #${idAlerta} — Resultado: ${clasificacionFinal || "—"}`,
+      }]);
+
+      showToast("Alerta tabulado correctamente", "success");
       if (onConfirm) onConfirm(idAlerta);
       onClose();
     } catch (err) {
       console.error("Error al guardar tabulación:", err);
-      alert("Error: " + err.message);
+      showToast("Error al guardar: " + err.message, "error");
     } finally {
       setGuardando(false);
     }
@@ -463,7 +560,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
     });
   };
 
-  // Función para dividir nombre en dos líneas (primera palabra arriba, resto abajo)
+  // Función para dividir nombre en dos líneas
   const splitNameLines = (fullName) => {
     if (!fullName || fullName === '—') return { first: fullName, last: '' };
     const parts = fullName.trim().split(' ');
@@ -471,12 +568,15 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
     return { first: parts[0], last: parts.slice(1).join(' ') };
   };
 
+  const inputEditableClass = "w-full bg-slate-100/40 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-500 outline-none focus:ring-1 focus:ring-slate-300 transition-all";
+  const inputReadonlyClass = "w-full bg-slate-100/40 border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-500 outline-none";
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
       
       <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[85vh]">
-        {/* BARRA SUPERIOR - con botón cerrar (X) */}
+        {/* BARRA SUPERIOR */}
         <div className="bg-[#113e27] py-4 px-6 text-white w-full shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -529,21 +629,21 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
               <HeaderSection icon={<FaFileAlt className="text-[#0C3DC2] text-[14px]"/>} title="DATOS DE LA ALERTA" bgColor="bg-blue-50 rounded-sm" />
               <div className="grid grid-cols-2 gap-3 flex-1">
                 <div className="col-span-2">
-                  <Field label="NOMBRE DEL CIUDADANO" value={ciudadanoData?.nombre_completo || alerta?.ciudadano || "—"} readOnly required />
+                  <LabelField label="NOMBRE DEL CIUDADANO" value={ciudadanoData?.nombre_completo || alerta?.ciudadano || "—"} readOnly required />
                 </div>
-                <Field label="CÉDULA" value={ciudadanoData?.ci || alerta?.ci || "—"} readOnly />
-                <Field label="CELULAR" value={ciudadanoData?.celular || alerta?.celular || "—"} readOnly />
+                <LabelField label="CÉDULA" value={ciudadanoData?.ci || alerta?.ci || "—"} readOnly />
+                <LabelField label="CELULAR" value={ciudadanoData?.celular || alerta?.celular || "—"} readOnly />
                 <div className="col-span-2">
-                  <Field
+                  <LabelField
                     label="CLASIFICACIÓN ORIGINAL DEL HECHO"
                     value={clasificacionOriginal}
                     readOnly
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="text-xs font-medium text-slate-500 ml-2">DESCRIPCIÓN DEL HECHO</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2">DESCRIPCIÓN DEL HECHO</label>
                   <textarea readOnly value={alerta?.descripcion || ""}
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-medium italic text-slate-400 outline-none mt-1 h-20 resize-none" />
+                    className="w-full bg-slate-100/40 border border-slate-100 rounded-xl p-3 text-xs font-medium italic text-slate-500 outline-none mt-1 h-20 resize-none" />
                 </div>
               </div>
             </section>
@@ -553,43 +653,43 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
               <HeaderSection icon={<FaMapMarkerAlt className="text-green-900 text-sm"/>} title="DIRECCIÓN Y DESCRIPCIÓN" bgColor="bg-green-50" />
               <div className="grid grid-cols-2 gap-3 flex-1">
                 <div className="space-y-0.5">
-                  <label className="text-xs font-medium text-slate-500 ml-1.5">ÁREA URBANA</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">ÁREA URBANA</label>
                   <input value={areaUrbana} onChange={e => !readOnly && setAreaUrbana(e.target.value)} placeholder="Zona de área urbana"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs font-semibold text-slate-500 outline-none focus:ring-1 focus:ring-green-600"
+                    className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
                 <div className="space-y-0.5">
-                  <label className="text-xs font-medium text-slate-500 ml-1.5">ÁREA RURAL</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">ÁREA RURAL</label>
                   <input value={areaRural} onChange={e => !readOnly && setAreaRural(e.target.value)} placeholder="Zona de área rural"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs font-semibold text-slate-500 outline-none focus:ring-1 focus:ring-green-600"
+                    className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
                 <div className="space-y-0.5">
-                  <label className="text-xs font-medium text-slate-500 ml-1.5">COMUNA</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">COMUNA</label>
                   <input value={comuna} onChange={e => !readOnly && setComuna(e.target.value)} placeholder="Comuna"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs font-semibold text-slate-500"
+                    className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
                 <div className="space-y-0.5">
-                  <label className="text-xs font-medium text-slate-500 ml-1.5">DISTRITO</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">DISTRITO</label>
                   <input value={distrito} onChange={e => !readOnly && setDistrito(e.target.value)} placeholder="Distrito"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs font-semibold text-slate-500"
+                    className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
                 <div className="col-span-2 space-y-0.5">
-                  <label className="text-xs font-medium text-slate-500 ml-1.5">SUBDISTRITO</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">SUBDISTRITO</label>
                   <input value={subdistrito} onChange={e => !readOnly && setSubdistrito(e.target.value)} placeholder="Subdistrito"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs font-semibold text-slate-500"
+                    className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
-                <Field label="LATITUD" value={latitudFinal || "—"} readOnly />
-                <Field label="LONGITUD" value={longitudFinal || "—"} readOnly />
+                <LabelField label="LATITUD" value={latitudFinal || "—"} readOnly />
+                <LabelField label="LONGITUD" value={longitudFinal || "—"} readOnly />
               </div>
             </section>
 
             {/* CLASIFICACIÓN DEL HECHO (TABULADOR) */}
             <section className={cardStyle}>
-              <HeaderSection icon={<FaShieldAlt className="text-red-500 text-sm"/>} title="CLASIFICACIÓN DEL HECHO (TABULADOR)" bgColor="bg-red-50" />
+              <HeaderSection icon={<FaShieldAlt className="text-red-500 text-sm"/>} title="CLASIFICACIÓN DEL HECHO" bgColor="bg-red-50" />
               <div className="space-y-4 flex-1 justify-center flex flex-col">
                 <SelectField
                   label="CONTRAVENCIÓN (RP)"
@@ -607,7 +707,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
                 />
                 <div className="mt-2 p-2 bg-slate-50 rounded-xl text-center">
                   <p className="text-[11px] font-bold text-slate-400 tracking-wider uppercase">
-                    {contravencionValue || delitoValue || (readOnly && clasificacionTabulador) ? "CLASIFICACIÓN FINAL" : "CLASIFICACIÓN A GUARDAR"}
+                    {contravencionValue || delitoValue || (readOnly && clasificacionTabulador) ? "CLASIFICACIÓN FINAL" : "CLASIFICACIÓN ACTUAL"}
                   </p>
                   <p className="mt-1 tracking-wide text-[11px] font-bold text-slate-700 uppercase">
                     {clasificacionActual ? (
@@ -617,24 +717,24 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
                     )}
                   </p>
                   {!readOnly && !contravencionValue && !delitoValue && clasificacionOriginal !== "NO CLASIFICADA" && (
-                    <p className="text-[8px] text-amber-600 mt-1">(Se usará la clasificación original del operador)</p>
+                    <p className="text-[11px] text-slate-400 mt-1">(Clasificación a guardar)</p>
                   )}
                 </div>
               </div>
             </section>
 
             {/* INFORME POLICIAL */}
-            <section className={`${cardStyle} !bg-amber-50/30 !border-amber-100`}>
-              <HeaderSection icon={<FaShieldAlt className="text-amber-600 text-sm"/>} title="INFORME POLICIAL" bgColor="bg-amber-100" />
+            <section className={`${cardStyle} !bg-white !border-slate-200 shadow-md p-6`}>
+              <HeaderSection icon={<FaShieldAlt className="text-amber-600"/>} title="INFORME POLICIAL" bgColor="bg-amber-50" />
               <div className="grid grid-cols-2 gap-3 flex-1">
-                <Field label="NÚMERO DE ESCALAFÓN" value={escalafon} readOnly />
-                <Field label="PLACA" value={placa} readOnly />
-                <Field label="EPI" value={epi} readOnly />
+                <LabelField label="NÚMERO DE ESCALAFÓN" value={escalafon} readOnly />
+                <LabelField label="PLACA" value={placa} readOnly />
+                <LabelField label="EPI" value={epi} readOnly />
                 <div className="col-span-2 space-y-0.5">
-                  <label className="text-xs font-medium text-slate-500 ml-2">REPORTE PATRULLERO</label>
-                  <div className="mt-1 p-3 bg-white border border-amber-100 rounded-xl text-xs italic text-slate-400 shadow-inner h-24 overflow-y-auto">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2">REPORTE PATRULLERO</label>
+                  <div className="mt-1 p-3 bg-white border border-slate-200 rounded-lg text-xs italic text-slate-400 h-20 overflow-y-auto">
                     {reportePatrullero ? (
-                      <p className="text-xs text-slate-600 font-medium">{reportePatrullero}</p>
+                      <p className="text-[11px] text-slate-600 font-medium">{reportePatrullero}</p>
                     ) : (
                       <p className="text-xs text-slate-400">"NO SE HA REGISTRADO UN REPORTE DEL PATRULLERO."</p>
                     )}
@@ -650,40 +750,40 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-3">
                 <div className="space-y-0.5">
-                  <label className="text-xs font-medium text-slate-500 ml-2">PROTAGONISTAS</label>
-                  <input required value={protagonistas} onChange={e => !readOnly && setProtagonistas(e.target.value)} placeholder="Nombres..."
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs font-semibold text-slate-500 outline-none focus:ring-1 focus:ring-green-600"
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2">PROTAGONISTAS</label>
+                  <input value={protagonistas} onChange={e => !readOnly && setProtagonistas(e.target.value)} placeholder="Nombres..."
+                    className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
                 <div className="space-y-0.5">
-                  <label className="text-xs font-medium text-slate-500 ml-2">REMISIÓN DEL CASO (DERIVACIÓN)</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2">REMISIÓN DEL CASO (DERIVACIÓN)</label>
                   <input
                     value={remisionCaso}
                     onChange={e => !readOnly && !isDerivacionLocked && setRemisionCaso(e.target.value)}
                     placeholder="Ej: FELCC, Fiscalía, Bomberos..."
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs font-semibold text-slate-500"
+                    className={(!readOnly && !isDerivacionLocked) ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly || isDerivacionLocked}
                   />
                 </div>
               </div>
-              <div className="flex flex-col">
-                <label className="text-xs font-medium text-slate-500 ml-2 mb-1">RESUMEN ADMINISTRATIVO *</label>
-                <textarea required value={resumenAdministrativo} onChange={e => !readOnly && setResumenAdministrativo(e.target.value)}
+              <div className="flex flex-col mt-1.5">
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2 mb-1">RESUMEN ADMINISTRATIVO</label>
+                <textarea value={resumenAdministrativo} onChange={e => !readOnly && setResumenAdministrativo(e.target.value)}
                   placeholder="Resumen administrativo obligatorio..."
-                  className="w-full bg-slate-50 border border-purple-100 rounded-xl p-3 text-xs font-medium text-slate-500 outline-none focus:ring-1 focus:ring-slate-400 focus:bg-white transition-all shadow-sm flex-1 min-h-[100px]"
+                  className={`${!readOnly ? inputEditableClass : inputReadonlyClass} min-h-[114px] resize-y`}
                   disabled={readOnly} />
               </div>
             </div>
           </section>
 
-          {/* HISTORIAL DE PROCESO - estilo tarjetas en una sola fila */}
+          {/* HISTORIAL DE PROCESO */}
           <div className="pt-6 px-2 mt-4">
-            <h2 className="flex items-center gap-1.5 font-black text-slate-500 uppercase text-[9px] tracking-wider mb-5">
-              <FaHistory className="text-[#1a5336] text-xs" /> HISTORIAL DE PROCESO
+            <h2 className="flex items-center gap-3 font-bold text-slate-400 uppercase text-[11px] tracking-wider mb-5">
+               HISTORIAL DE PROCESO
             </h2>
-            <div className="flex flex-wrap md:flex-nowrap justify-center gap-3">
+            <div className="flex flex-wrap md:flex-nowrap justify-center gap-5">
               <HistoryCard 
-                role="OPERADOR RECEPTOR" 
+                role="OPERADOR" 
                 name={nombreOperador} 
                 icon={<FaUser size={12} />} 
                 splitName={splitNameLines(nombreOperador)}
@@ -717,7 +817,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
               {readOnly ? "CERRAR" : "DESCARTAR"}
             </button>
             {!readOnly && (
-              <button type="submit" disabled={guardando}
+              <button type="submit" disabled={guardando} onClick={handleSubmit}
                 className="px-6 py-2.5 bg-[#1a5336] hover:bg-[#133d28] text-white font-black rounded-xl uppercase text-[9px] tracking-[0.15em] transition-all shadow flex items-center gap-2 disabled:opacity-60">
                 {guardando && <FaSpinner className="animate-spin" size={10} />}
                 {guardando ? "GUARDANDO..." : "FINALIZAR TABULACIÓN"}
@@ -730,7 +830,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
   );
 };
 
-// Componentes auxiliares
+// Componentes auxiliares (modificados para usar las nuevas clases de label)
 const HeaderSection = memo(({ icon, title, bgColor }) => (
   <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-4 shrink-0">
     <div className={`w-7 h-7 ${bgColor} rounded-lg flex items-center justify-center`}>{icon}</div>
@@ -740,37 +840,37 @@ const HeaderSection = memo(({ icon, title, bgColor }) => (
 
 const SelectField = memo(({ label, options, value, onChange, disabled }) => (
   <div className="flex flex-col">
-    <label className="text-xs font-medium text-slate-500 ml-2 mb-1">{label}</label>
+    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2 mb-1">{label}</label>
     <select value={value} onChange={onChange} disabled={disabled}
-      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-500 outline-none focus:ring-1 focus:ring-[#1a5336] transition-all disabled:opacity-60 disabled:bg-gray-100">
-      <option value="">SELECCIONE...</option>
+      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#1a5336] transition-all disabled:opacity-60 disabled:bg-gray-100 disabled:border-slate-100">
+      <option value="">Seleccionar...</option>
       {options.map((item, i) => <option key={i} value={item}>{item}</option>)}
     </select>
   </div>
 ));
 
-const Field = memo(({ label, value, readOnly = true, required = false }) => (
+// Componente LabelField unificado para campos de solo lectura (ahora con label estilizado)
+const LabelField = memo(({ label, value, readOnly = true, required = false }) => (
   <div className="space-y-0.5">
-    <label className="text-xs font-medium text-slate-500 ml-1.5 tracking-tight">{label}</label>
+    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">{label}</label>
     <input
       required={required}
       type="text"
       readOnly={readOnly}
       value={value || '—'}
-      className="w-full rounded-xl p-2.5 text-xs font-bold outline-none border bg-slate-100/40 border-slate-100 text-slate-500"
+      className="w-full rounded-xl p-2.5 text-xs font-bold outline-none border bg-slate-100/40 border-slate-100 text-slate-600"
     />
   </div>
 ));
 
-// Nuevo componente HistoryCard con nombre en dos líneas
 const HistoryCard = memo(({ role, name, icon, highlight, splitName }) => {
   return (
-    <div className={`flex-1 flex flex-col items-center min-w-[80px] rounded-xl p-2 transition-all ${highlight ? 'bg-green-50 border border-green-200 shadow-md' : 'bg-white border border-slate-100 shadow-sm'}`}>
+    <div className={`flex-1 flex flex-col items-center min-w-[96px] rounded-xl p-2 transition-all ${highlight ? 'bg-green-50 border border-green-200 shadow-md' : 'bg-white border border-slate-300 shadow-md'}`}>
       <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${highlight ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
         {icon}
       </div>
-      <p className="text-[9px] font-black text-slate-500 uppercase text-center">{role}</p>
-      <div className="text-center mt-0.5">
+      <p className="text-[9px] font-bold text-slate-400 uppercase text-center">{role}</p>
+      <div className="text-center mt-1">
         <p className={`text-[9px] font-bold uppercase leading-tight ${highlight ? 'text-green-700' : 'text-slate-600'}`}>
           {splitName.first}
         </p>

@@ -1,15 +1,130 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { LuZoomIn } from "react-icons/lu";
-import { FaLock } from "react-icons/fa";
+import { FaLock, FaSpinner } from "react-icons/fa";
 import DetalleAlertaModal from "../components/modals/DetalleAlerta";
 import DetalleEmergencia from "../components/modals/DetalleEmergencia";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+
+const cacheDuracionAudio = new Map();
+
+const AudioDuration = ({ audioUrl }) => {
+  const [duracion, setDuracion] = useState(() => cacheDuracionAudio.get(audioUrl) || null);
+  const [cargando, setCargando] = useState(false);
+  const [errorCarga, setErrorCarga] = useState(false);
+
+  useEffect(() => {
+    if (!audioUrl) {
+      setDuracion(null);
+      setErrorCarga(false);
+      return;
+    }
+
+    if (cacheDuracionAudio.has(audioUrl)) {
+      setDuracion(cacheDuracionAudio.get(audioUrl));
+      setCargando(false);
+      setErrorCarga(false);
+      return;
+    }
+
+    let cancelado = false;
+    setCargando(true);
+    setErrorCarga(false);
+
+    const audio = new Audio();
+    audio.preload = "metadata";
+
+    const guardarDuracion = (segundos) => {
+      if (cancelado) return;
+      const mins = Math.floor(segundos / 60);
+      const secs = Math.floor(segundos % 60);
+      const texto = mins > 0 ? `${mins}:${secs.toString().padStart(2, "0")}` : `${secs}s`;
+      cacheDuracionAudio.set(audioUrl, texto);
+      setDuracion(texto);
+      setCargando(false);
+    };
+
+    const handleLoadedMetadata = () => {
+      const segundos = audio.duration;
+      // Bug conocido del navegador con audios grabados (webm/opus de MediaRecorder):
+      // a veces reporta duration = Infinity. Forzamos el cálculo real con este truco.
+      if (!isFinite(segundos)) {
+        audio.currentTime = 1e101;
+        audio.addEventListener(
+          "timeupdate",
+          function onTimeUpdate() {
+            audio.removeEventListener("timeupdate", onTimeUpdate);
+            audio.currentTime = 0;
+            if (isFinite(audio.duration)) {
+              guardarDuracion(audio.duration);
+            } else if (!cancelado) {
+              setErrorCarga(true);
+              setCargando(false);
+            }
+          },
+          { once: true }
+        );
+        return;
+      }
+      guardarDuracion(segundos);
+    };
+
+    const handleError = () => {
+      if (!cancelado) {
+        setErrorCarga(true);
+        setCargando(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      if (!cancelado && !cacheDuracionAudio.has(audioUrl)) {
+        setErrorCarga(true);
+        setCargando(false);
+      }
+    }, 8000);
+
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("error", handleError);
+    audio.src = audioUrl;
+
+    return () => {
+      cancelado = true;
+      clearTimeout(timeoutId);
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("error", handleError);
+      audio.pause();
+      audio.src = "";
+    };
+  }, [audioUrl]);
+
+  if (!audioUrl) return <span className="text-slate-400">—</span>;
+  if (cargando) return <FaSpinner className="animate-spin text-slate-400" size={14} />;
+  if (duracion) return <span className="text-sm font-bold text-slate-700">{duracion}</span>;
+  return <span className="text-slate-400" title={errorCarga ? "No se pudo leer la duración" : undefined}>—</span>;
+};
+
+const calcularTiempoTranscurrido = (fechaHoraISO) => {
+  if (!fechaHoraISO) return "—";
+  const fecha = new Date(fechaHoraISO);
+  const ahora = new Date();
+  const diffMs = ahora - fecha;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHoras = Math.floor(diffMin / 60);
+  const diffDias = Math.floor(diffHoras / 24);
+
+  if (diffMin < 1) return "hace unos segundos";
+  if (diffMin < 60) return `hace ${diffMin} minuto${diffMin !== 1 ? "s" : ""}`;
+  if (diffHoras < 24) return `hace ${diffHoras} hora${diffHoras !== 1 ? "s" : ""}`;
+  if (diffDias < 7) return `hace ${diffDias} día${diffDias !== 1 ? "s" : ""}`;
+  return fecha.toLocaleDateString("es-BO");
+};
 
 function GestionAlertas() {
   const location = useLocation();
   const { user } = useAuth();
+  const { showToast } = useToast();
 
   const [tabActiva, setTabActiva] = useState("emergencia");
   const [mostrarModal, setMostrarModal] = useState(false);
@@ -33,22 +148,19 @@ function GestionAlertas() {
         id: item.id_alerta,
         ciudadano: item.usuario_ciudadano?.nombre_completo || `Usuario #${item.id_usuario}`,
         ubicacion: item.ubicacion || "Sin ubicación",
-        fecha: item.fecha_hora
-          ? new Date(item.fecha_hora).toLocaleDateString("es-BO")
-          : "—",
+        fecha: item.fecha_hora ? new Date(item.fecha_hora).toLocaleDateString("es-BO") : "—",
         hora: item.fecha_hora
-          ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
+          ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })
           : "—",
         descripcion: item.descripcion || "",
         categoria: item.categoria || "",
         audio_30s: item.audio_30s || null,
         prioridad: item.prioridad || "Media",
         codigo: item.codigo_alerta || "",
+        fecha_hora: item.fecha_hora,
         bloqueadoPor: item.bloqueado_por || null,
         bloqueadoRol: item.bloqueado_rol || null,
+        bloqueadoNombre: item.oficial_bloqueador?.nombre_completo || null,
       };
 
       if (item.categoria === "Panico") {
@@ -61,20 +173,25 @@ function GestionAlertas() {
     return { panico, ciudadanas };
   };
 
-  const cargarAlertas = async () => {
-    setCargando(true);
+const liberarBloqueos = async () => {
+    const idOficialActivo = alertaSeleccionadaRef.current ? user?.id_oficial : null;
+    let query = supabase
+      .from("alerta")
+      .update({ bloqueado_por: null, bloqueado_en: null, bloqueado_rol: null })
+      .eq("id_estado_actual", 1)
+      .lt("bloqueado_en", new Date(Date.now() - 8000).toISOString())
+      .not("bloqueado_por", "is", null);
+    if (idOficialActivo) query = query.neq("bloqueado_por", idOficialActivo);
+    await query;
+  };
+
+  const cargarAlertas = async (silencioso = false) => {
+    if (!silencioso) setCargando(true);
     setErrorCarga(null);
     try {
       const { data, error } = await supabase
         .from("alerta")
-        .select(
-          `
-          *,
-          usuario_ciudadano (
-            nombre_completo
-          )
-        `,
-        )
+        .select(`*, usuario_ciudadano (nombre_completo), oficial_bloqueador:bloqueado_por (nombre_completo)`)
         .eq("id_estado_actual", 1)
         .order("fecha_hora", { ascending: false });
 
@@ -97,22 +214,37 @@ function GestionAlertas() {
     }
   };
 
-  useEffect(() => {
-    cargarAlertas();
-  }, []);
+const mostrarModalRef = useRef(false);
+  const alertaSeleccionadaRef = useRef(null);
+
+  // Sincronización inmediata (no en useEffect para evitar delay de un render)
+  mostrarModalRef.current = mostrarModal;
+  alertaSeleccionadaRef.current = alertaSeleccionada;
 
   useEffect(() => {
+    cargarAlertas();
+
     const canal = supabase
       .channel("alertas-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "alerta" },
-        () => {
-          cargarAlertas();
-        },
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "alerta" }, () => {
+        if (!mostrarModalRef.current) {
+          cargarAlertas(true);
+        }
+      })
       .subscribe();
-    return () => supabase.removeChannel(canal);
+
+    // Cada 5s libera bloqueos vencidos y recarga si no hay modal abierto
+    const intervalo = setInterval(async () => {
+      await liberarBloqueos();
+      if (!mostrarModalRef.current) {
+        cargarAlertas(true);
+      }
+    }, 5000);
+
+    return () => {
+      supabase.removeChannel(canal);
+      clearInterval(intervalo);
+    };
   }, []);
 
   useEffect(() => {
@@ -131,15 +263,17 @@ function GestionAlertas() {
     }
   }, [location.state]);
 
-  // Función para limpiar bloqueos muy antiguos (opcional, se puede ejecutar al inicio)
-  // No se usa por defecto para no interferir.
-  // const limpiarBloqueosHuérfanos = async () => {
-  //   const haceUnaHora = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  //   await supabase
-  //     .from("alerta")
-  //     .update({ bloqueado_por: null, bloqueado_en: null, bloqueado_rol: null })
-  //     .lt("bloqueado_en", haceUnaHora);
-  // };
+  // Bloquea el scroll de la página mientras esta vista está activa
+useEffect(() => {
+  const bodyOverflowOriginal = document.body.style.overflow;
+  const htmlOverflowOriginal = document.documentElement.style.overflow;
+  document.body.style.overflow = "hidden";
+  document.documentElement.style.overflow = "hidden";
+  return () => {
+    document.body.style.overflow = bodyOverflowOriginal;
+    document.documentElement.style.overflow = htmlOverflowOriginal;
+  };
+}, []);
 
   const abrirModal = async (alerta) => {
     const idOficial = user?.id_oficial;
@@ -148,7 +282,6 @@ function GestionAlertas() {
       return;
     }
 
-    // Primero consultar el estado actual del bloqueo
     const { data: alertaActual, error: fetchError } = await supabase
       .from("alerta")
       .select("bloqueado_por")
@@ -163,12 +296,10 @@ function GestionAlertas() {
 
     const bloqueadoPor = alertaActual?.bloqueado_por;
     if (bloqueadoPor && bloqueadoPor !== idOficial) {
-      alert("🔒 Esta alerta ya está siendo atendida por otro operador");
+      alert("Esta alerta ya está siendo atendida por otro operador");
       return;
     }
 
-    // Si está bloqueada por el mismo usuario, permitimos reabrir (renovamos el bloqueo)
-    // Si está libre, la bloqueamos.
     const updateFields = {
       bloqueado_por: idOficial,
       bloqueado_en: new Date().toISOString(),
@@ -176,31 +307,45 @@ function GestionAlertas() {
       id_operador_receptor: idOficial,
     };
 
-    // Condición: si no está bloqueada por nadie, o si ya la tiene el mismo usuario
-    let updateQuery = supabase
-      .from("alerta")
-      .update(updateFields)
-      .eq("id_alerta", alerta.id);
+    let updateQuery = supabase.from("alerta").update(updateFields).eq("id_alerta", alerta.id);
 
     if (!bloqueadoPor) {
-      // Si no hay bloqueo, aseguramos que nadie más la haya tomado entre la consulta y la actualización
       updateQuery = updateQuery.is("bloqueado_por", null);
     } else {
-      // Si ya la tiene el mismo usuario, simplemente actualizamos (no hay riesgo de conflicto)
       updateQuery = updateQuery.eq("bloqueado_por", idOficial);
     }
 
     const { data, error } = await updateQuery.select().single();
 
     if (error || !data) {
-      // Si falló la actualización (porque otro operador la tomó justo antes), mostramos mensaje
-      alert("🔒 Esta alerta ya está siendo atendida por otro operador");
+      alert("Esta alerta ya está siendo atendida por otro operador");
       return;
     }
 
+await supabase.from("log_actividad").insert([{
+      id_oficial: idOficial,
+      id_alerta: alerta.id,
+      accion: "OPERADOR",
+      descripcion: `Abrió alerta ${alerta.codigo || `#${alerta.id}`} — Ciudadano: ${alerta.ciudadano}`,
+    }]);
     setAlertaSeleccionada(alerta);
     setMostrarModal(true);
   };
+
+  useEffect(() => {
+    if (!mostrarModal || !alertaSeleccionada || !user?.id_oficial) return;
+
+// Renueva el bloqueo cada 4s (umbral de expiración: 8s)
+    const heartbeat = setInterval(async () => {
+      await supabase
+        .from("alerta")
+        .update({ bloqueado_en: new Date().toISOString() })
+        .eq("id_alerta", alertaSeleccionada.id)
+        .eq("bloqueado_por", user.id_oficial);
+    }, 4000);
+    
+    return () => clearInterval(heartbeat);
+  }, [mostrarModal, alertaSeleccionada, user?.id_oficial]);
 
   const cerrarModal = async () => {
     if (alertaSeleccionada && user?.id_oficial) {
@@ -212,7 +357,7 @@ function GestionAlertas() {
           bloqueado_rol: null,
         })
         .eq("id_alerta", alertaSeleccionada.id)
-        .eq("bloqueado_por", user.id_oficial); // solo el dueño puede liberar
+        .eq("bloqueado_por", user.id_oficial);
     }
     setMostrarModal(false);
     setAlertaSeleccionada(null);
@@ -233,6 +378,14 @@ function GestionAlertas() {
       console.error("Error al desestimar:", error);
       return;
     }
+
+await supabase.from("log_actividad").insert([{
+      id_oficial: user?.id_oficial,
+      id_alerta: idAlerta,
+      accion: "OPERADOR",
+      descripcion: `Desestimó alerta #${idAlerta} — Motivo: ${motivo}`,
+    }]);
+
 
     const listaOrigen = tabActiva === "emergencia" ? alertasPanico : alertasCiudadanas;
     const alertaEncontrada = listaOrigen.find((a) => a.id === idAlerta);
@@ -255,21 +408,40 @@ function GestionAlertas() {
     cerrarModal();
   };
 
-  const manejarTransferencia = async (idAlerta) => {
-    const { error } = await supabase
-      .from("alerta")
-      .update({
-        id_estado_actual: 2,
-        bloqueado_por: null,
-        bloqueado_en: null,
-        bloqueado_rol: null,
-      })
-      .eq("id_alerta", idAlerta);
+  const manejarTransferencia = async (idAlerta, datosClasificacion) => {
+    // Actualizar estado a 2 (en despacho) y guardar prioridad/clasificación
+    const updateData = {
+      id_estado_actual: 2,
+      bloqueado_por: null,
+      bloqueado_en: null,
+      bloqueado_rol: null,
+    };
+    if (datosClasificacion) {
+      updateData.prioridad = datosClasificacion.prioridad;
+      if (datosClasificacion.esContravencion) {
+        updateData.contravenciones = datosClasificacion.clasificacion;
+        updateData.delitos = null;
+      } else {
+        updateData.delitos = datosClasificacion.clasificacion;
+        updateData.contravenciones = null;
+      }
+    }
+
+    const { error } = await supabase.from("alerta").update(updateData).eq("id_alerta", idAlerta);
 
     if (error) {
       console.error("Error al enviar a despacho:", error);
       return;
     }
+
+    await supabase.from("log_actividad").insert([
+      {
+        id_oficial: user?.id_oficial,
+        id_alerta: idAlerta,
+        accion: "OPERADOR",
+        descripcion: `Validó alerta #${idAlerta}`,
+      },
+    ]);
 
     if (tabActiva === "emergencia") {
       setAlertasPanico(alertasPanico.filter((a) => a.id !== idAlerta));
@@ -282,7 +454,7 @@ function GestionAlertas() {
 
   if (cargando) {
     return (
-      <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
+<div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col">
         <div className="flex justify-center items-center h-64">
           <div className="text-[#113e27] font-bold text-lg">Cargando alertas...</div>
         </div>
@@ -292,7 +464,7 @@ function GestionAlertas() {
 
   if (errorCarga) {
     return (
-      <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
+<div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col">
         <div className="bg-red-100 border-l-4 border-red-600 p-4 rounded shadow-md mx-4">
           <p className="text-red-700 font-bold">Error al cargar las alertas</p>
           <p className="text-sm text-red-600">{errorCarga}</p>
@@ -308,16 +480,14 @@ function GestionAlertas() {
   }
 
   return (
-    <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 min-h-screen overflow-x-hidden">
+<div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 h-[100dvh] max-h-[90dvh] overflow-hidden flex flex-col">
       {/* SELECTOR DE TABS */}
       <div className="px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2">
         <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
           <button
             onClick={() => setTabActiva("emergencia")}
             className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${
-              tabActiva === "emergencia"
-                ? "bg-[#113e27] text-white shadow-md"
-                : "text-slate-400"
+              tabActiva === "emergencia" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"
             }`}
           >
             <span className="hidden sm:inline">ALERTAS DE PÁNICO</span>
@@ -326,9 +496,7 @@ function GestionAlertas() {
           <button
             onClick={() => setTabActiva("ciudadana")}
             className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg font-bold text-xs transition-all tracking-wider ${
-              tabActiva === "ciudadana"
-                ? "bg-[#113e27] text-white shadow-md"
-                : "text-slate-400"
+              tabActiva === "ciudadana" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"
             }`}
           >
             <span className="hidden sm:inline">ALERTAS CIUDADANAS</span>
@@ -341,8 +509,9 @@ function GestionAlertas() {
       </div>
 
       {/* TABLA */}
-      <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col max-h-[70vh] min-h-0">
-        <h2 className="text-lg font-extrabold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wide flex-shrink-0">
+    <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0">
+
+        <h2 className="text-lg font-extrabold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wider flex-shrink-0">
           {tabActiva === "emergencia" ? "Bandeja de Emergencias" : "Reportes Ciudadanos"}
         </h2>
 
@@ -352,30 +521,28 @@ function GestionAlertas() {
               <tr className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">
                 <th className="pl-3 md:pl-4 pr-1 md:pr-2 py-2 w-[12%] md:w-[15%]">ID</th>
                 <th className="py-2 w-[28%] md:w-[30%]">Ciudadano</th>
-                <th className="px-1 md:px-2 py-2 w-[20%]">Ubicación</th>
-                <th className="py-2 w-[18%] md:w-[15%]">Fecha y Hora</th>
+                <th className="py-2 w-[15%]">Duración del audio</th>
+                <th className="py-2 w-[20%]">Tiempo</th>
                 <th className="py-2 w-[12%] md:w-[15%]">Estado</th>
                 <th className="px-3 md:px-4 py-2 w-[10%]">Acciones</th>
-              </tr>
+               </tr>
             </thead>
             <tbody>
               {dataActual.map((item) => {
-                const bloqueadaPorOtro =
-                  item.bloqueadoPor && item.bloqueadoPor !== user?.id_oficial;
-
+                const bloqueadaPorOtro = item.bloqueadoPor && item.bloqueadoPor !== user?.id_oficial;
                 return (
                   <tr
                     key={item.id}
                     id={`fila-${item.id}`}
-                    className={`bg-white group transition-all duration-200 border-b border-gray-100 ${
+                    className={`bg-white group transition-all duration-200 border-b border-slate-100 ${
                       filaResaltada === item.id
                         ? "ring-2 bg-slate-50"
                         : bloqueadaPorOtro
-                          ? "opacity-50"
-                          : "hover:shadow-lg hover:-translate-y-0.5"
+                        ? "opacity-50"
+                        : "hover:shadow-lg hover:-translate-y-0.5"
                     }`}
                   >
-                    <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-5 md:py-6 text-[11px] font-bold text-slate-400 uppercase align-middle">
+                    <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-5 md:py-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider align-middle">
                       {item.codigo || item.id}
                     </td>
                     <td className="py-5 md:py-6 align-middle">
@@ -384,7 +551,7 @@ function GestionAlertas() {
                           {item.ciudadano.charAt(0)}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-[12px] font-bold text-[#1e293b] leading-tight truncate max-w-[120px] md:max-w-none">
+                          <span className="text-[12px] font-bold text-[#1e293b] truncate max-w-[120px] md:max-w-none">
                             {item.ciudadano}
                           </span>
                           <span className="mt-0.5 text-[8px] text-gray-400 font-semibold uppercase tracking-wider">
@@ -393,22 +560,18 @@ function GestionAlertas() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle">
-                      <div className="px-1 md:px-2">
-                        <span className="truncate block max-w-[100px] md:max-w-none">
-                          {item.ubicacion}
-                        </span>
-                      </div>
+                    <td className="py-5 md:py-6 align-middle">
+                      <span className="text-[10px] font-mono">
+                        <AudioDuration audioUrl={item.audio_30s} />
+                      </span>
                     </td>
-                    <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle whitespace-nowrap">
-                      {item.fecha} {item.hora}
+                    <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle">
+                      {calcularTiempoTranscurrido(item.fecha_hora)}
                     </td>
                     <td className="py-5 md:py-6 align-middle">
                       <span
                         className={`inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-bold text-white tracking-wider ${
-                          item.estado.toUpperCase() === "EMERGENCIA"
-                            ? "bg-[#C90A0A]"
-                            : "bg-[#EBB615]"
+                          item.estado.toUpperCase() === "EMERGENCIA" ? "bg-[#C90A0A]" : "bg-[#EBB615]"
                         }`}
                       >
                         {item.estado.toUpperCase()}
@@ -416,16 +579,19 @@ function GestionAlertas() {
                     </td>
                     <td className="px-3 md:px-4 py-5 md:py-6 align-middle">
                       {bloqueadaPorOtro ? (
-                        <div
-                          title="En uso por otro operador"
-                          className="p-1.5 md:p-2 bg-slate-300 text-white rounded-lg flex items-center justify-center cursor-not-allowed"
+                        <button
+                          onClick={() => {
+                            showToast(`Operador: ${item.bloqueadoNombre || "Otro operador"} ya está gestionando esta alerta`, "error");
+                          }}
+                          className="p-1.5 md:p-2 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center hover:bg-green-50 hover:text-[#113e27] transition-all duration-200"
+                          title={`En uso por ${item.bloqueadoNombre || "otro operador"}`}
                         >
-                          <FaLock size={14} />
-                        </div>
+                          <FaLock size={13} />
+                        </button>
                       ) : (
                         <button
                           onClick={() => abrirModal(item)}
-                          className="p-1.5 md:p-2 bg-[#0C3DC2] text-white rounded-lg shadow hover:scale-105 active:scale-95 transition-all flex items-center justify-center"
+                          className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#113e27] hover:text-white transition-all duration-200 flex items-center justify-center"
                         >
                           <LuZoomIn size={14} />
                         </button>
@@ -447,8 +613,8 @@ function GestionAlertas() {
       </div>
 
       {/* MODAL */}
-      {mostrarModal && alertaSeleccionada && (
-        tabActiva === "emergencia" ? (
+      {mostrarModal && alertaSeleccionada &&
+        (tabActiva === "emergencia" ? (
           <DetalleEmergencia
             alerta={alertaSeleccionada}
             onBack={cerrarModal}
@@ -462,8 +628,7 @@ function GestionAlertas() {
             onEnviarDespacho={manejarTransferencia}
             onDesestimar={manejarDesestimar}
           />
-        )
-      )}
+        ))}
     </div>
   );
 }

@@ -7,12 +7,17 @@ const Toast = ({ id, type = 'error', message, onClose, duration = 4000 }) => {
     return () => clearTimeout(timer);
   }, [id, duration, onClose]);
 
-  const bgColor = {
+const bgColor = {
     success: 'bg-green-100 border-green-300 text-green-800',
     error: 'bg-red-100 border-red-300 text-red-800',
-  }[type];
+    warning: 'bg-orange-100 border-orange-300 text-orange-800',
+  }[type] || 'bg-orange-100 border-orange-300 text-orange-800';
 
-  const icon = type === 'success' ? <FaCheckCircle /> : <FaExclamationTriangle />;
+  const icon = type === 'success'
+    ? <FaCheckCircle />
+    : type === 'warning'
+    ? <FaExclamationTriangle className="text-orange-500" />
+    : <FaExclamationTriangle />;
 
   return (
     <div className={`${bgColor} rounded-xl shadow-2xl flex items-center gap-3 px-5 py-3.5 border`}>

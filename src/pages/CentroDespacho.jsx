@@ -65,7 +65,7 @@ const makeHaloIcon = (color, scale = 10, opacity = 0.7) => ({
 
 const CentroDespacho = () => {
   const { user } = useAuth();
-  const { showToast } = useToast(); // ✅ Usar el sistema central de notificaciones
+  const { showToast } = useToast();
 
   const [tabActiva, setTabActiva] = useState("nuevas");
   const [alertaSeleccionada, setAlertaSeleccionada] = useState(null);
@@ -87,6 +87,8 @@ const CentroDespacho = () => {
   const patrolPulseRef      = useRef(null);
   const zoomIntervalRef     = useRef(null);
   const detalleRef          = useRef(null);
+  const panelCentralRef = useRef(null);
+  const [sidebarHeight, setSidebarHeight] = useState(null);
   const [detalleVisible, setDetalleVisible] = useState(false);
 
   const parsearUbicacion = (str) => {
@@ -274,7 +276,6 @@ const CentroDespacho = () => {
         nombre_oficial: p.oficial?.nombre_completo || "Sin oficial asignado",
       }));
 
-      // Orden: activos ordenados por prioridad de estado, luego inactivos, y dentro de cada grupo por id_patrullero
       lista.sort((a, b) => {
         if (a.activo !== b.activo) return a.activo ? -1 : 1;
         const prioridadEstado = (estado) => {
@@ -316,7 +317,6 @@ const CentroDespacho = () => {
     return { reporte: reporte || null, evidencias: evidencias || [] };
   };
 
-  // Parpadeo de halos de patrullas
   useEffect(() => {
     if (!map || patrulleros.length === 0) return;
 
@@ -363,6 +363,11 @@ const CentroDespacho = () => {
     };
   }, [map, patrulleros]);
 
+const intervencionSeleccionadaRef = useRef(null);
+  useEffect(() => {
+    intervencionSeleccionadaRef.current = intervencionSeleccionada;
+  }, [intervencionSeleccionada]);
+
   useEffect(() => {
     cargarAlertas();
     cargarPatrulleros();
@@ -375,9 +380,17 @@ const CentroDespacho = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "oficial" }, () => cargarPatrulleros())
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "evidencia" }, (payload) => {
         const idAlerta = payload.new?.id_alerta;
-        if (idAlerta && idAlerta === intervencionSeleccionada) {
+        if (idAlerta && idAlerta === intervencionSeleccionadaRef.current) {
           setAlertasIntervencion(prev => prev.map(a =>
             a.id === idAlerta ? { ...a, evidencias: [...(a.evidencias || []), payload.new] } : a
+          ));
+        }
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "reporte_alerta" }, (payload) => {
+        const idAlerta = payload.new?.id_alerta;
+        if (idAlerta && idAlerta === intervencionSeleccionadaRef.current) {
+          setAlertasIntervencion(prev => prev.map(a =>
+            a.id === idAlerta ? { ...a, reportePatrullero: payload.new?.descripcion_reporte || null } : a
           ));
         }
       })
@@ -525,9 +538,16 @@ const CentroDespacho = () => {
       const nombres = pendientes
         .map(id => patrulleros.find(p => p.id_patrullero === Number(id))?.placa || `PAT-${id}`)
         .join(", ");
-      showToast(`📢 NOTIFICACIÓN ENVIADA A: ${nombres}`, "success");
-    }
+      showToast(`Notificación enviada a patrulla: ${nombres}`, "success");
 
+      await supabase.from("log_actividad").insert([{
+        id_oficial: idOficialAsignador,
+        id_alerta: alertaSeleccionada,
+        accion: "DESPACHO",
+        descripcion: `Despachó patrulla(s) ${nombres} a la alerta #${alertaSeleccionada}`,
+      }]);
+    }
+    
     setPendingAsignaciones({});
     setAlertaSeleccionada(null);
     setDetalleVisible(false);
@@ -537,11 +557,17 @@ const CentroDespacho = () => {
     await cargarPatrulleros();
   };
 
-  const enviarATabulacion = async () => {
+const enviarATabulacion = async () => {
     const idAlerta = intervencionSeleccionada;
     if (!idAlerta) return;
 
-    const { error } = await supabase
+    const alertaObj = alertasIntervencion.find(a => a.id === idAlerta);
+    if (!alertaObj?.reportePatrullero) {
+      showToast("Aún no se ha recibido el reporte policial. No es posible continuar.", "error");
+      return;
+    }
+
+const { error } = await supabase
       .from("alerta")
       .update({ id_estado_actual: 3 })
       .eq("id_alerta", idAlerta);
@@ -550,6 +576,13 @@ const CentroDespacho = () => {
       showToast("Error al enviar a tabulación", "error");
       return;
     }
+
+    await supabase.from("log_actividad").insert([{
+      id_oficial: user?.id_oficial,
+      id_alerta: idAlerta,
+      accion: "DESPACHO",
+      descripcion: `Envió alerta #${idAlerta} a tabulación`,
+    }]);
 
     const { data: asigs } = await supabase
       .from("asignacion_patrulla")
@@ -618,6 +651,12 @@ const CentroDespacho = () => {
     cargarPatrulleros();
   };
 
+  const recalcularSidebarHeight = () => {
+  if (panelCentralRef.current) {
+    setSidebarHeight(panelCentralRef.current.getBoundingClientRect().height);
+  }
+};
+
   useEffect(() => {
     if (!intervencionSeleccionada || tabActiva !== "intervencion") return;
     cargarReporte(intervencionSeleccionada).then(({ reporte, evidencias }) => {
@@ -628,6 +667,18 @@ const CentroDespacho = () => {
       ));
     });
   }, [intervencionSeleccionada, tabActiva]);
+
+
+useEffect(() => {
+  const observer = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      setSidebarHeight(entry.contentRect.height);
+    }
+  });
+  if (panelCentralRef.current) observer.observe(panelCentralRef.current);
+  return () => observer.disconnect();
+}, []);
+
 
   useEffect(() => { setPendingAsignaciones({}); }, [alertaSeleccionada]);
   useEffect(() => { setRouteGeometry(null); }, [alertaSeleccionada, tabActiva]);
@@ -651,200 +702,207 @@ const CentroDespacho = () => {
   const seleccionadaId  = tabActiva === "nuevas" ? alertaSeleccionada : intervencionSeleccionada;
 
   return (
-    <div className="-mt-2 w-full px-1 min-h-screen py-3 font-sans flex gap-6 items-stretch">
-      {/* SIDEBAR - altura fija con scroll interno */}
-      <div className="w-[320px] shrink-0 flex flex-col bg-white rounded-2xl shadow-md overflow-hidden h-[1170px]">
-        <div className="p-3 bg-white border-b border-slate-100">
-          <div className="mt-1 flex bg-slate-50 p-1 rounded-xl border border-slate-200">
-            <button
-              onClick={() => setTabActiva("nuevas")}
-              className={`flex-1 flex items-center justify-center py-2.5 rounded-lg font-bold text-[11px] uppercase transition-all tracking-wider ${tabActiva === "nuevas" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400 hover:bg-white"}`}
-            >
-              ALERTAS VALIDADAS
-            </button>
-            <button
-              onClick={() => setTabActiva("intervencion")}
-              className={`flex-1 flex items-center justify-center py-3 rounded-lg font-bold text-[11px] uppercase transition-all tracking-wider ${tabActiva === "intervencion" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400 hover:bg-white"}`}
-            >
-              EN INTERVENCIÓN
-            </button>
+    <div className="-mt-2 w-full px-1 min-h-screen py-3 font-sans">
+      <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+{/* SIDEBAR */}
+<div
+  className="w-full lg:w-[320px] shrink-0 flex flex-col bg-white rounded-2xl shadow-md lg:sticky top-3"
+  style={{ height: sidebarHeight ? `${sidebarHeight}px` : "auto", overflow: "hidden" }}
+>
+  <div className="p-3 bg-white border-b border-slate-100 rounded-t-2xl">
+    <div className="mt-1 flex bg-slate-50 p-1 rounded-xl border border-slate-200">
+      <button
+        onClick={() => setTabActiva("nuevas")}
+        className={`flex-1 flex items-center justify-center py-2.5 rounded-lg font-bold text-[11px] uppercase transition-all tracking-wider ${tabActiva === "nuevas" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400 hover:bg-white"}`}
+      >
+        ALERTAS VALIDADAS
+      </button>
+      <button
+        onClick={() => setTabActiva("intervencion")}
+        className={`flex-1 flex items-center justify-center py-3 rounded-lg font-bold text-[11px] uppercase transition-all tracking-wider ${tabActiva === "intervencion" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400 hover:bg-white"}`}
+      >
+        EN INTERVENCIÓN
+      </button>
+    </div>
+  </div>
+
+  {/* Área de listas que ocupa todo el espacio restante */}
+  <div className="flex-1 overflow-hidden flex flex-col">
+    {cargando ? (
+      <div className="flex justify-center items-center flex-1">
+        <FaSpinner className="animate-spin text-green-800 text-2xl" />
+      </div>
+    ) : (
+      <>
+        {/* Emergencias */}
+        <div className="flex-1 flex flex-col min-h-0 py-3">
+          <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3 shrink-0">
+            <span className="w-1.5 h-1.5 bg-[#C90A0A] rounded-full animate-pulse" />
+            Alertas de Emergencia
+          </h3>
+          <div className="flex-1 overflow-y-auto min-h-0 px-3 space-y-3">
+            {alertasVisibles.filter(a => a.tipo === "EMERGENCIA").map(a => (
+              <AlertaCard
+                key={a.id}
+                alerta={a}
+                seleccionada={seleccionadaId === a.id}
+                onClick={() => seleccionarAlerta(a.id, tabActiva)}
+              />
+            ))}
+            {alertasVisibles.filter(a => a.tipo === "EMERGENCIA").length === 0 && (
+              <p className="text-[10px] text-slate-400 text-center py-3">Sin emergencias</p>
+            )}
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {cargando ? (
-            <div className="flex justify-center items-center flex-1">
-              <FaSpinner className="animate-spin text-green-800 text-2xl" />
-            </div>
-          ) : (
-            <>
-              {/* Emergencias */}
-              <div className="flex-1 flex flex-col min-h-0 py-3">
-                <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3 shrink-0">
-                  <span className="w-1.5 h-1.5 bg-[#C90A0A] rounded-full animate-pulse" />
-                  Alertas de Emergencia
-                </h3>
-                <div className="flex-1 overflow-y-auto px-3 space-y-3">
-                  {alertasVisibles.filter(a => a.tipo === "EMERGENCIA").map(a => (
-                    <AlertaCard
-                      key={a.id}
-                      alerta={a}
-                      seleccionada={seleccionadaId === a.id}
-                      onClick={() => seleccionarAlerta(a.id, tabActiva)}
-                    />
-                  ))}
-                  {alertasVisibles.filter(a => a.tipo === "EMERGENCIA").length === 0 && (
-                    <p className="text-[10px] text-slate-400 text-center py-3">Sin emergencias</p>
-                  )}
-                </div>
-              </div>
+        {/* Línea divisoria */}
+        <div className="border-t-2 border-slate-100 mx-3 shrink-0" />
 
-              {/* Línea divisoria */}
-              <div className="border-t-2 border-slate-100 mx-3 my-1 mt-4 shrink-0" />
-
-              {/* Ciudadanas */}
-              <div className="flex-1 flex flex-col min-h-0 py-3">
-                <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3 shrink-0">
-                  <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                  Alertas Ciudadanas
-                </h3>
-                <div className="flex-1 overflow-y-auto px-3 space-y-3">
-                  {alertasVisibles.filter(a => a.tipo === "CIUDADANA").map(a => (
-                    <AlertaCard
-                      key={a.id}
-                      alerta={a}
-                      seleccionada={seleccionadaId === a.id}
-                      onClick={() => seleccionarAlerta(a.id, tabActiva)}
-                    />
-                  ))}
-                  {alertasVisibles.filter(a => a.tipo === "CIUDADANA").length === 0 && (
-                    <p className="text-[10px] text-slate-400 text-center py-3">Sin alertas ciudadanas</p>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
+        {/* Ciudadanas */}
+        <div className="flex-1 flex flex-col min-h-0 py-3">
+          <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3 shrink-0">
+            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+            Alertas Ciudadanas
+          </h3>
+          <div className="flex-1 overflow-y-auto min-h-0 px-3 space-y-3">
+            {alertasVisibles.filter(a => a.tipo === "CIUDADANA").map(a => (
+              <AlertaCard
+                key={a.id}
+                alerta={a}
+                seleccionada={seleccionadaId === a.id}
+                onClick={() => seleccionarAlerta(a.id, tabActiva)}
+              />
+            ))}
+            {alertasVisibles.filter(a => a.tipo === "CIUDADANA").length === 0 && (
+              <p className="text-[10px] text-slate-400 text-center py-3">Sin alertas ciudadanas</p>
+            )}
+          </div>
         </div>
-      </div>
+      </>
+    )}
+  </div>
+</div>
 
-      {/* PANEL CENTRAL */}
-      <div className="flex-1 flex flex-col gap-4 pb-6">
-        <div className="w-full h-[380px] shrink-0 bg-white rounded-2xl shadow-md overflow-hidden">
-          {!isLoaded ? (
-            <div className="flex items-center justify-center h-full gap-2">
-              <FaSpinner className="animate-spin text-blue-600 text-2xl" />
-              <span className="text-sm font-medium text-slate-600">Cargando mapa...</span>
-            </div>
-          ) : (
-            <GoogleMap
-              mapContainerStyle={mapContainerStyle}
-              center={defaultCenter}
-              zoom={defaultZoom}
-              options={mapOptions}
-              onLoad={(m) => setMap(m)}
-            >
-              {[...alertasNuevas, ...alertasIntervencion].map(alerta => (
-                <Marker
-                  key={alerta.id}
-                  position={{ lat: alerta.lat, lng: alerta.lng }}
-                  icon={makeCircleIcon(
-                    alerta.tipo === "EMERGENCIA" ? COLOR_EMERGENCIA : COLOR_CIUDADANA,
-                    8
-                  )}
-                  title={alerta.nombre}
-                  onClick={() => seleccionarAlerta(alerta.id, tabActiva)}
-                />
-              ))}
-
-              {patrulleros.map(p => {
-                const coords = parsearUbicacion(p.ubicacion_actual);
-                if (!coords) return null;
-
-                let color, titulo;
-                if (!p.activo) {
-                  color  = COLOR_INACTIVO;
-                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (FUERA DE SERVICIO)`;
-                } else if (p.id_estado === ESTADO_DISPONIBLE) {
-                  color  = COLOR_DISPONIBLE;
-                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (DISPONIBLE)`;
-                } else if (p.id_estado === ESTADO_NOTIFICADO) {
-                  color  = COLOR_OCUPADO;
-                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (NOTIFICADO)`;
-                } else if (p.id_estado === ESTADO_EN_CAMINO) {
-                  color  = COLOR_OCUPADO;
-                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (EN CAMINO)`;
-                } else if (p.id_estado === ESTADO_EN_LUGAR) {
-                  color  = COLOR_OCUPADO;
-                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (EN LUGAR)`;
-                } else if (p.id_estado === ESTADO_REVISION) {
-                  color  = COLOR_REVISION;
-                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (REVISIÓN)`;
-                } else {
-                  color  = COLOR_OCUPADO;
-                  titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (${p.estado_disponibilidad})`;
-                }
-
-                return (
+        {/* PANEL CENTRAL */}
+        <div ref={panelCentralRef} className="flex-1 flex flex-col gap-4">
+          <div className="w-full h-[380px] shrink-0 bg-white rounded-2xl shadow-md overflow-hidden">
+            {!isLoaded ? (
+              <div className="flex items-center justify-center h-full gap-2">
+                <FaSpinner className="animate-spin text-blue-600 text-2xl" />
+                <span className="text-sm font-medium text-slate-600">Cargando mapa...</span>
+              </div>
+            ) : (
+              <GoogleMap
+                mapContainerStyle={mapContainerStyle}
+                center={defaultCenter}
+                zoom={defaultZoom}
+                options={mapOptions}
+                onLoad={(m) => setMap(m)}
+              >
+                {[...alertasNuevas, ...alertasIntervencion].map(alerta => (
                   <Marker
-                    key={p.id_patrullero}
-                    position={{ lat: coords.lat, lng: coords.lng }}
-                    icon={makeCircleIcon(color, 7)}
-                    title={titulo}
+                    key={alerta.id}
+                    position={{ lat: alerta.lat, lng: alerta.lng }}
+                    icon={makeCircleIcon(
+                      alerta.tipo === "EMERGENCIA" ? COLOR_EMERGENCIA : COLOR_CIUDADANA,
+                      8
+                    )}
+                    title={alerta.nombre}
+                    onClick={() => seleccionarAlerta(alerta.id, tabActiva)}
                   />
-                );
-              })}
+                ))}
 
-              {routeGeometry?.geometry && (
-                <Polyline
-                  path={routeGeometry.geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }))}
-                  options={{ strokeColor: COLOR_CIUDADANA, strokeWeight: 5, strokeOpacity: 0.8 }}
-                />
-              )}
-            </GoogleMap>
-          )}
+                {patrulleros.map(p => {
+                  const coords = parsearUbicacion(p.ubicacion_actual);
+                  if (!coords) return null;
+
+                  let color, titulo;
+                  if (!p.activo) {
+                    color  = COLOR_INACTIVO;
+                    titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (FUERA DE SERVICIO)`;
+                  } else if (p.id_estado === ESTADO_DISPONIBLE) {
+                    color  = COLOR_DISPONIBLE;
+                    titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (DISPONIBLE)`;
+                  } else if (p.id_estado === ESTADO_NOTIFICADO) {
+                    color  = COLOR_OCUPADO;
+                    titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (NOTIFICADO)`;
+                  } else if (p.id_estado === ESTADO_EN_CAMINO) {
+                    color  = COLOR_OCUPADO;
+                    titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (EN CAMINO)`;
+                  } else if (p.id_estado === ESTADO_EN_LUGAR) {
+                    color  = COLOR_OCUPADO;
+                    titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (EN LUGAR)`;
+                  } else if (p.id_estado === ESTADO_REVISION) {
+                    color  = COLOR_REVISION;
+                    titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (REVISIÓN)`;
+                  } else {
+                    color  = COLOR_OCUPADO;
+                    titulo = `${p.nombre_oficial} — ${p.placa || "N/A"} (${p.estado_disponibilidad})`;
+                  }
+
+                  return (
+                    <Marker
+                      key={p.id_patrullero}
+                      position={{ lat: coords.lat, lng: coords.lng }}
+                      icon={makeCircleIcon(color, 7)}
+                      title={titulo}
+                    />
+                  );
+                })}
+
+                {routeGeometry?.geometry && (
+                  <Polyline
+                    path={routeGeometry.geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }))}
+                    options={{ strokeColor: COLOR_CIUDADANA, strokeWeight: 5, strokeOpacity: 0.8 }}
+                  />
+                )}
+              </GoogleMap>
+            )}
+          </div>
+
+          <div className="flex gap-4 flex-wrap text-[9px] font-bold uppercase tracking-wider text-slate-500">
+            {[
+              { hex: COLOR_EMERGENCIA, label: "Emergencia" },
+              { hex: COLOR_CIUDADANA,  label: "Ciudadana" },
+              { hex: COLOR_DISPONIBLE, label: "Patrulla Disponible" },
+              { hex: COLOR_OCUPADO,    label: "Patrulla Ocupada" },
+            
+            ].map(({ hex, label }) => (
+              <span key={label} className="flex items-center gap-1.5">
+                <span style={{ background: hex }} className="w-2.5 h-2.5 rounded-full inline-block" />
+                {label}
+              </span>
+            ))}
+          </div>
+
+          <DetalleAlerta
+  ref={detalleRef}
+  alerta={alertaActual}
+  visible={detalleVisible && !!alertaActual}
+  onExitComplete={recalcularSidebarHeight}
+  onClose={() => {
+    setDetalleVisible(false);
+    if (tabActiva === "nuevas") setAlertaSeleccionada(null);
+    else setIntervencionSeleccionada(null);
+    detenerPing();
+    fitMapToAllAlerts();
+  }}
+/>
+
+
+          <GestionPatrullas
+            tabActiva={tabActiva}
+            patrulleros={patrulleros}
+            alertaSeleccionada={tabActiva === "nuevas" ? alertaSeleccionada : intervencionSeleccionada}
+            alertaActual={alertaActual}
+            pendingAsignaciones={pendingAsignaciones}
+            asignaciones={asignaciones}
+            onDespachar={despacharPatrullero}
+            onCancelarAsignaciones={() => setPendingAsignaciones({})}
+            onFinalizarAsignacion={finalizarAsignacion}
+            onCargarRuta={cargarRutaPatrullero}
+          />
         </div>
-
-        <div className="flex gap-4 flex-wrap text-[9px] font-bold uppercase tracking-wider text-slate-500">
-          {[
-            { hex: COLOR_EMERGENCIA, label: "Emergencia" },
-            { hex: COLOR_CIUDADANA,  label: "Ciudadana" },
-            { hex: COLOR_DISPONIBLE, label: "Patrulla Disponible" },
-            { hex: COLOR_OCUPADO,    label: "Patrulla Ocupada" },
-            { hex: COLOR_INACTIVO,   label: "Patrulla Inactiva" },
-            { hex: COLOR_REVISION,   label: "Patrulla Revisión" },
-          ].map(({ hex, label }) => (
-            <span key={label} className="flex items-center gap-1.5">
-              <span style={{ background: hex }} className="w-2.5 h-2.5 rounded-full inline-block" />
-              {label}
-            </span>
-          ))}
-        </div>
-
-        <DetalleAlerta
-          ref={detalleRef}
-          alerta={alertaActual}
-          visible={detalleVisible && !!alertaActual}
-          onClose={() => {
-            setDetalleVisible(false);
-            if (tabActiva === "nuevas") setAlertaSeleccionada(null);
-            else setIntervencionSeleccionada(null);
-            detenerPing();
-            fitMapToAllAlerts();
-          }}
-        />
-
-        <GestionPatrullas
-          tabActiva={tabActiva}
-          patrulleros={patrulleros}
-          alertaSeleccionada={tabActiva === "nuevas" ? alertaSeleccionada : intervencionSeleccionada}
-          alertaActual={alertaActual}
-          pendingAsignaciones={pendingAsignaciones}
-          asignaciones={asignaciones}
-          onDespachar={despacharPatrullero}
-          onCancelarAsignaciones={() => setPendingAsignaciones({})}
-          onFinalizarAsignacion={finalizarAsignacion}
-          onCargarRuta={cargarRutaPatrullero}
-        />
       </div>
     </div>
   );

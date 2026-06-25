@@ -46,25 +46,24 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
   const [prioridad, setPrioridad] = useState("");
   const [estadoValidacion, setEstadoValidacion] = useState("verificacion");
 
-  // Desestimación
   const [showDesestimoPanel, setShowDesestimoPanel] = useState(false);
   const [desestimando, setDesestimando] = useState(false);
 
   const debounceTimeout = useRef(null);
 
-  // Guardar cambios en BD
-  const guardarCambios = async (camposActualizados) => {
+  // Solo guarda la descripción automáticamente
+  const guardarDescripcion = async (texto) => {
     if (!datos?.id_alerta) return;
     try {
       const { error } = await supabase
         .from("alerta")
-        .update(camposActualizados)
+        .update({ descripcion: texto })
         .eq("id_alerta", datos.id_alerta);
       if (error) throw error;
-      setDatos((prev) => ({ ...prev, ...camposActualizados }));
+      setDatos((prev) => ({ ...prev, descripcion: texto }));
     } catch (err) {
-      console.error("Error guardando cambios:", err);
-      showToast("Error al guardar cambios", "error");
+      console.error("Error guardando descripción:", err);
+      showToast("Error al guardar la descripción", "error");
     }
   };
 
@@ -72,28 +71,24 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
     setRelatoEditado(texto);
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
     debounceTimeout.current = setTimeout(() => {
-      guardarCambios({ descripcion: texto });
+      guardarDescripcion(texto);
     }, 800);
   };
 
-  const handleContravencionChange = async (valor) => {
+  const handleContravencionChange = (valor) => {
     setContravencion(valor);
     setDelito("");
-    await guardarCambios({ contravenciones: valor, delitos: null });
   };
 
-  const handleDelitoChange = async (valor) => {
+  const handleDelitoChange = (valor) => {
     setDelito(valor);
     setContravencion("");
-    await guardarCambios({ delitos: valor, contravenciones: null });
   };
 
-  const handlePrioridadChange = async (valor) => {
+  const handlePrioridadChange = (valor) => {
     setPrioridad(valor);
-    await guardarCambios({ prioridad: valor });
   };
 
-  // Confirmar desestimación (recibe motivo y justificación)
   const confirmarDesestimo = async (motivoTexto, justificacion) => {
     setDesestimando(true);
     try {
@@ -144,9 +139,9 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
         if (alertaErr) throw alertaErr;
         setDatos(alertaData);
         setRelatoEditado(alertaData.descripcion || "");
-        setPrioridad(alertaData.prioridad || "");
-        setContravencion(alertaData.contravenciones || "");
-        setDelito(alertaData.delitos || "");
+        setPrioridad("");
+        setContravencion("");
+        setDelito("");
 
         if (alertaData.id_usuario) {
           const { data: ciudadanoData } = await supabase
@@ -339,10 +334,20 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                 <FaShieldAlt className="text-white" size={30} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <h2 className="text-[18px] font-extrabold uppercase tracking-wide leading-none mt-0.5">
-                  Detalle de Alerta
-                </h2>
-              </div>
+  <h2 className="text-[18px] font-extrabold uppercase tracking-wide leading-none mt-0.5">
+    Detalle de Alerta
+  </h2>
+  <div className="flex flex-wrap gap-3 text-[11px] font-bold text-white/70 mt-0.5">
+    {datos?.codigo_alerta && (
+      <span className="ml-3">ID: {datos.codigo_alerta}</span>
+    )}
+    {datos?.fecha_hora && (
+      <span className="ml-3">
+        Recibida: {new Date(datos.fecha_hora).toLocaleString('es-BO', { timeZone: 'America/La_Paz', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}
+      </span>
+    )}
+  </div>
+</div>
             </div>
             <button
               type="button"
@@ -359,9 +364,9 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
             <FaSpinner className="animate-spin text-green-800 text-3xl" />
           </div>
         ) : (
-          <div className="p-6 bg-white overflow-y-auto">
+          <div className="p-7 bg-white overflow-y-auto">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
-              {/* COLUMNA IZQUIERDA (sin estiramiento forzado) */}
+              {/* COLUMNA IZQUIERDA */}
               <div className="flex flex-col gap-5 h-full">
                 {/* Ciudadano */}
                 <section>
@@ -409,7 +414,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                   </div>
                 </section>
 
-                {/* Evidencia - SIN flex-1 para que no se estire innecesariamente */}
+                {/* Evidencia */}
                 <section className="flex flex-col">
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 leading-none flex items-center gap-1 shrink-0">
                     Evidencia Adjunta
@@ -466,7 +471,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                                   onClick={() =>
                                     registrarVistaEvidencia(ev.id_evidencia)
                                   }
-                                  className="flex items-center gap-1 text-[10px] font-bold text-white bg-[#113e27] hover:bg-[#113e27] px-3 py-1.5 rounded-md shadow-sm transition-colors cursor-pointer"
+                                  className="flex items-center gap-1 text-[10px] font-bold text-white bg-[#113e27] hover:bg-[#164a2f] px-2 py-1.5 tracking-wider rounded-md shadow-sm transition-colors cursor-pointer"
                                 >
                                   <FaEye size={11} /> Ver
                                 </a>
@@ -562,6 +567,8 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                 </section>
 
                 {/* Descripción */}
+                  {/* Descripción */}
+                {!showDesestimoPanel && (
                 <section>
                   <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 leading-none">
                     Descripción del hecho
@@ -589,6 +596,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                     )}
                   </div>
                 </section>
+                )}
 
                 {/* Clasificación / Desestimar */}
                 <div className="w-full flex-1 flex flex-col">
@@ -613,7 +621,6 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                               onChange={(e) =>
                                 handleContravencionChange(e.target.value)
                               }
-                              disabled={!!delito}
                             >
                               <option value="">
                                 Seleccionar Contravención
@@ -636,7 +643,6 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                               onChange={(e) =>
                                 handleDelitoChange(e.target.value)
                               }
-                              disabled={!!contravencion}
                             >
                               <option value="">Seleccionar Delito</option>
                               {delitos.map((d) => (
@@ -669,7 +675,7 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
                                     ? "bg-[#C90A0A] border-red-700 text-white shadow-md hover:brightness-90"
                                     : p === "MEDIA"
                                       ? "bg-[#0C3DC2] border-blue-600 text-white shadow-md hover:brightness-90"
-                                      : "bg-[#EAB308] border-yellow-600 text-slate-900 shadow-md hover:brightness-90"
+                                      : "bg-[#EAB308] border-[#EAB308] text-slate-800 shadow-md hover:brightness-90"
                                   : "bg-white border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
                               }`}
                             >
@@ -687,16 +693,16 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
         )}
 
         {/* BOTONES INFERIORES */}
-        <div className="p-4 bg-slate-50 border-t flex gap-3 w-full shrink-0">
+        <div className="px-6 py-3.5 bg-slate-50 border-t flex gap-3 w-full shrink-0">
           <button
             type="button"
             onClick={() => {
               setShowDesestimoPanel(!showDesestimoPanel);
             }}
-            className={`w-2/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[11px] tracking-wider border transition-all shadow-sm ${
+            className={`w-2/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[11px] tracking-wider border-2 transition-all shadow-md ${
               showDesestimoPanel
-                ? "bg-slate-500 text-white shadow-md hover:bg-slate-600"
-                : "bg-white text-[#C13100] border-[#C13100] hover:bg-[#fff8f5]"
+                ? "bg-slate-200 hover:bg-slate-300"
+                : "bg-slate-200 hover:bg-slate-300"
             }`}
           >
             {showDesestimoPanel ? "Cancelar" : "Desestimar alerta"}
@@ -706,15 +712,15 @@ const DetalleAlerta = ({ alerta, onBack, onEnviarDespacho, onDesestimar }) => {
             type="button"
             onClick={showDesestimoPanel ? () => {} : handleEnviarDespachoLocal}
             disabled={cargando}
-            className={`w-3/5 py-3.5 px-4 rounded-xl font-bold uppercase text-[11px] tracking-wider shadow-md flex items-center justify-center gap-2 transition-all ${
+            className={`w-3/5 py-3.5 px-2 rounded-xl font-bold uppercase text-[11px] tracking-wider shadow-md flex items-center justify-center gap-2 transition-all ${
               showDesestimoPanel
                 ? "bg-slate-300 cursor-not-allowed opacity-50"
-                : "bg-[#113e27] hover:bg-[#b43c14] text-white"
+                : "bg-[#113e27] hover:bg-[#164a2f] text-white"
             }`}
           >
             <FaCheckCircle size={12} />
             {showDesestimoPanel
-              ? "Confirme o cancele arriba"
+              ? "Enviar a Despacho"
               : "Enviar a Despacho"}
           </button>
         </div>

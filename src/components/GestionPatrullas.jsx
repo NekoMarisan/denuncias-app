@@ -42,15 +42,14 @@ export const GestionPatrullas = ({
         setInstituciones([
           { id: 1, nombre: "FELCC (Fuerza Especial de Lucha Contra el Crimen)" },
           { id: 2, nombre: "FELCN (Fuerza Especial de Lucha Contra el Narcotráfico)" },
-          { id: 3, nombre: "Unidad de Prevención de Robos (UPR)" },
+          { id: 3, nombre: "FELCN (Fuerza Especial de Lucha Contra la Violencia)" },
           { id: 4, nombre: "Dirección de Seguridad Ciudadana" },
           { id: 5, nombre: "Diprove (División de Prevención de Robo de Vehículos)" },
           { id: 6, nombre: "SLIM (Servicio Legal Integral Municipal)" },
           { id: 7, nombre: "Defensoría de la Niñez y Adolescencia" },
           { id: 8, nombre: "Fiscalía" },
-          { id: 9, nombre: "Hospital de Clínicas" },
-          { id: 10, nombre: "Bomberos" },
-          { id: 11, nombre: "Tránsito" },
+          { id: 9, nombre: "Bomberos" },
+          { id: 10, nombre: "Tránsito" },
         ]);
     };
     cargar();
@@ -65,8 +64,14 @@ export const GestionPatrullas = ({
     (p) => asignaciones[p.id_patrullero] === alertaSeleccionada
   );
 
-  const handleEnviarTabulacion = async () => {
+const handleEnviarTabulacion = async () => {
     if (!alertaSeleccionada) return;
+
+    if (!alertaActual?.reportePatrullero) {
+      showToast("Aún no se ha recibido el reporte policial. No es posible enviar a tabulación.", "error");
+      return;
+    }
+
     setEnviando(true);
     try {
       await supabase
@@ -93,7 +98,13 @@ export const GestionPatrullas = ({
           .eq("id_alerta", alertaSeleccionada);
       }
 
-      showToast("✅ Alerta enviada a tabulación correctamente", "success");
+await supabase.from("log_actividad").insert([{
+        id_oficial: null,
+        id_alerta: alertaSeleccionada,
+        accion: "DESPACHO",
+        descripcion: `Envió alerta #${alertaSeleccionada} a tabulación${Derivacion ? ` — Derivación: ${Derivacion}` : ""}`,
+      }]);
+      showToast("Alerta enviada a tabulación correctamente", "success");
       if (onEnviarATabulacion) onEnviarATabulacion();
     } catch (err) {
       console.error("Error enviando a tabulación:", err);
@@ -181,25 +192,25 @@ export const GestionPatrullas = ({
       case ESTADO_DISPONIBLE:
         return {
           texto: pendingAsignaciones[p.id_patrullero] === alertaSeleccionada ? "SELECCIONADA" : "DESPACHAR",
-          claseBtn: alertaSeleccionada ? "bg-green-700 hover:bg-green-800 text-white" : "bg-slate-300 text-white cursor-not-allowed",
-          borde: "border-green-500",
+          claseBtn: alertaSeleccionada ? "bg-[#164a2f] hover:bg-green-900 text-white" : "bg-slate-300 text-white cursor-not-allowed",
+          borde: "border-green-800",
           deshab: !alertaSeleccionada
         };
       case ESTADO_NOTIFICADO:
-        return { texto: "NOTIFICADO", claseBtn: "bg-blue-500 text-white cursor-not-allowed", borde: "border-blue-500", deshab: true };
+        return { texto: "NOTIFICADO", claseBtn: "bg-blue-600 text-white cursor-not-allowed", borde: "border-blue-600", deshab: true };
       case ESTADO_EN_CAMINO:
-        return { texto: "EN CAMINO", claseBtn: "bg-orange-600 text-white cursor-not-allowed", borde: "border-orange-500", deshab: true };
+        return { texto: "EN CAMINO", claseBtn: "bg-orange-600 text-white cursor-not-allowed", borde: "border-orange-600", deshab: true };
       case ESTADO_EN_LUGAR:
-        return { texto: "EN EL LUGAR", claseBtn: "bg-purple-600 text-white cursor-not-allowed", borde: "border-purple-500", deshab: true };
+        return { texto: "EN EL LUGAR", claseBtn: "bg-purple-700 text-white cursor-not-allowed", borde: "border-purple-700", deshab: true };
       case ESTADO_REVISION:
-        return { texto: "EN REVISIÓN", claseBtn: "bg-gray-500 text-white cursor-not-allowed", borde: "border-gray-500", deshab: true };
+        return { texto: "EN REVISIÓN", claseBtn: "bg-gray-600 text-white cursor-not-allowed", borde: "border-gray-600", deshab: true };
       default:
         return { texto: "NO DISPONIBLE", claseBtn: "bg-slate-300 text-white cursor-not-allowed", borde: "border-slate-300", deshab: true };
     }
   };
 
   return (
-    <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-200 mt-2 relative z-0">
+    <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-200 relative z-0 mt-3">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-[15px] font-black uppercase flex items-center gap-2 tracking-tight text-[#1e293b]">
           <span className="w-7 h-7 flex items-center justify-center bg-green-50 rounded-md">
@@ -216,7 +227,7 @@ export const GestionPatrullas = ({
 
       {isNuevas ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-1">
             {patrulleros.map((p) => {
               const pendiente =
                 alertaSeleccionada &&
@@ -248,13 +259,13 @@ export const GestionPatrullas = ({
                         fueraServicio
                           ? "bg-gray-400"
                           : p.id_estado === ESTADO_DISPONIBLE
-                          ? "bg-green-500"
+                          ? "bg-green-800"
                           : p.id_estado === ESTADO_NOTIFICADO
-                          ? "bg-blue-500 animate-pulse"
+                          ? "bg-blue-600 animate-pulse"
                           : p.id_estado === ESTADO_EN_CAMINO
-                          ? "bg-yellow-500 animate-pulse"
+                          ? "bg-orange-600 animate-pulse"
                           : p.id_estado === ESTADO_EN_LUGAR
-                          ? "bg-purple-500 animate-pulse"
+                          ? "bg-purple-700 animate-pulse"
                           : p.id_estado === ESTADO_REVISION
                           ? "bg-gray-500 animate-pulse"
                           : ""
@@ -293,18 +304,18 @@ export const GestionPatrullas = ({
 
           {alertaSeleccionada &&
             Object.keys(pendingAsignaciones).length > 0 && (
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="mt-5 flex justify-end gap-2">
                 <button
                   onClick={onCancelarAsignaciones}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-500 px-4 py-2 rounded-lg font-extrabold text-[11px] uppercase"
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-500 px-4 py-2 rounded-lg font-extrabold text-[11px] uppercase"
                 >
                   CANCELAR
                 </button>
                 <button
                   onClick={onFinalizarAsignacion}
-                  className="bg-green-800 hover:bg-green-900 text-white px-4 py-2 rounded-lg font-black text-[11px] uppercase flex items-center gap-1 shadow"
+                  className="bg-[#113e27] hover:bg-[#164a2f] text-white px-4 py-2.5 rounded-lg font-bold text-[11px] uppercase flex items-center gap-1 shadow tracking-wider"
                 >
-                  <FaCheckCircle size={12} /> FINALIZAR ASIGNACIÓN
+                  <FaCheckCircle size={10} /> FINALIZAR ASIGNACIÓN
                 </button>
               </div>
             )}
@@ -364,13 +375,12 @@ export const GestionPatrullas = ({
                     })}
                   </div>
                 ) : (
-                  <p className="text-[10px] text-slate-400 tracking-wider">
+                  <p className="text-[11px] text-slate-400 tracking-wider">
                     Sin unidades asignadas
                   </p>
                 )}
               </div>
 
-              {/* 🧵 LÍNEA HORIZONTAL ENTRE LAS DOS FILAS PRINCIPALES */}
               <div className="border-t border-slate-100 my-4"></div>
 
               <div className="mt-0">
@@ -383,7 +393,7 @@ export const GestionPatrullas = ({
                       {alertaActual.reportePatrullero}
                     </p>
                   ) : (
-                    <p className="text-[10px] text-slate-400 italic">
+                    <p className="text-[11px] text-slate-400 italic">
                       Sin reporte enviado aún.
                     </p>
                   )}
@@ -391,33 +401,42 @@ export const GestionPatrullas = ({
               </div>
 
               <div className="space-y-2 mt-0">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Derivar (opcional)
-                </p>
-                <select
-                  value={Derivacion}
-                  onChange={(e) => setDerivacion(e.target.value)}
-                  className="w-full p-3 text-sm font-semibold border border-slate-200 rounded-md shadow-sm bg-white text-slate-400 outline-none focus:border-slate-300 transition-all"
-                >
-                  <option value="">Seleccionar derivación</option>
-                  {instituciones.map((inst) => (
-                    <option key={inst.id} value={inst.nombre}>
-                      {inst.nombre}
-                    </option>
-                  ))}
-                </select>
+  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+    Derivar (opcional)
+  </p>
+  <select
+    value={Derivacion}
+    onChange={(e) => setDerivacion(e.target.value)}
+    disabled={!alertaActual?.reportePatrullero}
+    className={`w-full text-sm font-semibold border border-slate-200 rounded-md shadow-sm bg-white text-slate-500 appearance-none focus:border-slate-300 transition-all h-12 p-2.5 pr-8 text-[12px] outline-none ${!alertaActual?.reportePatrullero ? 'opacity-50 cursor-not-allowed' : ''}`}
+  >
+    <option value="">Seleccionar derivación</option>
+    {instituciones.map((inst) => (
+      <option key={inst.id} value={inst.nombre}>
+        {inst.nombre}
+      </option>
+    ))}
+  </select>
 
-                <div className="">
-                  <button
-                    onClick={handleEnviarTabulacion}
-                    disabled={enviando}
-                    className="mt-4 w-full h-11 py-2.5 bg-[#113e27] hover:bg-[#164a2f] text-white rounded-lg font-bold text-[11px] uppercase tracking-wider shadow-md flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
-                  >
-                    <FaCheckCircle size={11} />
-                    {enviando ? "Enviando..." : "ENVIAR ALERTA A TABULACIÓN"}
-                  </button>
-                </div>
-              </div>
+  <div className="">
+    <button
+      onClick={handleEnviarTabulacion}
+      disabled={enviando || !alertaActual?.reportePatrullero}
+      className={`mt-4 w-full h-11 py-2.5 rounded-lg font-bold text-[11px] uppercase tracking-wider shadow-md flex items-center justify-center gap-1.5 transition-all ${
+        alertaActual?.reportePatrullero 
+          ? 'bg-[#113e27] hover:bg-[#164a2f] text-white' 
+          : 'bg-gray-300 text-white cursor-not-allowed'
+      }`}
+    >
+      <FaCheckCircle size={11} />
+      {enviando 
+        ? "Enviando..." 
+        : alertaActual?.reportePatrullero 
+          ? "ENVIAR ALERTA A TABULACIÓN" 
+          : "ESPERANDO REPORTE DEL PATRULLERO"}
+    </button>
+  </div>
+</div>
             </div>
 
             <div className="mx-6 flex flex-col gap-5 border border-slate-100"></div>
@@ -436,17 +455,49 @@ export const GestionPatrullas = ({
                 <div className="h-[400px] flex items-center justify-center bg-slate-50 rounded-md border border-slate-200 border-dashed">
                   <div className="text-center text-slate-400">
                     <FaFileImage size={24} className="mx-auto mb-2 opacity-50" />
-                    <p className="text-[11px] font-bold uppercase">Sin evidencias</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider">Sin evidencias</p>
                   </div>
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <p className="text-center text-slate-400 text-[11px] py-6">
-            Selecciona una alerta de la lista para ver el seguimiento, evidencias y opciones de cierre.
-          </p>
-        )
+  <div className="flex items-stretch">
+    <div className="w-[905px] flex flex-col gap-4">
+      <div>
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Patrullas asignadas</p>
+        <p className="text-[11px] text-slate-400 tracking-wider">Sin unidades asignadas</p>
+      </div>
+      <div className="border-t border-slate-100 my-4"></div>
+      <div>
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-2">Reporte del patrullero</p>
+        <div className="p-3 bg-slate-50 rounded-md border border-slate-200 min-h-[100px] shadow-sm">
+          <p className="text-[11px] text-slate-400 italic">Sin reporte enviado aún.</p>
+        </div>
+      </div>
+      
+      <div className="space-y-2">
+  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Derivar (opcional)</p>
+  <select disabled className="w-full p-3 text-sm font-semibold border border-slate-200 rounded-md shadow-sm bg-white text-slate-300 outline-none cursor-not-allowed">
+    <option>Seleccionar derivación</option>
+  </select>
+  <button disabled className="mt-4 w-full h-11 py-2.5 bg-gray-300 text-gray-500 rounded-lg font-bold text-[11px] uppercase tracking-wider shadow-md flex items-center justify-center gap-1.5 cursor-not-allowed">
+    <FaCheckCircle size={11} /> ESPERANDO REPORTE DEL PATRULLERO
+  </button>
+</div>
+    </div>
+    <div className="mx-6 flex flex-col gap-5 border border-slate-100"></div>
+    <div className="w-72 shrink-0">
+      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Evidencias <span>(0)</span></p>
+      <div className="h-[400px] flex items-center justify-center bg-slate-50 rounded-md border border-slate-200 border-dashed">
+        <div className="text-center text-slate-400">
+          <FaFileImage size={24} className="mx-auto mb-2 opacity-50" />
+          <p className="text-[11px] font-bold uppercase">Sin evidencias</p>
+        </div>
+      </div>
+    </div>
+  </div>
+)
       )}
     </div>
   );

@@ -14,16 +14,27 @@ import Usuarios from "./pages/Usuarios";
 import GestionAlertas from "./pages/GestionAlertas";
 import CentroDespacho from "./pages/CentroDespacho";
 import Tabulacion from "./pages/Tabulacion";
+import ActividadLog from "./pages/ActividadLog";
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const { user } = useAuth();
+  const { user, logout, sessionStart, DURACION_SESION_MS } = useAuth();
+
   if (!user) return <Navigate to="/" replace />;
+
+  if (sessionStart) {
+    const tiempoTranscurrido = Date.now() - parseInt(sessionStart, 10);
+    if (tiempoTranscurrido >= DURACION_SESION_MS) {
+      logout("expiracion");
+      return <Navigate to="/" replace />;
+    }
+  }
+
   if (allowedRoles.length > 0 && !allowedRoles.includes(user.rol)) {
     return <Navigate to="/dashboard" replace />;
   }
+
   return children;
 };
-
 
 function AppRoutes() {
   return (
@@ -33,14 +44,7 @@ function AppRoutes() {
       <Route
         path="/dashboard"
         element={
-<ProtectedRoute
-  allowedRoles={[
-    "admin",
-    "operador",
-    "despachador",
-    "tabulador"
-  ]}
->
+          <ProtectedRoute allowedRoles={["admin", "operador", "despachador", "tabulador"]}>
             <Layout>
               <Dashboard />
             </Layout>
@@ -92,7 +96,16 @@ function AppRoutes() {
         }
       />
 
-      
+      <Route
+        path="/actividad-log"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <Layout>
+              <ActividadLog />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -102,11 +115,11 @@ function AppRoutes() {
 function App() {
   return (
     <Router>
-      <ToastProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <ToastProvider>
           <AppRoutes />
-        </AuthProvider>
-      </ToastProvider>
+        </ToastProvider>
+      </AuthProvider>
     </Router>
   );
 }

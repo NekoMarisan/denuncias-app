@@ -12,21 +12,156 @@ import {
   FaFilePdf,
   FaFileExcel,
   FaPowerOff,
-  FaUserSlash
+  FaUserSlash,
+  FaEye,
+  FaTimes,
 } from "react-icons/fa";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "../services/supabase";
 import PerfilCiudadano from "../components/modals/PerfilCiudadano";
 import NuevoPolicia from "../components/modals/NuevoPolicia";
+import { useToast } from "../context/ToastContext";
+
+// ─── Modal de perfil de oficial (solo lectura) ───────────────────────────────
+function PerfilOficial({ oficial, onClose }) {
+  if (!oficial) return null;
+
+  const estaConectado = oficial.estado === true;
+  const accesoLabel =
+    oficial.acceso === "FUERA DE SERVICIO"
+      ? "Fuera de servicio"
+      : oficial.acceso === "DE BAJA"
+      ? "De baja"
+      : "En servicio";
+  const accesoColor =
+    oficial.acceso === "EN SERVICIO"
+      ? "text-green-700 bg-green-50"
+      : "text-red-700 bg-red-50";
+
+  return (
+    // ─── NUEVA ESTRUCTURA DE FONDO (igual que PerfilCiudadano) ───
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden flex flex-col h-fit max-h-[85vh] animate-fadeIn">
+        {/* Header (sin cambios) */}
+        <div className="bg-[#113e27] px-6 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center border border-white/20">
+              <FaShieldAlt size={22} className="text-white" />
+            </div>
+            <div>
+              <p className="text-white font-black text-base uppercase tracking-widest">
+                Perfil del Oficial
+              </p>
+              <p className="text-white/50 text-[11px] font-bold uppercase tracking-wider mt-0.5">
+                ROF-{String(oficial.id_oficial).padStart(4, "0")} · {oficial.rol || "—"}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all"
+          >
+            <FaTimes size={13} />
+          </button>
+        </div>
+
+        {/* Banner estado (sin cambios) */}
+{(() => {
+          const deBaja = oficial.acceso === "DE BAJA";
+          return (
+            <div className={`px-6 py-2.5 flex items-center gap-2 ${deBaja ? "bg-slate-100 border-b border-slate-200" : estaConectado ? "bg-[#113e27]/10 border-b border-green-100" : "bg-[#C90A0A]/5 border-b border-red-100"}`}>
+              <span className={`w-2 h-2 rounded-full ${deBaja ? "bg-slate-400" : estaConectado ? "bg-[#113e27] animate-pulse" : "bg-[#b40909]"}`} />
+              <span className={`text-[11px] font-black uppercase tracking-widest ${deBaja ? "text-slate-500" : estaConectado ? "text-green-900" : "text-[#b40909]"}`}>
+                {deBaja ? "Oficial dado de baja" : estaConectado ? "Oficial en línea" : "Oficial desconectado"}
+              </span>
+            </div>
+          );
+        })()}
+
+{/* Body */}
+        <div className="px-6 py-6 space-y-4 overflow-y-auto">
+          <div>
+            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Nombre Completo</label>
+            <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
+              {oficial.nombre_completo || "—"}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">CI</label>
+              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
+                {oficial.ci || "—"}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Celular</label>
+              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
+                {oficial.celular || "—"}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Escalafón</label>
+              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
+                {oficial.numero_escalafon || "—"}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Rango</label>
+              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
+                {oficial.cargo || "—"}
+              </div>
+            </div>
+          </div>
+<div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Rol en el sistema</label>
+              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
+                {oficial.rol || "—"}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Estado de servicio</label>
+              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 uppercase rounded-md font-bold text-[12px] text-slate-600">
+                {oficial.acceso === "EN SERVICIO"
+                  ? "En servicio"
+                  : oficial.acceso === "FUERA DE SERVICIO"
+                  ? "Fuera de servicio"
+                  : oficial.acceso === "DE BAJA"
+                  ? "De baja"
+                  : "—"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer (sin cambios) */}
+        <div className="px-6 pb-5">
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 bg-slate-100 hover:bg-[#113e27] hover:text-white text-slate-500 font-bold text-[11px] uppercase rounded-xl transition-all duration-200 tracking-wider"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Usuarios() {
+  const { showToast } = useToast();
   const [tabActiva, setTabActiva] = useState("oficiales");
   const [filtroActivo, setFiltroActivo] = useState("Todos");
-  const [busqueda, setBusqueda] = useState("");
+  const [busquedaOficiales, setBusquedaOficiales] = useState("");
+  const [busquedaCiudadanos, setBusquedaCiudadanos] = useState("");
+  const busqueda =
+    tabActiva === "oficiales" ? busquedaOficiales : busquedaCiudadanos;
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [ciudadanoSeleccionado, setCiudadanoSeleccionado] = useState(null);
+  const [oficialSeleccionado, setOficialSeleccionado] = useState(null);
   const [mostrarModalPolicia, setMostrarModalPolicia] = useState(false);
   const [editandoPolicia, setEditandoPolicia] = useState(null);
 
@@ -38,21 +173,106 @@ function Usuarios() {
       .from("oficial")
       .select("*")
       .order("id_oficial", { ascending: true });
-    if (error) console.error("Error oficiales:", error);
-    else {
+    if (error) {
+      console.error("Error oficiales:", error);
+      showToast("Error al cargar oficiales", "error");
+    } else {
       setOficiales(data || []);
-      console.log("Oficiales cargados:", data?.map(o => ({ id: o.id_oficial, estado: o.estado })));
     }
-  }, []);
+  }, [showToast]);
+
+  const obtenerAdvertencias = async (idUsuario) => {
+    try {
+      const { data: alertas, error: alertasError } = await supabase
+        .from("alerta")
+        .select("id_alerta")
+        .eq("id_usuario", idUsuario);
+      if (alertasError) throw alertasError;
+      if (!alertas || alertas.length === 0) return 0;
+
+      const idsAlertas = alertas.map((a) => a.id_alerta);
+      let { count, error: desError } = await supabase
+        .from("alerta_desestimada")
+        .select("*", { count: "exact", head: true })
+        .in("id_alerta", idsAlertas);
+
+      if (desError) {
+        const result = await supabase
+          .from("alerta_desestimada")
+          .select("*", { count: "exact", head: true })
+          .in("alerta_id", idsAlertas);
+        count = result.count;
+        desError = result.error;
+      }
+      if (desError) throw desError;
+      return count || 0;
+    } catch (error) {
+      console.error("Error en obtenerAdvertencias:", error);
+      return 0;
+    }
+  };
+
+  const actualizarEstadoSegunAdvertencias = async (
+    idUsuario,
+    advertencias,
+    estadoActual
+  ) => {
+    if (estadoActual === 1 || estadoActual === 5) return estadoActual;
+
+    let nuevoEstado = null;
+    if (advertencias === 0) nuevoEstado = 2;
+    else if (advertencias === 1 || advertencias === 2) nuevoEstado = 3;
+    else if (advertencias >= 3) nuevoEstado = 4;
+
+    if (nuevoEstado !== null && nuevoEstado !== estadoActual) {
+      const { error } = await supabase
+        .from("usuario_ciudadano")
+        .update({ id_estado_ciudadano: nuevoEstado })
+        .eq("id_usuario", idUsuario);
+      if (error) {
+        console.error("Error al actualizar estado:", error);
+      } else {
+        await supabase.from("historial_estado_ciudadano").insert([
+          {
+            id_ciudadano: idUsuario,
+            id_estado: nuevoEstado,
+            motivo: "Actualización automática por número de advertencias",
+            fecha_cambio: new Date().toISOString(),
+          },
+        ]);
+        return nuevoEstado;
+      }
+    }
+    return estadoActual;
+  };
 
   const cargarCiudadanos = useCallback(async () => {
     const { data, error } = await supabase
       .from("usuario_ciudadano")
       .select("*")
       .order("id_usuario", { ascending: true });
-    if (error) console.error("Error ciudadanos:", error);
-    else setCiudadanos(data || []);
-  }, []);
+    if (error) {
+      console.error("Error ciudadanos:", error);
+      showToast("Error al cargar ciudadanos", "error");
+    } else {
+      const ciudadanosActualizados = [];
+      for (const ciudadano of data || []) {
+        const advertencias = await obtenerAdvertencias(ciudadano.id_usuario);
+        const estadoAnterior = ciudadano.id_estado_ciudadano;
+        const nuevoEstado = await actualizarEstadoSegunAdvertencias(
+          ciudadano.id_usuario,
+          advertencias,
+          estadoAnterior
+        );
+        ciudadanosActualizados.push({
+          ...ciudadano,
+          advertencias,
+          id_estado_ciudadano: nuevoEstado || estadoAnterior,
+        });
+      }
+      setCiudadanos(ciudadanosActualizados);
+    }
+  }, [showToast]);
 
   const recargarTodo = useCallback(async () => {
     setRefrescando(true);
@@ -60,7 +280,6 @@ function Usuarios() {
     setRefrescando(false);
   }, [cargarOficiales, cargarCiudadanos]);
 
-  // Carga inicial
   useEffect(() => {
     const cargarInicial = async () => {
       setCargando(true);
@@ -70,7 +289,6 @@ function Usuarios() {
     cargarInicial();
   }, [recargarTodo]);
 
-  // Recarga periódica cada 10 segundos (para reflejar cambios de estado)
   useEffect(() => {
     const interval = setInterval(() => {
       recargarTodo();
@@ -78,55 +296,71 @@ function Usuarios() {
     return () => clearInterval(interval);
   }, [recargarTodo]);
 
-  // Recarga cuando la ventana recupera el foco
   useEffect(() => {
-    const handleFocus = () => {
-      recargarTodo();
-    };
+    const handleFocus = () => recargarTodo();
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
   }, [recargarTodo]);
 
   const eliminarOficial = async (id) => {
     if (!window.confirm("¿Eliminar este oficial?")) return;
-    const { error } = await supabase.from("oficial").delete().eq("id_oficial", id);
-    if (error) console.error("Error al eliminar:", error);
-    else await cargarOficiales();
-  };
-
-  const habilitarCiudadano = async (ciudadano) => {
-    if (!window.confirm(`¿Habilitar a ${ciudadano.nombre_completo}? La cuenta pasará a ACTIVO.`)) return;
     const { error } = await supabase
-      .from("usuario_ciudadano")
-      .update({ estado_cuenta: "ACTIVO" })
-      .eq("id_usuario", ciudadano.id_usuario);
-    if (error) console.error("Error al habilitar:", error);
-    else await cargarCiudadanos();
+      .from("oficial")
+      .delete()
+      .eq("id_oficial", id);
+    if (error) {
+      console.error("Error al eliminar:", error);
+      showToast("Error al eliminar oficial", "error");
+    } else {
+showToast("Oficial eliminado correctamente", "success");
+      await supabase.from("log_actividad").insert([{
+        id_oficial: null,
+        id_alerta: null,
+        accion: "ADMINISTRADOR",
+        descripcion: `Eliminó al oficial ID #${id}`,
+      }]);
+      await cargarOficiales();
+    }
   };
 
-  // Funciones de exportación (sin cambios)
-  const exportarPDF = () => {
+  const exportarPDF = async () => {
+    await supabase.from("log_actividad").insert([{
+      id_oficial: null,
+      id_alerta: null,
+      accion: "ADMINISTRADOR",
+      descripcion: `Exportó reporte PDF de ${tabActiva}`,
+    }]);
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const titulo = tabActiva === "oficiales" ? "REPORTE DE PERSONAL POLICIAL" : "REPORTE DE REGISTRO DE CIUDADANOS";
+    const titulo =
+      tabActiva === "oficiales"
+        ? "PERSONAL POLICIAL"
+        : "REGISTRO DE CIUDADANOS";
     const fechaActual = new Date().toLocaleString("es-ES", {
       day: "numeric", month: "numeric", year: "numeric",
-      hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true
+      hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
     });
 
-    doc.setFontSize(14); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0);
     doc.text(titulo, 20, 20);
-    doc.setFontSize(9); doc.setTextColor(100, 100, 100);
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
     doc.text("CENTRAL RADIO PATRULLAS - COCHABAMBA", 20, 26);
-    doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(60, 60, 60);
     doc.text(`Fecha: ${fechaActual}`, 190, 20, { align: "right" });
     doc.text(`Total registros: ${datosFiltrados.length}`, 190, 26, { align: "right" });
-    doc.setDrawColor(200); doc.line(20, 30, 190, 30);
+    doc.setDrawColor(200);
+    doc.line(20, 30, 190, 30);
 
-    const headers = tabActiva === "oficiales"
-      ? [["ID", "Oficial", "Escalafón / Rol", "Rango", "Celular", "Estado"]]
-      : [["ID", "Ciudadano", "Cédula", "Celular", "Estado"]];
+    const headers =
+      tabActiva === "oficiales"
+        ? [["ID", "Oficial", "Escalafón / Rol", "Rango", "Celular", "Estado"]]
+        : [["ID", "Ciudadano", "Cédula", "Celular", "Estado"]];
 
-    const body = datosFiltrados.map(item =>
+    const body = datosFiltrados.map((item) =>
       tabActiva === "oficiales"
         ? [
             item.id_oficial,
@@ -134,44 +368,63 @@ function Usuarios() {
             `${item.numero_escalafon || "—"} - ${item.rol || "—"}`,
             item.cargo || "—",
             item.celular || "—",
-            item.estado === true ? "Conectado" : "Desconectado"
+            item.estado === true ? "Conectado" : "Desconectado",
           ]
         : [
             item.id_usuario,
             item.nombre_completo,
             item.ci,
             item.celular,
-            item.estado_cuenta
+            getEstadoDisplay(item),
           ]
     );
 
     autoTable(doc, {
-      startY: 35, head: headers, body,
+      startY: 35,
+      head: headers,
+      body,
       theme: "grid",
       headStyles: { fillColor: [20, 83, 45], textColor: [255, 255, 255] },
       styles: { fontSize: 8 },
-      margin: { left: 20, right: 20 }
+      margin: { left: 20, right: 20 },
     });
 
     const finalY = doc.lastAutoTable.finalY + 30;
-    const admin = oficiales.find(o => o.rol === "Administrador")?.nombre_completo || "ADMINISTRADOR DE TURNO";
-    doc.setDrawColor(0); doc.line(30, finalY, 85, finalY);
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(0);
+    const admin =
+      oficiales.find((o) => o.rol === "Administrador")?.nombre_completo ||
+      "ADMINISTRADOR DE TURNO";
+    doc.setDrawColor(0);
+    doc.line(30, finalY, 85, finalY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(0);
     doc.text("SISTEMA DE SEGURIDAD", 57.5, finalY + 5, { align: "center" });
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
     doc.text(admin, 57.5, finalY + 10, { align: "center" });
-    doc.line(125, finalY, 180, finalY);
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(0);
+    doc.line(125, finalY, 120, finalY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(0);
     doc.text("SELLO INSTITUCIONAL", 152.5, finalY + 5, { align: "center" });
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
     doc.text("CENTRAL RADIO PATRULLAS", 152.5, finalY + 10, { align: "center" });
     doc.save(`Reporte_${tabActiva}.pdf`);
   };
 
-  const exportarExcel = () => {
-    const titulo = tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS";
+const exportarExcel = async () => {
+    await supabase.from("log_actividad").insert([{
+      id_oficial: null,
+      id_alerta: null,
+      accion: "ADMINISTRADOR",
+      descripcion: `Exportó reporte Excel de ${tabActiva}`,
+    }]);
+    const titulo =
+      tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS";
     const fecha = new Date().toLocaleString();
-    const registros = datosFiltrados;
 
     let xmlExcel = `
       <xml xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -180,27 +433,32 @@ function Usuarios() {
           <tr><td colspan="6" style="font-size:16pt;font-weight:bold">${titulo}</td></tr>
           <tr><td colspan="6" style="color:#666">SISTEMA DE SEGURIDAD CIUDADANA - COCHABAMBA | Generado: ${fecha}</td></tr>
           <tr>
-            ${tabActiva === "oficiales" 
-              ? "<th>ID</th><th>OFICIAL</th><th>ESCALAFÓN / ROL</th><th>RANGO</th><th>CELULAR</th><th>ESTADO</th>"
-              : "<th>ID</th><th>CIUDADANO</th><th>CÉDULA</th><th>CELULAR</th><th>ESTADO</th>"
+            ${
+              tabActiva === "oficiales"
+                ? "<th>ID</th><th>OFICIAL</th><th>ESCALAFÓN / ROL</th><th>RANGO</th><th>CELULAR</th><th>ESTADO</th>"
+                : "<th>ID</th><th>CIUDADANO</th><th>CÉDULA</th><th>CELULAR</th><th>ESTADO</th>"
             }
           </tr>
-          ${registros.map(item => `
+          ${datosFiltrados
+            .map(
+              (item) => `
             <tr>
               <td>${tabActiva === "oficiales" ? item.id_oficial : item.id_usuario}</td>
               <td style="font-weight:bold">${item.nombre_completo}</td>
-              ${tabActiva === "oficiales" ? `
-                <td>${item.numero_escalafon || "—"} - ${item.rol || "—"}</td>
-                <td>${item.cargo || "—"}</td>
-                <td>${item.celular || ""}</td>
-                <td style="font-weight:bold">${item.estado === true ? "Conectado" : "Desconectado"}</td>
-              ` : `
-                <td>${item.ci || ""}</td>
-                <td>${item.celular || ""}</td>
-                <td style="font-weight:bold">${item.estado_cuenta || ""}</td>
-              `}
+              ${
+                tabActiva === "oficiales"
+                  ? `<td>${item.numero_escalafon || "—"} - ${item.rol || "—"}</td>
+                     <td>${item.cargo || "—"}</td>
+                     <td>${item.celular || ""}</td>
+                     <td style="font-weight:bold">${item.estado === true ? "Conectado" : "Desconectado"}</td>`
+                  : `<td>${item.ci || ""}</td>
+                     <td>${item.celular || ""}</td>
+                     <td style="font-weight:bold">${getEstadoDisplay(item)}</td>`
+              }
             </tr>
-          `).join("")}
+          `
+            )
+            .join("")}
         </body>
       </xml>`;
 
@@ -211,22 +469,55 @@ function Usuarios() {
     link.click();
   };
 
-  const datosFiltrados = (tabActiva === "oficiales" ? oficiales : ciudadanos).filter((item) => {
-    const nombre = item.nombre_completo?.toLowerCase() || "";
-    const ci = item.ci?.toLowerCase() || "";
-    const id = tabActiva === "oficiales" ? String(item.id_oficial) : String(item.id_usuario);
-    const termino = busqueda.toLowerCase();
-    const cumpleBusqueda = nombre.includes(termino) || ci.includes(termino) || id.includes(termino);
+  const getEstadoDisplay = (ciudadano) => {
+    const estadoId = ciudadano.id_estado_ciudadano;
+    if (estadoId === 1) return "NO VERIFICADO";
+    if (estadoId === 2) return "VERIFICADO";
+    if (estadoId === 3) return "ADVERTIDO";
+    if (estadoId === 4) return "SUSPENDIDO";
+    if (estadoId === 5) return "CORRECCION";
+    return "DESCONOCIDO";
+  };
 
-    if (tabActiva === "ciudadanos") return cumpleBusqueda;
+  const datosFiltrados = (
+    tabActiva === "oficiales" ? oficiales : ciudadanos
+  ).filter((item) => {
+    const termino = busqueda.toLowerCase().trim();
 
-    const estaConectado = item.estado === true;
-    const cumpleFiltro =
-      filtroActivo === "Todos" ||
-      (filtroActivo === "conectado" && estaConectado) ||
-      (filtroActivo === "desconectado" && !estaConectado);
+    if (tabActiva === "oficiales") {
+      const estaConectado = item.estado === true;
+      const cumpleFiltro =
+        filtroActivo === "Todos" ||
+        (filtroActivo === "conectado" && estaConectado) ||
+        (filtroActivo === "desconectado" && !estaConectado);
 
-    return cumpleBusqueda && cumpleFiltro;
+      if (termino === "") return cumpleFiltro;
+
+      const palabras = termino.split(/\s+/);
+      const campos = [
+        item.nombre_completo?.toLowerCase() || "",
+        item.ci?.toLowerCase() || "",
+        item.numero_escalafon?.toLowerCase() || "",
+        item.rol?.toLowerCase() || "",
+        item.cargo?.toLowerCase() || "",
+      ];
+      const cumpleBusqueda = palabras.every((palabra) =>
+        campos.some((campo) => campo.includes(palabra))
+      );
+
+      return cumpleBusqueda && cumpleFiltro;
+    }
+
+    // Ciudadanos
+    if (termino === "") return true;
+    const palabras = termino.split(/\s+/);
+    const campos = [
+      item.nombre_completo?.toLowerCase() || "",
+      item.ci?.toLowerCase() || "",
+    ];
+    return palabras.every((palabra) =>
+      campos.some((campo) => campo.includes(palabra))
+    );
   });
 
   if (cargando) {
@@ -238,39 +529,68 @@ function Usuarios() {
   }
 
   return (
-    <div className="-mt-4 w-full px-1 py-4 space-y-5 animate-fadeIn pb-6 bg-gray-50/30">
-      {/* Barra de herramientas SIN botón de refresco manual */}
-      <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between gap-4">
+    <div className="-mt-4 w-full px-1 py-4 space-y-5 animate-fadeIn pb-6 bg-slate-50/30">
+      {/* SELECTOR DE TABS */}
+      <div className="w-full bg-white p-3 rounded-2xl shadow-md border border-slate-100 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 flex-1">
-          <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100 shrink-0">
+          <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100 shrink-0">
             <button
-              onClick={() => { setTabActiva("oficiales"); setFiltroActivo("Todos"); }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${tabActiva === "oficiales" ? "bg-[#113e27] text-white shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+              onClick={() => {
+                setTabActiva("oficiales");
+                setFiltroActivo("Todos");
+                setBusquedaCiudadanos("");
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${
+                tabActiva === "oficiales"
+                  ? "bg-[#113e27] text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
             >
-              <FaUserTie size={12} /> OFICIALES
+              <FaUserTie size={12} />
+              <span className="hidden sm:inline">OFICIALES</span>
             </button>
             <button
-              onClick={() => { setTabActiva("ciudadanos"); setFiltroActivo("Todos"); }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${tabActiva === "ciudadanos" ? "bg-[#113e27] text-white shadow-sm" : "hover:text-slate-600"}`}
+              onClick={() => {
+                setTabActiva("ciudadanos");
+                setFiltroActivo("Todos");
+                setBusquedaOficiales("");
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${
+                tabActiva === "ciudadanos"
+                  ? "bg-[#113e27] text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
             >
-              <FaUsers size={12} /> CIUDADANOS
+              <FaUsers size={12} />
+              <span className="hidden sm:inline">CIUDADANOS</span>
             </button>
           </div>
 
           <div className="relative flex-1">
-            <FaSearch className={`absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400${tabActiva === "oficiales" ? "text-green-700" : "text-blue-600"}`} />
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar por nombre, ID o CI..."
-              className={`w-full h-10 pl-8 pr-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[11px] font-bold text-slate-700 transition-all focus:bg-white focus:border-[#113e27] ${tabActiva === "oficiales" ? "border-gray-300 focus:border-green-600" : "border-gray-300 focus:border-blue-600"}`}
+              placeholder={
+                tabActiva === "oficiales"
+                  ? "Buscar por nombre, CI, escalafón, rol o rango..."
+                  : "Buscar por nombre o CI..."
+              }
+              className="w-full h-10 pl-8 pr-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[11px] font-bold text-slate-700 transition-all border-b focus:bg-white focus:border-slate-400"
               value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
+              onChange={(e) =>
+                tabActiva === "oficiales"
+                  ? setBusquedaOficiales(e.target.value)
+                  : setBusquedaCiudadanos(e.target.value)
+              }
             />
           </div>
 
           {tabActiva === "oficiales" && (
             <button
-              onClick={() => { setEditandoPolicia(null); setMostrarModalPolicia(true); }}
+              onClick={() => {
+                setEditandoPolicia(null);
+                setMostrarModalPolicia(true);
+              }}
               className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-bold text-[11px] uppercase shadow text-white bg-[#113e27] hover:bg-[#164a2f] transition-all shrink-0"
             >
               <FaPlus size={10} /> Nuevo oficial
@@ -285,9 +605,17 @@ function Usuarios() {
                 <button
                   key={f}
                   onClick={() => setFiltroActivo(f)}
-                  className={`px-6 py-2.5 rounded-lg font-bold text-[11px] uppercase transition-all ${filtroActivo === f ? "bg-[#113e27] text-white" : "text-gray-400 hover:text-gray-600"}`}
+                  className={`px-6 py-2.5 rounded-lg font-bold text-[11px] uppercase transition-all ${
+                    filtroActivo === f
+                      ? "bg-[#113e27] text-white"
+                      : "text-gray-400 hover:text-gray-600"
+                  }`}
                 >
-                  {f === "conectado" ? "Conectado" : f === "desconectado" ? "Desconectado" : "Todos"}
+                  {f === "conectado"
+                    ? "Conectado"
+                    : f === "desconectado"
+                    ? "Desconectado"
+                    : "Todos"}
                 </button>
               ))}
             </div>
@@ -298,18 +626,24 @@ function Usuarios() {
               <FaFileDownload size={11} /> <span>Exportar</span>
             </button>
             <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-              <button onClick={exportarExcel} className="w-full px-3 py-2 text-left hover:bg-green-50 text-slate-600 font-bold text-[10px] flex items-center gap-2">
-                <FaFileExcel className="text-green-700" size={11} /> Excel (.xls)
+              <button
+                onClick={exportarExcel}
+                className="w-full px-3 py-2 text-left hover:bg-green-50 text-black font-bold text-[10px] flex items-center gap-2"
+              >
+                <FaFileExcel className="text-green-800" size={11} /> Excel (.xls)
               </button>
-              <button onClick={exportarPDF} className="w-full px-3 py-2 text-left hover:bg-red-50 text-slate-700 font-bold text-[10px] flex items-center gap-2">
-                <FaFilePdf className="text-red-700" size={11} /> Guardar PDF
+              <button
+                onClick={exportarPDF}
+                className="w-full px-3 py-2 text-left hover:bg-red-50 text-black font-bold text-[10px] flex items-center gap-2"
+              >
+                <FaFilePdf className="text-red-700" size={11} /> PDF
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tabla (sin cambios) */}
+      {/* Tabla */}
       <div className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-50 text-left">
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-xl font-black uppercase tracking-tight text-[#1e293b]">
@@ -320,9 +654,11 @@ function Usuarios() {
         <div className="overflow-x-auto">
           <table className="w-full border-separate border-spacing-y-3 table-fixed">
             <thead>
-              <tr className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wide">
+              <tr className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
                 <th className="px-3 pb-2 w-[8%] text-left">ID</th>
-                <th className="pb-2 w-[22%] text-left">{tabActiva === "oficiales" ? "Oficial" : "Ciudadano"}</th>
+                <th className="pb-2 w-[22%] text-left">
+                  {tabActiva === "oficiales" ? "Oficial" : "Ciudadano"}
+                </th>
                 {tabActiva === "oficiales" ? (
                   <>
                     <th className="pb-2 w-[18%] text-left">Escalafón / Rol</th>
@@ -334,7 +670,7 @@ function Usuarios() {
                   <>
                     <th className="pb-2 w-[12%] text-left">Cédula</th>
                     <th className="pb-2 w-[12%] text-left">Celular</th>
-                    <th className="px-0 pb-2 w-[12%] text-left">Estado</th>
+                    <th className="px-0 pb-2 w-[14%] text-left">Estado</th>
                   </>
                 )}
                 <th className="px-4 pb-2 w-[10%] text-left">Acciones</th>
@@ -343,26 +679,47 @@ function Usuarios() {
             <tbody>
               {datosFiltrados.map((item, i) => {
                 const esOficial = tabActiva === "oficiales";
-                const idMostrar = esOficial ? `ROF-${String(item.id_oficial).padStart(4, "0")}` : `REGC-${String(item.id_usuario).padStart(4, "0")}`;
-                const estaConectado = item.estado === true;
-                
-                let IconoAcceso = null;
-                if (item.acceso === "FUERA DE SERVICIO") {
-                  IconoAcceso = <FaPowerOff size={12} className="text-amber-600 mr-1" title="FUERA DE SERVICIO" />;
-                } else if (item.acceso === "DE BAJA") {
-                  IconoAcceso = <FaUserSlash size={12} className="text-red-600 mr-1" title="DE BAJA" />;
+                const idMostrar = esOficial
+                  ? `ROF-${String(item.id_oficial).padStart(4, "0")}`
+                  : `REGC-${String(item.id_usuario).padStart(4, "0")}`;
+
+                let estaConectado = false;
+                if (esOficial) {
+                  estaConectado = item.estado === true;
                 }
 
+                const advertencias = !esOficial ? (item.advertencias ?? 0) : 0;
+                const estadoDisplay = !esOficial ? getEstadoDisplay(item) : null;
+                const mostrarContador =
+                  !esOficial && estadoDisplay === "ADVERTIDO";
+
                 return (
-                  <tr key={i} className="bg-white group transition-all duration-150 hover:shadow-lg hover:-translate-y-0.5">
-                    <td className="px-3 py-3 text-[10px] font-bold text-slate-400 border-y border-l rounded-l-xl border-gray-50 uppercase text-left">{idMostrar}</td>
+                  <tr
+                    key={i}
+                    className="bg-white group transition-all duration-150 hover:shadow-lg hover:-translate-y-0.5"
+                  >
+                    <td className="px-3 py-3 text-[10px] font-bold text-slate-400 border-y border-l rounded-l-xl border-gray-50 uppercase text-left">
+                      {idMostrar}
+                    </td>
                     <td className="py-3 border-y border-gray-50">
                       <div className="flex items-center gap-3 text-left">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shrink-0 shadow-inner ${!esOficial ? "bg-blue-50 text-blue-600" : "bg-green-50 text-green-700"}`}>
-                          {!esOficial ? item.nombre_completo?.charAt(0) : <FaShieldAlt size={14} />}
+                        <div
+                          className={`w-6 h-8 rounded-md flex items-center justify-center font-black text-sm shrink-0 shadow-inner ${
+                            !esOficial
+                              ? "bg-blue-50 text-[#0C3DC2]"
+                              : "bg-green-50 text-green-700"
+                          }`}
+                        >
+                          {!esOficial ? (
+                            item.nombre_completo?.charAt(0)
+                          ) : (
+                            <FaShieldAlt size={14} />
+                          )}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-bold text-[#1e293b] leading-tight truncate">{item.nombre_completo}</span>
+                          <span className="text-xs font-bold text-[#1e293b] leading-tight truncate">
+                            {item.nombre_completo}
+                          </span>
                         </div>
                       </div>
                     </td>
@@ -371,35 +728,87 @@ function Usuarios() {
                         <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">
                           {item.numero_escalafon || "—"} - {item.rol || "—"}
                         </td>
-                        <td className="py-3 text-[11px] font-extrabold text-slate-600 border-y border-gray-50 text-left">{item.cargo || "—"}</td>
-                        <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">{item.celular || "—"}</td>
+                        <td className="py-3 text-[11px] font-extrabold text-slate-600 border-y border-gray-50 text-left">
+                          {item.cargo || "—"}
+                        </td>
+                        <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">
+                          {item.celular || "—"}
+                        </td>
                         <td className="py-3 border-y border-gray-50 text-left">
-                          <div className="flex items-center">
-                            {IconoAcceso}
-                            <span className={`inline-flex justify-center w-24 py-1.5 rounded-lg text-[9px] font-black uppercase text-white shadow-sm ${estaConectado ? "bg-[#00a65a]" : "bg-[#e00000]"}`}>
-                              {estaConectado ? "Conectado" : "Desconectado"}
-                            </span>
+                          <div className="flex flex-col items-start gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`inline-flex py-1.5 w-16px md:w-24 rounded-md text-[9px] font-bold tracking-wider text-white justify-center uppercase shadow-sm ${
+                                  estaConectado ? "bg-[#007942]" : "bg-[#C90A0A]"
+                                }`}
+                              >
+                                {estaConectado ? "Conectado" : "Desconectado"}
+                              </span>
+                              {item.acceso === "FUERA DE SERVICIO" && (
+                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#C90A0A] text-[#C90A0A] shadow-sm">
+                                  <FaPowerOff size={10} />
+                                </div>
+                              )}
+                              {item.acceso === "DE BAJA" && (
+                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#C90A0A] text-[#C90A0A] shadow-sm">
+                                  <FaUserSlash size={10} />
+                                </div>
+                              )}
+                            </div>
+                            {item.acceso === "FUERA DE SERVICIO" && (
+                              <span className="text-[8px] font-bold uppercase tracking-wide text-[#C90A0A] leading-none">
+                                FUERA DE SERVICIO
+                              </span>
+                            )}
+                            {item.acceso === "DE BAJA" && (
+                              <span className="text-[8px] font-bold uppercase tracking-wide text-[#C90A0A] leading-none">
+                                DADO DE BAJA
+                              </span>
+                            )}
                           </div>
                         </td>
                       </>
                     ) : (
                       <>
-                        <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">{item.ci || "—"}</td>
-                        <td className="py-3 text-[11px] font-extrabold text-slate-600 border-y border-gray-50 text-left">{item.celular || "—"}</td>
+                        <td className="py-3 text-[11px] font-bold text-slate-500 border-y border-gray-50 text-left">
+                          {item.ci || "—"}
+                        </td>
+                        <td className="py-3 text-[11px] font-extrabold text-slate-600 border-y border-gray-50 text-left">
+                          {item.celular || "—"}
+                        </td>
                         <td className="py-3 border-y border-gray-50 text-left">
-                          <div className="flex flex-col items-start justify-center">
-                            <span className={`inline-flex justify-center w-28 py-1.5 rounded-lg text-[9px] font-black uppercase text-white shadow-sm ${
-                              item.estado_cuenta === "ACTIVO" ? "bg-[#00a65a]" :
-                              item.estado_cuenta === "ADVERTIDO" ? "bg-[#ff7e00]" :
-                              item.estado_cuenta === "SUSPENDIDO" ? "bg-[#e00000]" : "bg-[#9da1a3]"
-                            }`}>
-                              {item.estado_cuenta}
-                            </span>
-                            {item.estado_cuenta === "ADVERTIDO" && (
-                              <span className="text-[7px] font-black uppercase mt-0.5 tracking-tighter text-[#ff7e00] leading-none">REPORTES MALINTENCIONADOS</span>
+                          <div className="flex flex-col items-start justify-center gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`inline-flex py-1.5 px-2.5 rounded-md text-[10px] font-bold tracking-wider uppercase text-white ${
+                                  estadoDisplay === "VERIFICADO"
+                                    ? "bg-[#0172e3]"
+                                    : estadoDisplay === "NO VERIFICADO"
+                                    ? "bg-[#9da1a3]"
+                                    : estadoDisplay === "ADVERTIDO"
+                                    ? "bg-[#c64114]"
+                                    : estadoDisplay === "SUSPENDIDO"
+                                    ? "bg-[#C90A0A]"
+                                    : "bg-[#9da1a3]"
+                                }`}
+                              >
+                                {estadoDisplay}
+                              </span>
+                              {mostrarContador && (
+                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#e67402] text-[#e67402] text-[10px] font-black shadow-sm">
+                                  {advertencias}
+                                </div>
+                              )}
+                            </div>
+                            {estadoDisplay === "ADVERTIDO" && (
+                              <span className="text-[8px] font-bold uppercase tracking-wide text-[#e67402] leading-none">
+                                ALERTAS DESESTIMADAS
+                              </span>
                             )}
-                            {item.estado_cuenta === "SUSPENDIDO" && (
-                              <span className="text-[7px] font-black uppercase mt-0.5 tracking-tighter text-[#e00000] leading-none">LÍMITE DE ADVERTENCIA</span>
+                            {estadoDisplay === "SUSPENDIDO" && (
+                              <span className="text-[8px] font-black uppercase tracking-tighter text-[#C90A0A] leading-none">
+                                LÍMITE DE ADVERTENCIAS
+                              </span>
                             )}
                           </div>
                         </td>
@@ -409,17 +818,35 @@ function Usuarios() {
                       <div className="flex items-center gap-2">
                         {esOficial ? (
                           <>
-                            <button onClick={() => { setEditandoPolicia(item); setMostrarModalPolicia(true); }} className="p-2 bg-amber-500 text-white rounded-lg shadow shadow-amber-100 hover:scale-105 transition-all">
+                            <button
+                              onClick={() => setOficialSeleccionado(item)}
+                              className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#113e27] hover:text-white transition-all duration-200"
+                              title="Ver perfil"
+                            >
+                              <FaEye size={11} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditandoPolicia(item);
+                                setMostrarModalPolicia(true);
+                              }}
+                              className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#113e27] hover:text-white transition-all duration-200"
+                              title="Editar"
+                            >
                               <FaEdit size={11} />
                             </button>
-                            <button onClick={() => eliminarOficial(item.id_oficial)} className="p-2 bg-red-600 text-white rounded-lg shadow shadow-red-100 hover:scale-105 transition-all">
+                            <button
+                              onClick={() => eliminarOficial(item.id_oficial)}
+                              className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#C90A0A] hover:text-white transition-all duration-200"
+                              title="Eliminar"
+                            >
                               <FaTrashAlt size={11} />
                             </button>
                           </>
                         ) : (
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setCiudadanoSeleccionado({
+                          <button
+                            onClick={() =>
+                              setCiudadanoSeleccionado({
                                 nombre: item.nombre_completo,
                                 id: item.id_usuario,
                                 ci: item.ci,
@@ -427,23 +854,17 @@ function Usuarios() {
                                 email: item.email,
                                 foto_ci: item.foto_ci,
                                 selfie: item.selfie,
-                                estado: item.estado_cuenta,
-                                fecha_registro: item.fecha_registro
-                              })}
-                              className="p-2 bg-blue-600 text-white rounded-lg shadow shadow-blue-100 hover:scale-105 transition-all shrink-0"
-                            >
-                              <FaSearch size={11} />
-                            </button>
-                            {item.estado_cuenta === "SUSPENDIDO" && (
-                              <button
-                                onClick={() => habilitarCiudadano(item)}
-                                className="p-2 bg-green-600 text-white rounded-lg shadow shadow-green-100 hover:scale-105 transition-all shrink-0"
-                                title="Habilitar cuenta"
-                              >
-                                <FaCheckCircle size={11} />
-                              </button>
-                            )}
-                          </div>
+                                id_estado_ciudadano: item.id_estado_ciudadano,
+                                fecha_registro: item.fecha_registro,
+                                advertencias: item.advertencias,
+                                motivo_rechazo: item.motivo_rechazo,
+                              })
+                            }
+                            className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#113e27] hover:text-white transition-all duration-200"
+                            title="Ver perfil"
+                          >
+                            <FaEye size={11} />
+                          </button>
                         )}
                       </div>
                     </td>
@@ -452,7 +873,10 @@ function Usuarios() {
               })}
               {datosFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan={tabActiva === "oficiales" ? 7 : 6} className="text-center py-12 text-gray-400 font-medium">
+                  <td
+                    colSpan={tabActiva === "oficiales" ? 7 : 6}
+                    className="text-center py-12 text-gray-400 font-medium"
+                  >
                     No hay registros
                   </td>
                 </tr>
@@ -473,6 +897,12 @@ function Usuarios() {
         ciudadano={ciudadanoSeleccionado}
         onClose={() => setCiudadanoSeleccionado(null)}
         onActualizar={cargarCiudadanos}
+      />
+
+      {/* MODAL PERFIL OFICIAL */}
+      <PerfilOficial
+        oficial={oficialSeleccionado}
+        onClose={() => setOficialSeleccionado(null)}
       />
     </div>
   );

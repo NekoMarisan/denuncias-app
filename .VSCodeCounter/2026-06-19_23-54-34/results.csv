@@ -1,0 +1,45 @@
+"filename", "language", "JavaScript", "PostCSS", "Dotenv", "JSON", "JavaScript JSX", "HTML", "comment", "blank", "total"
+"c:\denuncias-app\.env", "Dotenv", 0, 0, 7, 0, 0, 0, 0, 3, 10
+"c:\denuncias-app\craco.config.js", "JavaScript", 19, 0, 0, 0, 0, 0, 4, 4, 27
+"c:\denuncias-app\package-lock.json", "JSON", 0, 0, 0, 19317, 0, 0, 0, 1, 19318
+"c:\denuncias-app\package.json", "JSON", 0, 0, 0, 63, 0, 0, 0, 1, 64
+"c:\denuncias-app\public\index.html", "HTML", 0, 0, 0, 0, 0, 15, 0, 1, 16
+"c:\denuncias-app\public\manifest.json", "JSON", 0, 0, 0, 25, 0, 0, 0, 1, 26
+"c:\denuncias-app\src\App.css", "PostCSS", 0, 33, 0, 0, 0, 0, 0, 6, 39
+"c:\denuncias-app\src\App.jsx", "JavaScript JSX", 0, 0, 0, 0, 112, 0, 0, 15, 127
+"c:\denuncias-app\src\App.test.js", "JavaScript", 7, 0, 0, 0, 0, 0, 0, 2, 9
+"c:\denuncias-app\src\components\AlertaCard.jsx", "JavaScript JSX", 0, 0, 0, 0, 44, 0, 0, 4, 48
+"c:\denuncias-app\src\components\DatoAlerta.jsx", "JavaScript JSX", 0, 0, 0, 0, 102, 0, 4, 7, 113
+"c:\denuncias-app\src\components\DesestimarAlerta.jsx", "JavaScript JSX", 0, 0, 0, 0, 112, 0, 0, 8, 120
+"c:\denuncias-app\src\components\GestionPatrullas.jsx", "JavaScript JSX", 0, 0, 0, 0, 464, 0, 5, 29, 498
+"c:\denuncias-app\src\components\Layout.jsx", "JavaScript JSX", 0, 0, 0, 0, 186, 0, 10, 18, 214
+"c:\denuncias-app\src\components\ProtectedRoute.jsx", "JavaScript JSX", 0, 0, 0, 0, 17, 0, 0, 5, 22
+"c:\denuncias-app\src\components\map\MapComponent.jsx", "JavaScript JSX", 0, 0, 0, 0, 30, 0, 1, 6, 37
+"c:\denuncias-app\src\components\modals\DetalleAlerta.jsx", "JavaScript JSX", 0, 0, 0, 0, 683, 0, 11, 35, 729
+"c:\denuncias-app\src\components\modals\DetalleEmergencia.jsx", "JavaScript JSX", 0, 0, 0, 0, 642, 0, 9, 36, 687
+"c:\denuncias-app\src\components\modals\FormularioDesestimados.jsx", "JavaScript JSX", 0, 0, 0, 0, 153, 0, 8, 12, 173
+"c:\denuncias-app\src\components\modals\FormularioTabulacion.jsx", "JavaScript JSX", 0, 0, 0, 0, 795, 0, 22, 70, 887
+"c:\denuncias-app\src\components\modals\NuevoPolicia.jsx", "JavaScript JSX", 0, 0, 0, 0, 533, 0, 37, 61, 631
+"c:\denuncias-app\src\components\modals\PerfilCiudadano.jsx", "JavaScript JSX", 0, 0, 0, 0, 460, 0, 19, 43, 522
+"c:\denuncias-app\src\components\ui\Toast.jsx", "JavaScript JSX", 0, 0, 0, 0, 28, 0, 0, 5, 33
+"c:\denuncias-app\src\constants\CategoriasDelitos.js", "JavaScript", 2, 0, 0, 0, 0, 0, 0, 0, 2
+"c:\denuncias-app\src\context\AuthContext.jsx", "JavaScript JSX", 0, 0, 0, 0, 154, 0, 1, 27, 182
+"c:\denuncias-app\src\context\ToastContext.jsx", "JavaScript JSX", 0, 0, 0, 0, 36, 0, 0, 7, 43
+"c:\denuncias-app\src\index.css", "PostCSS", 0, 13, 0, 0, 0, 0, 0, 3, 16
+"c:\denuncias-app\src\index.js", "JavaScript", 12, 0, 0, 0, 0, 0, 3, 3, 18
+"c:\denuncias-app\src\pages\ActividadLog.jsx", "JavaScript JSX", 0, 0, 0, 0, 413, 0, 19, 31, 463
+"c:\denuncias-app\src\pages\ArchivoHistorico.jsx", "JavaScript JSX", 0, 0, 0, 0, 444, 0, 9, 30, 483
+"c:\denuncias-app\src\pages\CentroDespacho.jsx", "JavaScript JSX", 0, 0, 0, 0, 776, 0, 6, 104, 886
+"c:\denuncias-app\src\pages\Dashboard.jsx", "JavaScript JSX", 0, 0, 0, 0, 348, 0, 14, 35, 397
+"c:\denuncias-app\src\pages\GestionAlertas.jsx", "JavaScript JSX", 0, 0, 0, 0, 510, 0, 9, 61, 580
+"c:\denuncias-app\src\pages\Login.jsx", "JavaScript JSX", 0, 0, 0, 0, 278, 0, 0, 28, 306
+"c:\denuncias-app\src\pages\Tabulacion.jsx", "JavaScript JSX", 0, 0, 0, 0, 631, 0, 6, 44, 681
+"c:\denuncias-app\src\pages\Usuarios.jsx", "JavaScript JSX", 0, 0, 0, 0, 746, 0, 10, 53, 809
+"c:\denuncias-app\src\reportWebVitals.js", "JavaScript", 12, 0, 0, 0, 0, 0, 0, 2, 14
+"c:\denuncias-app\src\services\apiSegura.js", "JavaScript", 18, 0, 0, 0, 0, 0, 0, 3, 21
+"c:\denuncias-app\src\services\logService.js", "JavaScript", 17, 0, 0, 0, 0, 0, 1, 1, 19
+"c:\denuncias-app\src\services\orsService.js", "JavaScript", 19, 0, 0, 0, 0, 0, 0, 2, 21
+"c:\denuncias-app\src\services\supabase.js", "JavaScript", 10, 0, 0, 0, 0, 0, 0, 2, 12
+"c:\denuncias-app\src\setupTests.js", "JavaScript", 1, 0, 0, 0, 0, 0, 4, 1, 6
+"c:\denuncias-app\tailwind.config.js", "JavaScript", 26, 0, 0, 0, 0, 0, 1, 1, 28
+"Total", "-", 143, 46, 7, 19405, 8697, 15, 213, 811, 29337

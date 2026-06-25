@@ -2,7 +2,7 @@ import React, { forwardRef } from "react";
 import { FaUser, FaFileAlt, FaMapMarkerAlt, FaExclamationCircle } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 
-export const DatoAlerta = forwardRef(({ alerta, visible, onClose }, ref) => {
+export const DatoAlerta = forwardRef(({ alerta, visible, onClose, onExitComplete }, ref) => {
   const getPrioridadStyles = (prioridad) => {
     if (!prioridad) return "bg-amber-400 text-white";
     const p = prioridad.toString().toLowerCase().trim();
@@ -26,7 +26,7 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose }, ref) => {
   }
 
   return (
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={onExitComplete}>
       {visible && alerta && (
         <motion.div
           ref={ref}
@@ -37,7 +37,7 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose }, ref) => {
           style={{ overflow: "visible" }}
         >
           <div className="pt-3 relative z-20">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-md">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-md -mt-1">
               <div className="flex justify-between items-start mb-5">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
