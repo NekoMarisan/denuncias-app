@@ -38,25 +38,6 @@ function Login() {
   const errorTimeout = useRef(null);
 
   useEffect(() => {
-    if (user) {
-      switch (user.rol) {
-        case "admin":
-        case "operador":
-          navigate("/dashboard");
-          break;
-        case "despachador":
-          navigate("/dashboard");
-          break;
-        case "tabulador":
-          navigate("/dashboard");
-          break;
-        default:
-          navigate("/dashboard");
-      }
-    }
-  }, [user, navigate]);
-
-  useEffect(() => {
     if (error) {
       if (errorTimeout.current) clearTimeout(errorTimeout.current);
       errorTimeout.current = setTimeout(() => setError(""), 2000);
@@ -166,10 +147,27 @@ function Login() {
     try {
       const result = await login(escalafon, pass);
       if (!result.success) {
-        registrarIntentoFallido(escalafon);
-        setError(result.error || "Credenciales incorrectas");
+        const esSuspendido = result.error?.includes("FUERA DE SERVICIO");
+        const esBaja = result.error?.includes("DADO DE BAJA");
+        if (esSuspendido || esBaja) {
+          showToast(result.error, "error");
+        } else {
+          registrarIntentoFallido(escalafon);
+          setError(result.error || "Credenciales incorrectas");
+        }
       } else {
         resetearIntentos(escalafon);
+
+
+        
+        const rolLabel = {
+          admin: "Administrador",
+          operador: "Operador",
+          despachador: "Despachador",
+          tabulador: "Tabulador",
+        }[result.rol] || result.rol;
+        showToast(`¡Bienvenido, ${rolLabel} ${result.nombre}!`, "success");
+        navigate("/dashboard");
       }
     } catch (err) {
       console.error(err);

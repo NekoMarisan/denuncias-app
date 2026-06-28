@@ -16,23 +16,34 @@ import { useToast } from "../context/ToastContext";
 const Layout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-const { user, logout } = useAuth();
-const { showToast } = useToast();
+  const { user, logout } = useAuth();
+  const { showToast } = useToast();
+  const [verTodoState, setVerTodoState] = React.useState(false);
 
-useEffect(() => {
-  const handler = () => {
-    showToast("Tu sesión expirará en 2 minutos. Guarda tu proceso de gestión.", "warning");
-  };
-  window.addEventListener("sesion_por_expirar", handler);
-  return () => window.removeEventListener("sesion_por_expirar", handler);
-}, [showToast]);
+  useEffect(() => {
+    const handler = () => setVerTodoState(!!window.__tabulacionVerTodo);
+    window.addEventListener("tabulacion_view_change", handler);
+    return () => window.removeEventListener("tabulacion_view_change", handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      showToast(
+        "Tu sesión expirará en 2 minutos. Guarda tu proceso de gestión.",
+        "warning",
+      );
+    };
+    window.addEventListener("sesion_por_expirar", handler);
+    return () => window.removeEventListener("sesion_por_expirar", handler);
+  }, [showToast]);
 
   const getHeaderTitle = () => {
     const path = location.pathname;
     if (path === "/dashboard") return "DASHBOARD PRINCIPAL";
     if (path === "/gestion-alertas") return "GESTIÓN DE ALERTAS";
     if (path === "/centro-despacho") return "CENTRO DE DESPACHO TÁCTICO";
-    if (path === "/tabulacion") return "TABULACIÓN Y ESTADÍSTICAS";
+    if (path === "/tabulacion")
+      return verTodoState ? "ARCHIVO HISTÓRICO" : "TABULACIÓN Y ESTADÍSTICAS";
     if (path === "/usuarios") return "GESTIÓN INTEGRAL DE USUARIOS";
     if (path === "/actividad-log") return "REGISTRO DE ACTIVIDAD";
     if (path === "/archivo-historico") return "ARCHIVO HISTÓRICO";
@@ -40,8 +51,11 @@ useEffect(() => {
   };
 
   const shouldShowBackButton = () => location.pathname !== "/dashboard";
-  const getBackTarget = () =>
-    location.pathname === "/archivo-historico" ? "/tabulacion" : "/dashboard";
+  const getBackTarget = () => {
+    if (location.pathname === "/tabulacion" && window.__tabulacionVerTodo)
+      return null;
+    return "/dashboard";
+  };
 
   // Determinar si el usuario es administrador
   const esAdmin = user?.rol === "admin";
@@ -172,7 +186,16 @@ useEffect(() => {
           <div className="flex items-center gap-4">
             {shouldShowBackButton() && (
               <button
-                onClick={() => navigate(getBackTarget())}
+                onClick={() => {
+                  if (
+                    location.pathname === "/tabulacion" &&
+                    window.__tabulacionVerTodo
+                  ) {
+                    window.__tabulacionOnBack();
+                  } else {
+                    navigate("/dashboard");
+                  }
+                }}
                 className="p-2 bg-gray-50 rounded-lg text-slate-500 hover:bg-gray-100 transition-all border border-gray-100"
               >
                 <FaChevronLeft size={12} />

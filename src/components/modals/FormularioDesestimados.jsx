@@ -14,12 +14,12 @@ const HeaderSection = ({ icon, title, bgColor }) => (
 
 const Field = ({ label, value }) => (
   <div className="space-y-0.5">
-    <label className="text-xs font-medium text-slate-500 ml-1.5 tracking-tight">{label}</label>
+    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">{label}</label>
     <input
       type="text"
       readOnly
       value={value || '—'}
-      className="w-full rounded-xl p-2.5 text-xs font-bold outline-none border bg-slate-100/40 border-slate-100 text-slate-500"
+      className="w-full rounded-xl p-2.5 text-xs font-bold outline-none border bg-slate-100/40 border-slate-100 text-slate-600"
     />
   </div>
 );
@@ -56,6 +56,13 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
     });
   };
 
+  const splitNameLines = (fullName) => {
+  if (!fullName || fullName === '—') return { first: fullName, last: '' };
+  const parts = fullName.trim().split(' ');
+  if (parts.length === 1) return { first: parts[0], last: '' };
+  return { first: parts[0], last: parts.slice(1).join(' ') };
+};
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
@@ -73,12 +80,13 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
                   ALERTA DESESTIMADA - REPORTE FINAL
                 </h2>
                 <div className="flex flex-wrap gap-3 text-[11px] font-bold text-white/70 mt-0.5">
-                  {codigo_alerta && (
-                    <span className="ml-3">
-                      Código: {codigo_alerta}
-                    </span>
-                  )}
-                </div>
+  {codigo_alerta && (
+    <span>ID: {codigo_alerta}</span>
+  )}
+  {fecha_desestimo && (
+    <span className="ml-3">Desestimado: {fecha_desestimo}</span>
+  )}
+</div>
               </div>
             </div>
             <button
@@ -121,38 +129,34 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
           <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full mb-6">
             <HeaderSection icon={<FaExclamationTriangle className="text-red-600 text-sm" />} title="INFORMACIÓN DE DESESTIMACIÓN" bgColor="bg-red-50" />
             <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-0.5">
-                <label className="text-[11px] font-bold text-slate-400 ml-2 tracking-wider">MOTIVO</label>
-                <div className="bg-slate-50 rounded-md p-3 border border-slate-200">
-                  <p className="text-xs font-medium ml-2 tracking-wider text-slate-500">{motivo_desestimo || "—"}</p>
-                </div>
-              </div>
-              <div className="space-y-0.5">
-                <label className="text-[11px] font-bold text-slate-400 ml-2 tracking-wider">JUSTIFICACIÓN ADICIONAL</label>
-                <div className="bg-slate-50 rounded-md p-3 border border-slate-20">
-                  <p className="text-xs font-medium ml-2 tracking-wider text-slate-500">{justificacion || "No especificada"}</p>
-                </div>
-              </div>
-            </div>
+  <Field label="MOTIVO" value={motivo_desestimo} />
+  <Field label="FECHA DE DESESTIMACIÓN" value={fecha_desestimo} />
+  <div className="space-y-0.5">
+    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">JUSTIFICACIÓN ADICIONAL</label>
+    <textarea
+      readOnly
+      value={justificacion || "No especificada"}
+      className="w-full bg-slate-100/40 border border-slate-100 rounded-xl p-3 text-xs font-medium italic text-slate-500 outline-none h-20 resize-none"
+    />
+  </div>
+</div>
           </section>
 
           {/* HISTORIAL DE PROCESO - estilo similar al de tabulación */}
-          <div className="pt-2 px-2 mb-4">
-            <h2 className="flex items-center gap-1.5 font-black text-slate-500 uppercase text-[9px] tracking-wider mb-3">
-              <FaHistory className="text-[#1a5336] text-xs" /> HISTORIAL DE PROCESO
-            </h2>
-            <div className="flex justify-endr">
-              <div className="flex items-center gap-3 bg-white border border-slate-100 shadow-sm rounded-xl p-3 min-w-[200px]">
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                  <FaUserCheck size={14} />
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase">Operador que desestimó</p>
-                  <p className="text-[11px] font-bold text-slate-700 uppercase">{nombre_operador_desestimo || "—"}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <div className="pt-6 px-2 mt-4">
+  <h2 className="flex items-center gap-3 font-bold text-slate-400 uppercase text-[11px] tracking-wider mb-5">
+    HISTORIAL DE PROCESO
+  </h2>
+  <div className="flex flex-wrap md:flex-nowrap justify-center gap-5">
+    <HistoryCard
+      role="OPERADOR QUE DESESTIMÓ"
+      name={nombre_operador_desestimo || "—"}
+      icon={<FaUserCheck size={12} />}
+      highlight
+      splitName={splitNameLines(nombre_operador_desestimo || "—")}
+    />
+  </div>
+</div>
 
           {/* BOTONES */}
           <div className="flex justify-end gap-4 pt-4 border-t border-slate-100 mt-2">
@@ -169,5 +173,24 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
     </div>
   );
 };
+
+const HistoryCard = ({ role, name, icon, highlight, splitName }) => (
+  <div className={`flex-1 flex flex-col items-center min-w-[96px] rounded-xl p-2 transition-all ${highlight ? 'bg-green-50 border border-green-200 shadow-md' : 'bg-white border border-slate-300 shadow-md'}`}>
+    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${highlight ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+      {icon}
+    </div>
+    <p className="text-[9px] font-bold text-slate-400 uppercase text-center">{role}</p>
+    <div className="text-center mt-1">
+      <p className={`text-[9px] font-bold uppercase leading-tight ${highlight ? 'text-green-700' : 'text-slate-600'}`}>
+        {splitName.first}
+      </p>
+      {splitName.last && (
+        <p className={`text-[9px] font-bold uppercase leading-tight ${highlight ? 'text-green-700' : 'text-slate-600'}`}>
+          {splitName.last}
+        </p>
+      )}
+    </div>
+  </div>
+);
 
 export default FormularioDesestimados;

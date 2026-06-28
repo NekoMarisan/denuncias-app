@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { FaTimes, FaEye, FaEyeSlash } from "react-icons/fa";
 import { supabase } from "../../services/supabase";
 
-const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) => {
+const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null, onToast }) => {
   const [formData, setFormData] = useState({
     nombre_completo:  "",
     ci:               "",
@@ -268,22 +268,19 @@ const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null }) =
     }
 
     // Construir objeto para oficial
-    const nuevoAcceso = editandoPolicia ? formData.acceso : "FUERA DE SERVICIO";
-    let nuevoEstado = false;
-    if (editandoPolicia) {
-      nuevoEstado = nuevoAcceso === "EN SERVICIO" ? editandoPolicia.estado : false;
-    }
+// DESPUÉS
+const nuevoAcceso = editandoPolicia ? formData.acceso : "FUERA DE SERVICIO";
 
-    const datosOficial = {
-      nombre_completo:  formData.nombre_completo,
-      ci:               formData.ci,
-      celular:          formData.celular,
-      cargo:            formData.cargo,
-      rol:              formData.rol,
-      numero_escalafon: formData.numero_escalafon,
-      acceso:           nuevoAcceso,
-      estado:           nuevoEstado,
-    };
+const datosOficial = {
+  nombre_completo:  formData.nombre_completo,
+  ci:               formData.ci,
+  celular:          formData.celular,
+  cargo:            formData.cargo,
+  rol:              formData.rol,
+  numero_escalafon: formData.numero_escalafon,
+  acceso:           nuevoAcceso,
+  estado:           nuevoAcceso === "EN SERVICIO" ? (editandoPolicia?.estado ?? false) : false,
+};
     if (formData.contrasena && formData.contrasena.trim() !== "") {
       datosOficial.contrasena = formData.contrasena;
     }
@@ -367,6 +364,34 @@ await supabase.from("log_actividad").insert([{
           ? `Editó datos del oficial: ${formData.nombre_completo} — Rol: ${formData.rol}`
           : `Creó nuevo oficial: ${formData.nombre_completo} — Rol: ${formData.rol}`,
       }]);
+
+      if (editandoPolicia) {
+        const accesoAnterior = editandoPolicia.acceso;
+        const accesoCambio = accesoAnterior !== nuevoAcceso;
+
+        const camposEditados = [];
+        if (formData.nombre_completo !== editandoPolicia.nombre_completo) camposEditados.push("Nombre");
+        if (formData.ci !== editandoPolicia.ci) camposEditados.push("CI");
+        if (formData.celular !== editandoPolicia.celular) camposEditados.push("Celular");
+        if (formData.cargo !== editandoPolicia.cargo) camposEditados.push("Rango");
+        if (formData.rol !== editandoPolicia.rol) camposEditados.push("Rol");
+        if (formData.numero_escalafon !== editandoPolicia.numero_escalafon) camposEditados.push("Escalafón");
+
+        if (accesoCambio && nuevoAcceso === "EN SERVICIO") {
+          onToast?.(`Oficial ${formData.nombre_completo} — Cuenta EN SERVICIO`, "success");
+        } else if (accesoCambio && nuevoAcceso === "FUERA DE SERVICIO") {
+          onToast?.(`Oficial ${formData.nombre_completo} — Cuenta FUERA DE SERVICIO`, "error");
+        } else if (accesoCambio && nuevoAcceso === "DE BAJA") {
+          onToast?.(`Oficial ${formData.nombre_completo} — Cuenta DADA DE BAJA`, "error");
+        } else if (camposEditados.length > 0) {
+          onToast?.(`Oficial ${formData.nombre_completo} — Campo(s) ${camposEditados.join(", ")} actualizado(s)`, "success");
+        } else {
+          onToast?.(`Oficial ${formData.nombre_completo} — Sin cambios detectados`, "success");
+        }
+      } else {
+        onToast?.(`Oficial ${formData.nombre_completo} — Cuenta registrada correctamente`, "success");
+      }
+
       onGuardado();
       onClose();
     } catch (err) {

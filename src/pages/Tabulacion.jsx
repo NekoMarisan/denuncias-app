@@ -7,6 +7,7 @@ import { contravenciones, delitos } from "../constants/CategoriasDelitos";
 import ArchivoHistorico from "./ArchivoHistorico";
 import { supabase } from '../services/supabase';
 import { useAuth } from "../context/AuthContext";
+import { exportPDFTabulacion } from "../utils/exports/exportPDFTabulacion";
 
 const getColorByCategoria = (categoria) => {
   if (!categoria) return "bg-gray-300";
@@ -40,6 +41,12 @@ function Tabulacion() {
 
   const fechaHoy = new Date().toISOString().split('T')[0];
 
+useEffect(() => {
+  window.__tabulacionVerTodo = verTodo;
+  window.__tabulacionOnBack = () => setVerTodo(false);
+  window.dispatchEvent(new Event("tabulacion_view_change"));
+}, [verTodo]);
+
   const cargarDatos = useCallback(async () => {
     setCargando(true);
     try {
@@ -63,21 +70,22 @@ function Tabulacion() {
           protagonistas,
           remision_caso,
           alerta:id_alerta (
-            id_alerta,
-            codigo_alerta,
-            categoria,
-            contravenciones,
-            delitos,
-            descripcion,
-            fecha_hora,
-            ubicacion,
-            id_operador_receptor,
-            usuario_ciudadano:id_usuario (
-              nombre_completo,
-              ci,
-              celular
-            )
-          ),
+  id_alerta,
+  codigo_alerta,
+  categoria,
+  contravenciones,
+  delitos,
+  descripcion,
+  fecha_hora,
+  ubicacion,
+  prioridad,
+  id_operador_receptor,
+  usuario_ciudadano:id_usuario (
+    nombre_completo,
+    ci,
+    celular
+  )
+),
           patrullero:patrullero!id_patrullero (
             placa,
             epi,
@@ -120,22 +128,22 @@ function Tabulacion() {
           id_patrullero,
           id_oficial_asignador,
           alerta:id_alerta (
-            id_alerta,
-            codigo_alerta,
-            categoria,
-            contravenciones,
-            delitos,
-            descripcion,
-            fecha_hora,
-            ubicacion,
-            id_usuario,
-            id_estado_actual,
-            usuario_ciudadano:id_usuario (
-              nombre_completo,
-              ci,
-              celular
-            )
-          ),
+  id_alerta,
+  codigo_alerta,
+  categoria,
+  contravenciones,
+  delitos,
+  descripcion,
+  fecha_hora,
+  ubicacion,
+  prioridad,
+  id_operador_receptor,
+  usuario_ciudadano:id_usuario (
+    nombre_completo,
+    ci,
+    celular
+  )
+),
           patrullero:patrullero!id_patrullero (
             oficial:oficial (
               numero_escalafon
@@ -168,24 +176,25 @@ function Tabulacion() {
           const estaDesestimada = idsDesestimadas.has(a.alerta.id_alerta);
           
           return {
-            id: a.alerta.codigo_alerta || `ALT-${String(a.alerta.id_alerta).padStart(4, "0")}`,
-            id_alerta: a.alerta.id_alerta,
-            id_asignacion: a.id_asignacion,
-            id_patrullero: a.id_patrullero,
-            id_despachador: a.id_oficial_asignador,
-            incidente: clasificacion,
-            contravenciones: a.alerta.contravenciones,
-            delitos: a.alerta.delitos,
-            descripcion: a.alerta.descripcion || "",
-            patrulla: numeroEscalafon,
-            estado: estaDesestimada ? "DESESTIMADA" : "ATENDIDO",
-            ciudadano: a.alerta.usuario_ciudadano?.nombre_completo || "Ciudadano desconocido",
-            ci: a.alerta.usuario_ciudadano?.ci || "—",
-            celular: a.alerta.usuario_ciudadano?.celular || "—",
-            id_usuario: a.alerta.id_usuario,
-            ubicacion: a.alerta.ubicacion || "",
-            fecha: a.alerta.fecha_hora?.split("T")[0] || fechaHoy,
-          };
+  id: a.alerta.codigo_alerta || `ALT-${String(a.alerta.id_alerta).padStart(4, "0")}`,
+  id_alerta: a.alerta.id_alerta,
+  id_asignacion: a.id_asignacion,
+  id_patrullero: a.id_patrullero,
+  id_despachador: a.id_oficial_asignador,
+  incidente: clasificacion,
+  contravenciones: a.alerta.contravenciones,
+  delitos: a.alerta.delitos,
+  descripcion: a.alerta.descripcion || "",
+  patrulla: numeroEscalafon,
+  estado: estaDesestimada ? "DESESTIMADA" : "ATENDIDO",
+  ciudadano: a.alerta.usuario_ciudadano?.nombre_completo || "Ciudadano desconocido",
+  ci: a.alerta.usuario_ciudadano?.ci || "—",
+  celular: a.alerta.usuario_ciudadano?.celular || "—",
+  id_usuario: a.alerta.id_usuario,
+  ubicacion: a.alerta.ubicacion || "",
+  prioridad: a.alerta.prioridad || "—",
+  fecha: a.alerta.fecha_hora?.split("T")[0] || fechaHoy,
+};
         });
 
       setAlertasPendientes(pendientes);
@@ -201,9 +210,9 @@ function Tabulacion() {
     const subscription = supabase
       .channel('tabulacion-realtime')
       .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'alerta' }, 
-        () => cargarDatos()
-      )
+  { event: 'INSERT', schema: 'public', table: 'alerta' }, 
+  () => cargarDatos()
+)
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'alerta_desestimada' }, 
         () => cargarDatos()
@@ -261,118 +270,101 @@ function Tabulacion() {
 
   const ultimasTabuladas = useMemo(() => tabuladas.slice(0, 4), [tabuladas]);
 
-  const handleGenerarPDF = (tab) => {
-    const alerta = tab.alerta || {};
-    const usuario = alerta.usuario_ciudadano || {};
-    const clasificacionOriginal = alerta.contravenciones || alerta.delitos || "Sin clasificar";
-    const clasificacionFinal = tab.resultado_final || "—";
-    const areaUrbanaTexto = tab.area_urbana ? "Sí" : "No";
-    const areaRuralTexto = tab.area_rural ? "Sí" : "No";
-    const fechaTabulacion = new Date(tab.fecha_tabulacion).toLocaleString();
-    const fechaAlerta = alerta.fecha_hora ? new Date(alerta.fecha_hora).toLocaleString() : "—";
+const handleGenerarPDF = async (tab) => {
+    let logoBase64 = null;
+    try {
+      const res = await fetch("/logo_of.png");
+      const blob = await res.blob();
+      logoBase64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch (_) {}
 
-    const contenido = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Reporte de Tabulación - Alerta ${tab.id_alerta}</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.4; }
-          h1 { color: #1a5336; font-size: 24px; border-bottom: 2px solid #1a5336; padding-bottom: 10px; }
-          h2 { color: #2d6a4f; font-size: 18px; margin-top: 20px; border-left: 4px solid #2d6a4f; padding-left: 10px; }
-          .seccion { margin-bottom: 25px; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-          .campo { margin-bottom: 8px; }
-          .label { font-weight: bold; width: 200px; display: inline-block; color: #333; }
-          .valor { display: inline-block; color: #555; }
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
-          th { background-color: #f2f2f2; font-weight: bold; }
-          .firma { margin-top: 40px; border-top: 1px solid #ccc; padding-top: 20px; text-align: center; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <h1>REPORTE DE TABULACIÓN</h1>
-        <p><strong>Fecha de emisión:</strong> ${new Date().toLocaleString()}</p>
+    // Resolver nombres desde IDs
+    const ids = [tab.id_operador_receptor, tab.id_despachador, tab.id_patrullero].filter(Boolean);
+    let nombresMap = {};
+    if (ids.length > 0) {
+      const { data: oficiales } = await supabase
+        .from("oficial")
+        .select("id_oficial, nombre_completo")
+        .in("id_oficial", ids);
+      (oficiales || []).forEach(o => { nombresMap[o.id_oficial] = o.nombre_completo; });
+    }
 
-        <div class="seccion">
-          <h2>DATOS DE LA ALERTA</h2>
-          <div class="grid">
-            <div class="campo"><span class="label">ID Alerta:</span> <span class="valor">${tab.id_alerta}</span></div>
-            <div class="campo"><span class="label">Código Alerta:</span> <span class="valor">${alerta.codigo_alerta || "—"}</span></div>
-            <div class="campo"><span class="label">Ciudadano:</span> <span class="valor">${usuario.nombre_completo || "—"}</span></div>
-            <div class="campo"><span class="label">Cédula:</span> <span class="valor">${usuario.ci || "—"}</span></div>
-            <div class="campo"><span class="label">Celular:</span> <span class="valor">${usuario.celular || "—"}</span></div>
-            <div class="campo"><span class="label">Fecha/Hora Alerta:</span> <span class="valor">${fechaAlerta}</span></div>
-            <div class="campo"><span class="label">Ubicación:</span> <span class="valor">${alerta.ubicacion || "—"}</span></div>
-            <div class="campo"><span class="label">Categoría:</span> <span class="valor">${alerta.categoria || "—"}</span></div>
-          </div>
-          <div class="campo"><span class="label">Descripción del hecho:</span><br><span class="valor">${alerta.descripcion || "—"}</span></div>
-        </div>
+    // Resolver nombre patrullero desde patrullero -> oficial
+    let nombrePatrullero = tab.numero_escalafon || "—";
+    if (tab.id_patrullero) {
+      const { data: pat } = await supabase
+        .from("patrullero")
+        .select("id_oficial")
+        .eq("id_patrullero", tab.id_patrullero)
+        .maybeSingle();
+      if (pat?.id_oficial) {
+        const { data: of } = await supabase
+          .from("oficial")
+          .select("nombre_completo")
+          .eq("id_oficial", pat.id_oficial)
+          .maybeSingle();
+        if (of) nombrePatrullero = of.nombre_completo;
+      }
+    }
 
-        <div class="seccion">
-          <h2>DIRECCIÓN Y LOCALIZACIÓN</h2>
-          <div class="grid">
-            <div class="campo"><span class="label">Área Urbana:</span> <span class="valor">${areaUrbanaTexto}</span></div>
-            <div class="campo"><span class="label">Área Rural:</span> <span class="valor">${areaRuralTexto}</span></div>
-            <div class="campo"><span class="label">Comuna:</span> <span class="valor">${tab.comuna || "—"}</span></div>
-            <div class="campo"><span class="label">Distrito:</span> <span class="valor">${tab.distrito || "—"}</span></div>
-            <div class="campo"><span class="label">Subdistrito:</span> <span class="valor">${tab.subdistrito || "—"}</span></div>
-            <div class="campo"><span class="label">Latitud:</span> <span class="valor">${alerta.lat ? alerta.lat.toFixed(6) : "—"}</span></div>
-            <div class="campo"><span class="label">Longitud:</span> <span class="valor">${alerta.lng ? alerta.lng.toFixed(6) : "—"}</span></div>
-          </div>
-        </div>
+    let reportePatrullero = "—";
+if (tab.id_patrullero && tab.id_alerta) {
+  const { data: reporte } = await supabase
+    .from("reporte_alerta")
+    .select("descripcion_reporte")
+    .eq("id_alerta", tab.id_alerta)
+    .eq("id_patrullero", tab.id_patrullero)
+    .order("fecha_reporte", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (reporte?.descripcion_reporte) reportePatrullero = reporte.descripcion_reporte;
+}
 
-        <div class="seccion">
-          <h2>CLASIFICACIÓN DEL HECHO</h2>
-          <div class="campo"><span class="label">Clasificación Original (Operador):</span> <span class="valor">${clasificacionOriginal}</span></div>
-          <div class="campo"><span class="label">Clasificación Final (Tabulador):</span> <span class="valor">${clasificacionFinal}</span></div>
-        </div>
+const codigoAlerta = tab.alerta?.codigo_alerta || tab.id_alerta;
+const nombreArchivo = `reportes/tabulacion_${codigoAlerta}.pdf`;
 
-        <div class="seccion">
-          <h2>INFORME POLICIAL</h2>
-          <div class="grid">
-            <div class="campo"><span class="label">Número de Escalafón:</span> <span class="valor">${tab.numero_escalafon}</span></div>
-            <div class="campo"><span class="label">Placa:</span> <span class="valor">${tab.placa}</span></div>
-            <div class="campo"><span class="label">EPI:</span> <span class="valor">${tab.epi}</span></div>
-          </div>
-          <div class="campo"><span class="label">Reporte del Patrullero:</span><br><span class="valor">${tab.resumen_administrativo || "No registrado"}</span></div>
-        </div>
+// 1. Generar sin QR y subir
+const pdfBlob = await exportPDFTabulacion({
+  tab: { ...tab, reporte_patrullero: reportePatrullero },
+  nombreOperador: nombresMap[tab.id_operador_receptor] || "—",
+  nombreDespachador: nombresMap[tab.id_despachador] || "—",
+  nombrePatrullero,
+  nombreTabulador: user?.nombre_completo || "—",
+  logoBase64,
+  filename: `Tabulacion_${codigoAlerta}.pdf`,
+  qrData: null,
+  returnBlob: true,
+});
 
-        <div class="seccion">
-          <h2>TABULACIÓN PARA SECRETARÍA</h2>
-          <div class="campo"><span class="label">Protagonistas:</span> <span class="valor">${tab.protagonistas || "—"}</span></div>
-          <div class="campo"><span class="label">Remisión del Caso (Derivación):</span> <span class="valor">${tab.remision_caso || "—"}</span></div>
-          <div class="campo"><span class="label">Resumen Administrativo:</span><br><span class="valor">${tab.resumen_administrativo || "—"}</span></div>
-        </div>
+const { error: uploadError } = await supabase.storage
+  .from("reportes")
+  .upload(nombreArchivo, pdfBlob, { contentType: "application/pdf", upsert: true });
 
-        <div class="seccion">
-          <h2>HISTORIAL DE PROCESO</h2>
-          <table>
-            <thead><tr><th>Rol</th><th>Nombre / ID</th></tr></thead>
-            <tbody>
-              <tr><td>Operador Receptor</td><td>${tab.id_operador_receptor || "—"}</td></tr>
-              <tr><td>Despachador</td><td>${tab.id_despachador || "—"}</td></tr>
-              <tr><td>Patrullero</td><td>${tab.id_patrullero || "—"}</td></tr>
-              <tr><td>Tabulador</td><td>${user?.nombre_completo || user?.id_oficial || "—"}</td></tr>
-            </tbody>
-          </table>
-          <div class="campo"><span class="label">Fecha de Tabulación:</span> <span class="valor">${fechaTabulacion}</span></div>
-        </div>
+if (uploadError) {
+  console.error("Error al subir PDF:", uploadError);
+}
 
-        <div class="firma">
-          Documento generado automáticamente por el Sistema de Tabulación<br>
-          ${new Date().toLocaleDateString()}
-        </div>
-      </body>
-      </html>
-    `;
-    
-    const ventana = window.open();
-    ventana.document.write(contenido);
-    ventana.document.close();
-    ventana.print();
+const { data: urlData } = supabase.storage
+  .from("reportes")
+  .getPublicUrl(nombreArchivo);
+
+const urlPublica = urlData.publicUrl;
+
+// 2. Generar con QR y descargar
+await exportPDFTabulacion({
+  tab: { ...tab, reporte_patrullero: reportePatrullero },
+  nombreOperador: nombresMap[tab.id_operador_receptor] || "—",
+  nombreDespachador: nombresMap[tab.id_despachador] || "—",
+  nombrePatrullero,
+  nombreTabulador: user?.nombre_completo || "—",
+  logoBase64,
+  filename: `Tabulacion_${codigoAlerta}.pdf`,
+  qrData: urlPublica,
+});
   };
 
   const historicoAlertas = useMemo(() => {
@@ -381,15 +373,19 @@ function Tabulacion() {
       id: t.alerta?.codigo_alerta || `ALT-${String(t.id_alerta).padStart(4, "0")}`,
       ciudadano: t.alerta?.usuario_ciudadano?.nombre_completo || "Anónimo",
       fecha: t.fecha_tabulacion?.split("T")[0] || "—",
-      incidente: t.alerta?.contravenciones || t.alerta?.delitos || t.resultado_final || "Sin clasificar",
+      incidente: t.resultado_final || t.alerta?.contravenciones || t.alerta?.delitos || "Sin clasificar",
       estado: "TABULADO",
       motivoDesestimacion: null
     }));
   }, [tabuladas]);
 
-  if (verTodo) {
-    return (
-      <ArchivoHistorico
+  useEffect(() => {
+  document.title = verTodo ? "ARCHIVO HISTÓRICO" : "TABULACIÓN Y ESTADÍSTICAS";
+}, [verTodo]);
+
+if (verTodo) {
+  return (
+    <ArchivoHistorico
         alertasTabuladas={historicoAlertas}
         tabuladasCompletas={tabuladas}
         onGenerarPDFTabulada={handleGenerarPDF}
@@ -579,9 +575,8 @@ function Tabulacion() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fadeIn">
                 {ultimasTabuladas.map((tab) => {
                   const ciudadano = tab.alerta?.usuario_ciudadano?.nombre_completo || "Ciudadano";
-                  const codigo = tab.alerta?.codigo_alerta || `TAB-${String(tab.id_tabulacion).padStart(4, "0")}`;
-                  let clasificacion = tab.alerta?.contravenciones || tab.alerta?.delitos;
-                  if (!clasificacion) clasificacion = tab.resultado_final || "Sin clasificar";
+                  const codigo = tab.alerta?.codigo_alerta || `ALT-${String(tab.id_alerta).padStart(4, "0")}`;
+                  let clasificacion = tab.resultado_final || tab.alerta?.contravenciones || tab.alerta?.delitos || "Sin clasificar";
                   const fecha = tab.fecha_tabulacion?.split("T")[0] || "—";
                   return (
                     <div key={tab.id_tabulacion} className="h-60 bg-white rounded-lg p-4 border border-slate-200 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md group overflow-hidden">
@@ -609,16 +604,18 @@ function Tabulacion() {
                         <button
                           onClick={() => {
                             setAlertaVista({
-                              id_alerta: tab.id_alerta,
-                              ciudadano: ciudadano,
-                              ci: tab.alerta?.usuario_ciudadano?.ci,
-                              celular: tab.alerta?.usuario_ciudadano?.celular,
-                              incidente: clasificacion,
-                              descripcion: tab.alerta?.descripcion,
-                              ubicacion: tab.alerta?.ubicacion,
-                              contravenciones: tab.alerta?.contravenciones,
-                              delitos: tab.alerta?.delitos,
-                              resultado_final: tab.resultado_final,
+  id_alerta: tab.id_alerta,
+  codigo_alerta: tab.alerta?.codigo_alerta,
+  ciudadano: ciudadano,
+  ci: tab.alerta?.usuario_ciudadano?.ci,
+  celular: tab.alerta?.usuario_ciudadano?.celular,
+  incidente: clasificacion,
+  descripcion: tab.alerta?.descripcion,
+  ubicacion: tab.alerta?.ubicacion,
+  prioridad: tab.alerta?.prioridad,
+  contravenciones: tab.alerta?.contravenciones,
+  delitos: tab.alerta?.delitos,
+  resultado_final: tab.resultado_final,
                               id_patrullero: tab.id_patrullero,
                               id_despachador: tab.id_despachador,
                               id_operador_receptor: tab.id_operador_receptor,

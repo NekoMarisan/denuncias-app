@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -6,7 +6,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { ToastProvider } from "./context/ToastContext";
+import { ToastProvider, useToast } from "./context/ToastContext";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -15,6 +15,7 @@ import GestionAlertas from "./pages/GestionAlertas";
 import CentroDespacho from "./pages/CentroDespacho";
 import Tabulacion from "./pages/Tabulacion";
 import ActividadLog from "./pages/ActividadLog";
+import Reporte from "./pages/Reporte";
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user, logout, sessionStart, DURACION_SESION_MS } = useAuth();
@@ -37,6 +38,22 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
 };
 
 function AppRoutes() {
+  const { showToast } = useToast();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const handler = (e) => {
+      const { motivo } = e.detail;
+      if (motivo === "fuera_de_servicio") {
+        showToast("Su cuenta está fuera de servicio temporalmente.", "error");
+      } else if (motivo === "de_baja") {
+        showToast("Su cuenta ha sido dada de baja. Ya no tiene acceso.", "error");
+      }
+    };
+    window.addEventListener("sesion_bloqueada", handler);
+    return () => window.removeEventListener("sesion_bloqueada", handler);
+  }, []);
+
   return (
     <Routes>
       <Route path="/" element={<Login />} />
@@ -107,7 +124,10 @@ function AppRoutes() {
         }
       />
 
+<Route path="/reporte" element={<Reporte />} />
+
       <Route path="*" element={<Navigate to="/" replace />} />
+
     </Routes>
   );
 }

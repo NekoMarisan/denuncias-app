@@ -175,8 +175,9 @@ const ArchivoHistorico = ({
       if (!clasificacion) clasificacion = tabuladaCompleta.resultado_final || "Sin clasificar";
 
       const alertaDetalle = {
-        id_alerta: tabuladaCompleta.id_alerta,
-        ciudadano: ciudadano,
+  id_alerta: tabuladaCompleta.id_alerta,
+  codigo_alerta: tabuladaCompleta.alerta?.codigo_alerta,
+  ciudadano: ciudadano,
         ci: tabuladaCompleta.alerta?.usuario_ciudadano?.ci,
         celular: tabuladaCompleta.alerta?.usuario_ciudadano?.celular,
         incidente: clasificacion,
@@ -322,7 +323,8 @@ const ArchivoHistorico = ({
       {/* Barra de herramientas */}
       <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4 flex-1 min-w-[200px]">
-          <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200 shrink-0">
+
+  <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200 shrink-0">
             <button 
               onClick={() => setTabActiva("TABULADO")} 
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${

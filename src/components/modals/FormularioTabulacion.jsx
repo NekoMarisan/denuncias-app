@@ -117,6 +117,18 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
         if (alerta.protagonistas !== undefined) setProtagonistas(alerta.protagonistas || '');
         if (alerta.resumen_administrativo !== undefined) setResumenAdministrativo(alerta.resumen_administrativo || '');
         if (alerta.remision_caso !== undefined) setRemisionCaso(alerta.remision_caso || '');
+
+if (alerta.id_patrullero && idAlerta) {
+  const { data: reporteData } = await supabase
+    .from("reporte_alerta")
+    .select("descripcion_reporte")
+    .eq("id_alerta", idAlerta)
+    .eq("id_patrullero", alerta.id_patrullero)
+    .order("fecha_reporte", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (reporteData?.descripcion_reporte) setReportePatrullero(reporteData.descripcion_reporte);
+}
         
         if (alerta.latitud !== undefined && alerta.latitud !== null) setLatitudFinal(alerta.latitud.toString());
         else if (alerta.ubicacion && alerta.ubicacion.includes(',')) {
@@ -168,7 +180,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
           }
         }
 
-        // ✅ Cargar clasificación original desde la alerta (contravenciones/delitos)
+        // Cargar clasificación desde la alerta (contravenciones/delitos)
         const contraOriginal = alerta?.contravenciones || null;
         const delitoOriginal = alerta?.delitos || null;
 
@@ -431,7 +443,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
 
     // Validar Resumen Administrativo
     if (!resumenAdministrativo.trim()) {
-      showToast("❌ Complete el campo Resumen Administrativo", "error");
+      showToast("Complete el campo Resumen Administrativo", "error");
       return;
     }
 
@@ -441,7 +453,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
       if (clasificacionOriginal && clasificacionOriginal !== "NO CLASIFICADA") {
         clasificacionFinal = clasificacionOriginal;
       } else {
-        showToast("⚠️ Debe seleccionar una Contravención o un Delito, o asegurar que la alerta tenga una clasificación original válida.", "error");
+        showToast("Debe seleccionar una Contravención o un Delito, o asegurar que la alerta tenga una clasificación válida.", "error");
         return;
       }
     }
@@ -588,15 +600,15 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
                   {readOnly ? "ALERTA TABULADA · REPORTE FINAL" : "TABULACIÓN DE ALERTAS"}
                 </h2>
                 {readOnly && (
-                  <div className="flex flex-wrap gap-3 text-[11px] font-bold text-white/70 mt-0.5">
-                    <span>
-                      ID: {alerta?.id || alerta?.codigo_alerta || idAlerta || "—"}
-                    </span>
-                    <span className='ml-3'>
-                      Concluido: {formatFechaHora(fechaTabulacion || alerta?.fecha_tabulacion)}
-                    </span>
-                  </div>
-                )}
+  <div className="flex flex-wrap gap-3 text-[11px] font-bold text-white/70 mt-0.5">
+    <span>
+      Código: {alerta?.codigo_alerta || alerta?.id || `ALT-${String(idAlerta).padStart(4, "0")}` || "—"}
+    </span>
+    <span className='ml-3'>
+      Archivado: {formatFechaHora(fechaTabulacion || alerta?.fecha_tabulacion)}
+    </span>
+  </div>
+)}
                 {!readOnly && alerta?.id && (
                   <div className="flex flex-wrap gap-2 text-[10px] font-medium text-white/70 mt-0.5">
                     <span>{alerta.id}</span>
@@ -633,15 +645,16 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
                 </div>
                 <LabelField label="CÉDULA" value={ciudadanoData?.ci || alerta?.ci || "—"} readOnly />
                 <LabelField label="CELULAR" value={ciudadanoData?.celular || alerta?.celular || "—"} readOnly />
+                <LabelField label="PRIORIDAD" value={alerta?.prioridad || "—"} readOnly />
+<div className="col-span-1">
+  <LabelField
+    label="CLASIFICACIÓN DEL HECHO"
+    value={clasificacionOriginal}
+    readOnly
+  />
+</div>
                 <div className="col-span-2">
-                  <LabelField
-                    label="CLASIFICACIÓN ORIGINAL DEL HECHO"
-                    value={clasificacionOriginal}
-                    readOnly
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2">DESCRIPCIÓN DEL HECHO</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2">RELATO DEL HECHO</label>
                   <textarea readOnly value={alerta?.descripcion || ""}
                     className="w-full bg-slate-100/40 border border-slate-100 rounded-xl p-3 text-xs font-medium italic text-slate-500 outline-none mt-1 h-20 resize-none" />
                 </div>
@@ -692,7 +705,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
               <HeaderSection icon={<FaShieldAlt className="text-red-500 text-sm"/>} title="CLASIFICACIÓN DEL HECHO" bgColor="bg-red-50" />
               <div className="space-y-4 flex-1 justify-center flex flex-col">
                 <SelectField
-                  label="CONTRAVENCIÓN (RP)"
+                  label="CONTRAVENCIONES (RP)"
                   options={contravenciones}
                   value={contravencionValue}
                   onChange={handleContravencionChange}
@@ -727,7 +740,7 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
             <section className={`${cardStyle} !bg-white !border-slate-200 shadow-md p-6`}>
               <HeaderSection icon={<FaShieldAlt className="text-amber-600"/>} title="INFORME POLICIAL" bgColor="bg-amber-50" />
               <div className="grid grid-cols-2 gap-3 flex-1">
-                <LabelField label="NÚMERO DE ESCALAFÓN" value={escalafon} readOnly />
+                <LabelField label="ESCALAFÓN" value={escalafon} readOnly />
                 <LabelField label="PLACA" value={placa} readOnly />
                 <LabelField label="EPI" value={epi} readOnly />
                 <div className="col-span-2 space-y-0.5">

@@ -16,12 +16,13 @@ import {
   FaEye,
   FaTimes,
 } from "react-icons/fa";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { exportPDF } from "../utils/exports/exportPDF";
+import { exportExcel } from "../utils/exports/exportExcel";
 import { supabase } from "../services/supabase";
 import PerfilCiudadano from "../components/modals/PerfilCiudadano";
 import NuevoPolicia from "../components/modals/NuevoPolicia";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 
 // ─── Modal de perfil de oficial (solo lectura) ───────────────────────────────
 function PerfilOficial({ oficial, onClose }) {
@@ -151,7 +152,8 @@ function PerfilOficial({ oficial, onClose }) {
 }
 
 function Usuarios() {
-  const { showToast } = useToast();
+const { showToast } = useToast();
+const { user } = useAuth();
   const [tabActiva, setTabActiva] = useState("oficiales");
   const [filtroActivo, setFiltroActivo] = useState("Todos");
   const [busquedaOficiales, setBusquedaOficiales] = useState("");
@@ -163,7 +165,9 @@ function Usuarios() {
   const [ciudadanoSeleccionado, setCiudadanoSeleccionado] = useState(null);
   const [oficialSeleccionado, setOficialSeleccionado] = useState(null);
   const [mostrarModalPolicia, setMostrarModalPolicia] = useState(false);
-  const [editandoPolicia, setEditandoPolicia] = useState(null);
+const [editandoPolicia, setEditandoPolicia] = useState(null);
+const [adminActivo, setAdminActivo] = useState({ nombre: "ADMINISTRADOR DE TURNO", cargo: "Administrador del Sistema" });
+const [confirmarEliminar, setConfirmarEliminar] = useState(null);
 
   const [oficiales, setOficiales] = useState([]);
   const [ciudadanos, setCiudadanos] = useState([]);
@@ -173,11 +177,19 @@ function Usuarios() {
       .from("oficial")
       .select("*")
       .order("id_oficial", { ascending: true });
-    if (error) {
+if (error) {
       console.error("Error oficiales:", error);
       showToast("Error al cargar oficiales", "error");
     } else {
       setOficiales(data || []);
+      (data || []).forEach(o => console.log(o.nombre_completo, "|", o.rol, "|", o.estado));
+      const admin = (data || []).find((o) => o.estado === true && o.rol === "Admin");
+      if (admin) {
+setAdminActivo({
+  nombre: admin.nombre_completo || "ADMINISTRADOR DE TURNO",
+  cargo: "Administrador del Sistema",
+});
+      }
     }
   }, [showToast]);
 
@@ -240,6 +252,12 @@ function Usuarios() {
             fecha_cambio: new Date().toISOString(),
           },
         ]);
+
+        const ciudadano = ciudadanos.find(c => c.id_usuario === idUsuario);
+        const nombre = ciudadano?.nombre_completo || `Ciudadano #${idUsuario}`;
+        if (nuevoEstado === 3) showToast(`${nombre} tiene ${advertencias} advertencia(s)`, "error");
+        if (nuevoEstado === 4) showToast(`${nombre} ha sido suspendido`, "error");
+
         return nuevoEstado;
       }
     }
@@ -302,9 +320,17 @@ function Usuarios() {
     return () => window.removeEventListener("focus", handleFocus);
   }, [recargarTodo]);
 
-  const eliminarOficial = async (id) => {
-    if (!window.confirm("¿Eliminar este oficial?")) return;
-    const { error } = await supabase
+const eliminarOficial = async (id) => {
+    const oficial = oficiales.find(o => o.id_oficial === id);
+    setConfirmarEliminar(oficial);
+  };
+
+  const confirmarEliminarOficial = async () => {
+    const id = confirmarEliminar?.id_oficial;
+    const oficial = confirmarEliminar;
+    setConfirmarEliminar(null);
+
+   const { error } = await supabase
       .from("oficial")
       .delete()
       .eq("id_oficial", id);
@@ -312,7 +338,7 @@ function Usuarios() {
       console.error("Error al eliminar:", error);
       showToast("Error al eliminar oficial", "error");
     } else {
-showToast("Oficial eliminado correctamente", "success");
+      showToast(`**Oficial** ${oficial?.nombre_completo} eliminado del sistema`, "error");
       await supabase.from("log_actividad").insert([{
         id_oficial: null,
         id_alerta: null,
@@ -323,150 +349,131 @@ showToast("Oficial eliminado correctamente", "success");
     }
   };
 
-  const exportarPDF = async () => {
+const exportarPDF = async () => {
     await supabase.from("log_actividad").insert([{
       id_oficial: null,
       id_alerta: null,
       accion: "ADMINISTRADOR",
       descripcion: `Exportó reporte PDF de ${tabActiva}`,
     }]);
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const titulo =
-      tabActiva === "oficiales"
-        ? "PERSONAL POLICIAL"
-        : "REGISTRO DE CIUDADANOS";
-    const fechaActual = new Date().toLocaleString("es-ES", {
-      day: "numeric", month: "numeric", year: "numeric",
-      hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
-    });
 
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0);
-    doc.text(titulo, 20, 20);
-    doc.setFontSize(9);
-    doc.setTextColor(100, 100, 100);
-    doc.text("CENTRAL RADIO PATRULLAS - COCHABAMBA", 20, 26);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(60, 60, 60);
-    doc.text(`Fecha: ${fechaActual}`, 190, 20, { align: "right" });
-    doc.text(`Total registros: ${datosFiltrados.length}`, 190, 26, { align: "right" });
-    doc.setDrawColor(200);
-    doc.line(20, 30, 190, 30);
+    let logoBase64 = null;
+    try {
+      const res = await fetch("/logo_of.png");
+      const blob = await res.blob();
+      logoBase64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch (_) { logoBase64 = null; }
 
-    const headers =
+const headers =
       tabActiva === "oficiales"
-        ? [["ID", "Oficial", "Escalafón / Rol", "Rango", "Celular", "Estado"]]
-        : [["ID", "Ciudadano", "Cédula", "Celular", "Estado"]];
+        ? ["Escalafón", "Oficial", "Rol", "Rango", "Celular", "Estado"]
+        : ["Ciudadano", "Cédula", "Celular", "Estado"];
 
     const body = datosFiltrados.map((item) =>
       tabActiva === "oficiales"
         ? [
-            item.id_oficial,
+            item.numero_escalafon || "—",
             item.nombre_completo,
-            `${item.numero_escalafon || "—"} - ${item.rol || "—"}`,
+            item.rol || "—",
             item.cargo || "—",
             item.celular || "—",
             item.estado === true ? "Conectado" : "Desconectado",
           ]
         : [
-            item.id_usuario,
             item.nombre_completo,
-            item.ci,
-            item.celular,
+            item.ci || "—",
+            item.celular || "—",
             getEstadoDisplay(item),
           ]
     );
 
-    autoTable(doc, {
-      startY: 35,
-      head: headers,
+    const nombreArchivo = `reportes/${tabActiva}_reporte.pdf`;
+    const pdfBlob = await exportPDF({
+      titulo: tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS",
+      subtitulo: tabActiva === "oficiales"
+        ? "Listado completo del personal policial registrado en el sistema"
+        : "Listado completo de ciudadanos registrados en el sistema",
+      headers,
       body,
-      theme: "grid",
-      headStyles: { fillColor: [20, 83, 45], textColor: [255, 255, 255] },
-      styles: { fontSize: 8 },
-      margin: { left: 20, right: 20 },
+      nombreAdmin: user?.nombre_completo || "ADMINISTRADOR DE TURNO",
+      cargoAdmin: user?.cargo || "Administrador del Sistema",
+      logoBase64,
+      filename: `Reporte_${tabActiva}.pdf`,
+      qrData: null,
     });
 
-    const finalY = doc.lastAutoTable.finalY + 30;
-    const admin =
-      oficiales.find((o) => o.rol === "Administrador")?.nombre_completo ||
-      "ADMINISTRADOR DE TURNO";
-    doc.setDrawColor(0);
-    doc.line(30, finalY, 85, finalY);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(0);
-    doc.text("SISTEMA DE SEGURIDAD", 57.5, finalY + 5, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(120, 120, 120);
-    doc.text(admin, 57.5, finalY + 10, { align: "center" });
-    doc.line(125, finalY, 120, finalY);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(0);
-    doc.text("SELLO INSTITUCIONAL", 152.5, finalY + 5, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(120, 120, 120);
-    doc.text("CENTRAL RADIO PATRULLAS", 152.5, finalY + 10, { align: "center" });
-    doc.save(`Reporte_${tabActiva}.pdf`);
+    const { error: uploadError } = await supabase.storage
+      .from("reportes")
+      .upload(nombreArchivo, pdfBlob, { contentType: "application/pdf", upsert: true });
+
+    if (uploadError) {
+      showToast("Error al subir el reporte", "error");
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("reportes")
+      .getPublicUrl(nombreArchivo);
+
+    const urlPublica = urlData.publicUrl;
+
+    await exportPDF({
+      titulo: tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS",
+      subtitulo: tabActiva === "oficiales"
+        ? "Listado completo del personal policial registrado en el sistema"
+        : "Listado completo de ciudadanos registrados en el sistema",
+      headers,
+      body,
+      nombreAdmin: user?.nombre_completo || "ADMINISTRADOR DE TURNO",
+      cargoAdmin: user?.cargo || "Administrador del Sistema",
+      logoBase64,
+      filename: `Reporte_${tabActiva}.pdf`,
+      qrData: `${urlPublica}?tipo=${tabActiva}&total=${datosFiltrados.length}&admin=${encodeURIComponent(user?.nombre_completo || "ADMINISTRADOR")}&modulo=Usuarios&fecha=${new Date().toISOString()}`,
+    });
   };
 
-const exportarExcel = async () => {
+  const exportarExcel = async () => {
     await supabase.from("log_actividad").insert([{
       id_oficial: null,
       id_alerta: null,
       accion: "ADMINISTRADOR",
       descripcion: `Exportó reporte Excel de ${tabActiva}`,
     }]);
-    const titulo =
-      tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS";
-    const fecha = new Date().toLocaleString();
 
-    let xmlExcel = `
-      <xml xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-        <head><meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8"></head>
-        <body>
-          <tr><td colspan="6" style="font-size:16pt;font-weight:bold">${titulo}</td></tr>
-          <tr><td colspan="6" style="color:#666">SISTEMA DE SEGURIDAD CIUDADANA - COCHABAMBA | Generado: ${fecha}</td></tr>
-          <tr>
-            ${
-              tabActiva === "oficiales"
-                ? "<th>ID</th><th>OFICIAL</th><th>ESCALAFÓN / ROL</th><th>RANGO</th><th>CELULAR</th><th>ESTADO</th>"
-                : "<th>ID</th><th>CIUDADANO</th><th>CÉDULA</th><th>CELULAR</th><th>ESTADO</th>"
-            }
-          </tr>
-          ${datosFiltrados
-            .map(
-              (item) => `
-            <tr>
-              <td>${tabActiva === "oficiales" ? item.id_oficial : item.id_usuario}</td>
-              <td style="font-weight:bold">${item.nombre_completo}</td>
-              ${
-                tabActiva === "oficiales"
-                  ? `<td>${item.numero_escalafon || "—"} - ${item.rol || "—"}</td>
-                     <td>${item.cargo || "—"}</td>
-                     <td>${item.celular || ""}</td>
-                     <td style="font-weight:bold">${item.estado === true ? "Conectado" : "Desconectado"}</td>`
-                  : `<td>${item.ci || ""}</td>
-                     <td>${item.celular || ""}</td>
-                     <td style="font-weight:bold">${getEstadoDisplay(item)}</td>`
-              }
-            </tr>
-          `
-            )
-            .join("")}
-        </body>
-      </xml>`;
+    const headers =
+      tabActiva === "oficiales"
+        ? ["ESCALAFÓN", "OFICIAL", "ROL", "RANGO", "CELULAR", "ESTADO"]
+        : ["CIUDADANO", "CÉDULA", "CELULAR", "ESTADO"];
 
-    const blob = new Blob([xmlExcel], { type: "application/vnd.ms-excel" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `Reporte_${tabActiva}.xls`;
-    link.click();
+    const body = datosFiltrados.map((item) =>
+      tabActiva === "oficiales"
+        ? [
+            item.numero_escalafon || "—",
+            item.nombre_completo,
+            item.rol || "—",
+            item.cargo || "—",
+            item.celular || "—",
+            item.estado === true ? "Conectado" : "Desconectado",
+          ]
+        : [
+            item.nombre_completo,
+            item.ci || "—",
+            item.celular || "—",
+            getEstadoDisplay(item),
+          ]
+    );
+
+    exportExcel({
+      titulo: tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS",
+      headers,
+      body,
+      nombreAdmin: adminActivo.nombre,
+      filename: `Reporte_${tabActiva}.xlsx`,
+    });
   };
 
   const getEstadoDisplay = (ciudadano) => {
@@ -891,6 +898,7 @@ const exportarExcel = async () => {
         onClose={() => setMostrarModalPolicia(false)}
         onGuardado={cargarOficiales}
         editandoPolicia={editandoPolicia}
+        onToast={showToast}
       />
 
       <PerfilCiudadano
@@ -904,6 +912,52 @@ const exportarExcel = async () => {
         oficial={oficialSeleccionado}
         onClose={() => setOficialSeleccionado(null)}
       />
+
+      {/* MODAL CONFIRMAR ELIMINAR */}
+      {confirmarEliminar && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl min-w-[500px] max-w-sm overflow-hidden min-h-[360px] flex flex-col justify-between">
+            <div className="bg-[#113e27] px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FaTrashAlt className="text-white" size={16} />
+                <h2 className="text-white font-extrabold text-[15px] uppercase tracking-wider">Eliminar Oficial</h2>
+              </div>
+              <button
+                onClick={() => setConfirmarEliminar(null)}
+                className="hover:bg-white/20 p-1.5 rounded-md transition-colors text-white"
+              >
+                <FaTimes size={14} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4" style={{ paddingBottom: "115px" }}>
+              <p className="text-slate-500 text-[15px] tracking-wide font-bold text-center pb-2">
+                ¿Está seguro que desea eliminar al oficial?
+              </p>
+              <div className="w-full mt-6 px-2 py-4 bg-slate-50 uppercase border border-slate-200 rounded-xl text-center font-extrabold text-[14px] text-[#113e27]">
+                {confirmarEliminar.nombre_completo}
+              </div>
+              <p className="text-[11px] text-slate-400 text-center font-bold uppercase tracking-wider">
+                Esta acción no se puede deshacer
+              </p>
+             <div className="flex justify-center bg-slate-100/80 -mx-6 gap-6 px-3 py-4 absolute bottom-0 left-0 right-0">
+                <button
+                  onClick={() => setConfirmarEliminar(null)}
+                  className="w-40 px-6 py-3 bg-slate-200 hover:bg-slate-300 rounded-lg font-bold text-[11px] uppercase tracking-wider text-slate-600 border-b border-slate-300 transition-all shadow-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarEliminarOficial}
+                  className="w-64 px-12 py-3 bg-[#113e27] hover:bg-[#164a2f] rounded-lg font-bold text-[11px] uppercase tracking-wider text-white transition-all shadow-md"
+                >
+                  Sí, eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

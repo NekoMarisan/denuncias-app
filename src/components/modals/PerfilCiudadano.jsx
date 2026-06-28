@@ -142,7 +142,7 @@ if (!ciudadano) return null;
 
       await registrarHistorialEstado(nuevoEstadoId, "Verificación de cuenta");
       setEstadoActual(nuevoEstadoId);
-      showToast("Ciudadano verificado correctamente", "success");
+      showToast(`${ciudadano.nombre} verificado correctamente`, "success");
       if (onActualizar) onActualizar();
       await cargarAdvertenciasReales();
     } catch (error) {
@@ -186,7 +186,7 @@ const handleCorregir = () => {
 
       await registrarHistorialEstado(nuevoEstadoId, motivoFinal);
       setEstadoActual(nuevoEstadoId);
-      showToast("Se ha marcado el ciudadano para corrección", "success");
+      showToast(`Corrección enviada a ${ciudadano.nombre} correctamente`, "success");
       if (onActualizar) onActualizar();
       await cargarAdvertenciasReales();
     } catch (error) {
@@ -235,7 +235,7 @@ const handleCorregir = () => {
       await registrarHistorialEstado(nuevoEstadoId, "Habilitación de suspensión - Se eliminaron las advertencias");
       setEstadoActual(nuevoEstadoId);
       setAdvertencias(0);
-      showToast("Suspensión habilitada. El ciudadano vuelve a estar VERIFICADO sin advertencias.", "success");
+      showToast(`${ciudadano.nombre} habilitado — advertencias eliminadas`, "success");
       if (onActualizar) onActualizar();
     } catch (error) {
       console.error(error);

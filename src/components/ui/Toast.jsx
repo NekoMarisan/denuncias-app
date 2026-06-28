@@ -22,7 +22,13 @@ const bgColor = {
   return (
     <div className={`${bgColor} rounded-xl shadow-2xl flex items-center gap-3 px-5 py-3.5 border`}>
       {icon}
-      <span className="text-xs font-semibold">{message}</span>
+      <span className="text-xs font-semibold">
+        {typeof message === "string"
+          ? message.split("**").map((part, i) =>
+              i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+            )
+          : message}
+      </span>
       <button onClick={() => onClose(id)} className="ml-auto hover:bg-white/30 p-1 rounded-full">
         <FaTimes size={12} />
       </button>

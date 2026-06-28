@@ -26,6 +26,33 @@ const AVISO_MS = 28 * 60 * 1000;
     }
   }, []);
 
+// ANTES — no existe nada aquí
+
+// DESPUÉS — agregar esto
+useEffect(() => {
+  if (!user) return;
+
+  const channel = supabase
+    .channel("acceso_oficial")
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "oficial", filter: `id_oficial=eq.${user.id_oficial}` },
+      (payload) => {
+        const nuevoAcceso = payload.new.acceso;
+        if (nuevoAcceso === "FUERA DE SERVICIO") {
+          window.dispatchEvent(new CustomEvent("sesion_bloqueada", { detail: { motivo: "fuera_de_servicio" } }));
+          logout("fuera_de_servicio");
+        } else if (nuevoAcceso === "DE BAJA") {
+          window.dispatchEvent(new CustomEvent("sesion_bloqueada", { detail: { motivo: "de_baja" } }));
+          logout("de_baja");
+        }
+      }
+    )
+    .subscribe();
+
+  return () => supabase.removeChannel(channel);
+}, [user]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -57,13 +84,16 @@ const AVISO_MS = 28 * 60 * 1000;
       .eq("contrasena", contrasena)
       .maybeSingle();
 
-    if (error || !data) {
+if (error || !data) {
       console.error("Error login:", error);
       return { success: false, error: "Credenciales incorrectas" };
     }
 
-    if (data.acceso !== "EN SERVICIO") {
-      return { success: false, error: "Cuenta no habilitada. Contacte a la central." };
+    if (data.acceso === "FUERA DE SERVICIO") {
+      return { success: false, error: "FUERA DE SERVICIO - Su cuenta está inactiva temporalmente." };
+    }
+    if (data.acceso === "DE BAJA") {
+      return { success: false, error: "DADO DE BAJA - Su cuenta esta deshabilitada." };
     }
 
     const { error: updateError } = await supabase
@@ -86,6 +116,7 @@ const AVISO_MS = 28 * 60 * 1000;
     sessionStorage.setItem("sistema_user", JSON.stringify(cleanUser));
     sessionStorage.setItem("session_start", Date.now().toString());
     sessionStorage.removeItem("aviso_expiracion");
+    sessionStorage.removeItem("bienvenida_mostrada");
 
     // Crear token de sesión seguro via Edge Function
     try {
@@ -119,7 +150,7 @@ const AVISO_MS = 28 * 60 * 1000;
       fecha_hora: new Date().toISOString(),
     });
 
-    return { success: true, rol: rolNormalizado };
+    return { success: true, rol: rolNormalizado, nombre: cleanUser.nombre_completo };
   };
 
   const logout = async (motivo = "manual") => {
