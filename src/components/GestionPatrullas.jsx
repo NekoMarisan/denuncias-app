@@ -24,6 +24,7 @@ export const GestionPatrullas = ({
   onCargarRuta,
   onDerivar,
   onEnviarATabulacion,
+  idOficialActual,
 }) => {
   const { showToast } = useToast();
   const isNuevas = tabActiva === "nuevas";
@@ -40,17 +41,13 @@ export const GestionPatrullas = ({
       if (!error && data) setInstituciones(data);
       else
         setInstituciones([
-          { id: 1, nombre: "FELCC (Fuerza Especial de Lucha Contra el Crimen)" },
-          { id: 2, nombre: "FELCN (Fuerza Especial de Lucha Contra el Narcotráfico)" },
-          { id: 3, nombre: "FELCN (Fuerza Especial de Lucha Contra la Violencia)" },
-          { id: 4, nombre: "Dirección de Seguridad Ciudadana" },
-          { id: 5, nombre: "Diprove (División de Prevención de Robo de Vehículos)" },
-          { id: 6, nombre: "SLIM (Servicio Legal Integral Municipal)" },
-          { id: 7, nombre: "Defensoría de la Niñez y Adolescencia" },
-          { id: 8, nombre: "Fiscalía" },
-          { id: 9, nombre: "Bomberos" },
-          { id: 10, nombre: "Tránsito" },
-        ]);
+  { id: 1, nombre: "FELCC (Fuerza Especial de Lucha Contra el Crimen)" },
+  { id: 2, nombre: "FELCV (Fuerza Especial de Lucha Contra la Violencia)" },
+  { id: 3, nombre: "FELCN (Fuerza Especial de Lucha Contra el Narcotráfico)" },
+  { id: 4, nombre: "Defensoría de la Niñez y Adolescencia" },
+  { id: 5, nombre: "SLIM (Servicio Legal Integral Municipal)" },
+  { id: 6, nombre: "Tránsito" },
+]);
     };
     cargar();
   }, []);
@@ -72,6 +69,11 @@ const handleEnviarTabulacion = async () => {
       return;
     }
 
+    if (!Derivacion) {
+      showToast("Debe seleccionar una opción de derivación (o 'Sin derivación') antes de continuar.", "error");
+      return;
+    }
+
     setEnviando(true);
     try {
       await supabase
@@ -79,31 +81,31 @@ const handleEnviarTabulacion = async () => {
         .update({ id_estado_actual: 3 })
         .eq("id_alerta", alertaSeleccionada);
 
-      for (const p of patrullasAsignadas) {
-        await supabase
-          .from("asignacion_patrulla")
-          .update({ id_estado_asignacion: ESTADO_DISPONIBLE })
-          .eq("id_alerta", alertaSeleccionada)
-          .eq("id_patrullero", p.id_patrullero);
-        await supabase
-          .from("patrullero")
-          .update({ id_estado_patrullero: ESTADO_DISPONIBLE })
-          .eq("id_patrullero", p.id_patrullero);
-      }
-
+for (const p of patrullasAsignadas) {
+  await supabase
+    .from("asignacion_patrulla")
+    .update({ id_estado_asignacion: ESTADO_DISPONIBLE })
+    .eq("id_alerta", alertaSeleccionada)
+    .eq("id_patrullero", p.id_patrullero);
+await supabase
+  .from("patrullero")
+  .update({ id_estado_patrullero: ESTADO_DISPONIBLE })
+  .eq("id_patrullero", p.id_patrullero);
+}
       if (Derivacion) {
         await supabase
           .from("asignacion_patrulla")
-          .update({ derivacion: Derivacion })
+          .update({ derivacion: Derivacion, derivacion_por: idOficialActual || null })
           .eq("id_alerta", alertaSeleccionada);
       }
 
 await supabase.from("log_actividad").insert([{
-        id_oficial: null,
+        id_oficial: idOficialActual || null,
         id_alerta: alertaSeleccionada,
         accion: "DESPACHO",
-        descripcion: `Envió alerta #${alertaSeleccionada} a tabulación${Derivacion ? ` — Derivación: ${Derivacion}` : ""}`,
+        descripcion: `Derivó la alerta a ${Derivacion}`,
       }]);
+      
       showToast("Alerta enviada a tabulación correctamente", "success");
       if (onEnviarATabulacion) onEnviarATabulacion();
     } catch (err) {
@@ -322,9 +324,9 @@ await supabase.from("log_actividad").insert([{
         </>
       ) : (
         alertaSeleccionada ? (
-          <div className="flex items-stretch">
-            {/* COLUMNA IZQUIERDA */}
-            <div className="w-[905px] flex flex-col gap-4">
+          <div className="flex flex-col lg:flex-row items-stretch gap-4">
+  {/* COLUMNA IZQUIERDA */}
+  <div className="flex-1 min-w-0 flex flex-col gap-4">
               <div>
                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                   Patrullas asignadas
@@ -404,13 +406,26 @@ await supabase.from("log_actividad").insert([{
   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
     Derivar (opcional)
   </p>
-  <select
-    value={Derivacion}
-    onChange={(e) => setDerivacion(e.target.value)}
-    disabled={!alertaActual?.reportePatrullero}
-    className={`w-full text-sm font-semibold border border-slate-200 rounded-md shadow-sm bg-white text-slate-500 appearance-none focus:border-slate-300 transition-all h-12 p-2.5 pr-8 text-[12px] outline-none ${!alertaActual?.reportePatrullero ? 'opacity-50 cursor-not-allowed' : ''}`}
-  >
+<select
+  value={Derivacion}
+  onChange={async (e) => {
+    const valor = e.target.value;
+    console.log("idOficialActual:", idOficialActual);
+    setDerivacion(valor);
+    if (alertaSeleccionada) {
+      await supabase
+        .from("asignacion_patrulla")
+        .update({
+          derivacion: valor,
+          derivacion_por: idOficialActual || null,
+        })
+        .eq("id_alerta", alertaSeleccionada);
+    }
+  }}
+  className="w-full text-sm font-semibold border border-slate-200 rounded-md shadow-sm bg-white text-slate-500 appearance-none focus:border-slate-300 transition-all h-12 p-2.5 pr-8 text-[12px] outline-none"
+>
     <option value="">Seleccionar derivación</option>
+    <option value="SIN DERIVACIÓN">Sin derivación</option>
     {instituciones.map((inst) => (
       <option key={inst.id} value={inst.nombre}>
         {inst.nombre}
@@ -442,7 +457,7 @@ await supabase.from("log_actividad").insert([{
             <div className="mx-6 flex flex-col gap-5 border border-slate-100"></div>
 
             {/* COLUMNA DERECHA (evidencias) */}
-            <div className="w-72 shrink-0">
+            <div className="w-full lg:w-72 shrink-0">
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
                 Evidencias
                 <span>({evidencias.length})</span>

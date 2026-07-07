@@ -10,3 +10,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
   },
 })
+
+export const setOficialHeader = (idOficial) => {
+  supabase.rest.headers['x-oficial-id'] = idOficial ? String(idOficial) : '';
+};
+
+
+
+

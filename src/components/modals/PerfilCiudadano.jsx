@@ -3,7 +3,7 @@ import { FaTimes, FaIdCard, FaPhone, FaShieldAlt, FaUsers, FaEnvelope, FaCalenda
 import { supabase } from "../../services/supabase";
 import { useToast } from "../../context/ToastContext";
 
-const PerfilCiudadano = ({ ciudadano, onClose, onActualizar }) => {
+const PerfilCiudadano = ({ ciudadano, onClose, onActualizar, usuarioActual = null }) => {
   const { showToast } = useToast();
   const [estadoActual, setEstadoActual] = useState(ciudadano?.id_estado_ciudadano || 1);
   const [advertencias, setAdvertencias] = useState(ciudadano?.advertencias || 0);
@@ -141,6 +141,12 @@ if (!ciudadano) return null;
       if (updateError) throw updateError;
 
       await registrarHistorialEstado(nuevoEstadoId, "Verificación de cuenta");
+  await supabase.from("log_actividad").insert([{
+  id_oficial: usuarioActual?.id_oficial || null,
+  id_alerta: null,
+  accion: "ADMINISTRADOR",
+  descripcion: `Habilitó suspensión de ${ciudadano.nombre} (REGC-${String(ciudadano.id).padStart(4, "0")}) — advertencias eliminadas`,
+}]);
       setEstadoActual(nuevoEstadoId);
       showToast(`${ciudadano.nombre} verificado correctamente`, "success");
       if (onActualizar) onActualizar();
@@ -185,6 +191,12 @@ const handleCorregir = () => {
       if (updateError) throw updateError;
 
       await registrarHistorialEstado(nuevoEstadoId, motivoFinal);
+      await supabase.from("log_actividad").insert([{
+        id_oficial: usuarioActual?.id_oficial || null,
+        id_alerta: null,
+        accion: "CORRIGIO",
+        descripcion: `Solicitó corrección a ${ciudadano.nombre} (REGC-${String(ciudadano.id).padStart(4, "0")}) — Motivo: ${motivoFinal}`,
+      }]);
       setEstadoActual(nuevoEstadoId);
       showToast(`Corrección enviada a ${ciudadano.nombre} correctamente`, "success");
       if (onActualizar) onActualizar();
@@ -233,6 +245,12 @@ const handleCorregir = () => {
       if (updateError) throw updateError;
 
       await registrarHistorialEstado(nuevoEstadoId, "Habilitación de suspensión - Se eliminaron las advertencias");
+      await supabase.from("log_actividad").insert([{
+        id_oficial: usuarioActual?.id_oficial || null,
+        id_alerta: null,
+        accion: "HABILITO_SUSPENSION",
+        descripcion: `Habilitó suspensión de ${ciudadano.nombre} (REGC-${String(ciudadano.id).padStart(4, "0")}) — advertencias eliminadas`,
+      }]);
       setEstadoActual(nuevoEstadoId);
       setAdvertencias(0);
       showToast(`${ciudadano.nombre} habilitado — advertencias eliminadas`, "success");

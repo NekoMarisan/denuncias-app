@@ -36,3 +36,13 @@
     transform: rotate(360deg);
   }
 }
+
+/* Oculta el ícono nativo de calendario del input type="date" en Chrome/Edge/Safari */
+.date-input-clean::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}

@@ -5,15 +5,19 @@ import {
   FaClipboardCheck, FaBan, FaSpinner
 } from 'react-icons/fa';
 import { supabase } from '../services/supabase';
+import { exportPDFDesestimacion } from '../utils/exports/exportPDFDesestimacion';
 import FormularioDesestimados from '../components/modals/FormularioDesestimados';
 import FormularioTabulacion from '../components/modals/FormularioTabulacion';
-
+import { exportPDFArchivoHis } from '../utils/exports/exportPDFArchivoHis';
+import { exportExcelArchivoHis } from '../utils/exports/exportExcelArchivoHis';
+import { useAuth } from '../context/AuthContext';
 const ArchivoHistorico = ({
   alertasTabuladas,
   tabuladasCompletas = [],
   onGenerarPDFTabulada,
   onBack
 }) => {
+  const { user } = useAuth();
   const [busqueda, setBusqueda] = useState("");
   const [tabActiva, setTabActiva] = useState("TABULADO");
   const [filtroTiempo, setFiltroTiempo] = useState("TODO");
@@ -221,71 +225,67 @@ const ArchivoHistorico = ({
   };
 
   // Funciones para desestimadas
-  const generarPDFDesestimada = (alerta) => {
-    const fechaHoraAlerta = alerta.alerta_completa?.fecha_hora 
-      ? new Date(alerta.alerta_completa.fecha_hora).toLocaleString('es-BO')
-      : "—";
-    const clasificacionOriginal = alerta.alerta_completa?.contravenciones || alerta.alerta_completa?.delitos || "—";
+  const generarPDFDesestimada = async (alerta) => {
+  let logoBase64 = null;
+  try {
+    const res = await fetch("/logo_of.png");
+    const blob = await res.blob();
+    logoBase64 = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch (_) {}
 
-    const contenidoHTML = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Reporte de Alerta Desestimada - ${alerta.id}</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 30px; line-height: 1.4; }
-          h1 { color: #1a5336; font-size: 22px; border-bottom: 2px solid #1a5336; padding-bottom: 8px; }
-          h2 { color: #2d6a4f; font-size: 18px; margin-top: 20px; border-left: 4px solid #2d6a4f; padding-left: 10px; }
-          .seccion { margin-bottom: 25px; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-          .campo { margin-bottom: 8px; }
-          .label { font-weight: bold; width: 180px; display: inline-block; color: #333; }
-          .valor { display: inline-block; color: #555; }
-          .rojo { background-color: #ffefef; border-left: 4px solid #c13100; padding: 10px; }
-          .firma { margin-top: 40px; border-top: 1px solid #ccc; padding-top: 20px; text-align: center; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <h1>REPORTE DE ALERTA DESESTIMADA</h1>
-        <p><strong>Fecha de emisión:</strong> ${new Date().toLocaleString()}</p>
+  const codigoAlerta = alerta.id || alerta.id_alerta;
+  const nombreArchivo = `reportes/desestimada_${codigoAlerta}.pdf`;
 
-        <div class="seccion">
-          <h2>DATOS DE LA ALERTA</h2>
-          <div class="grid">
-            <div><span class="label">Código Alerta:</span> <span class="valor">${alerta.id}</span></div>
-            <div><span class="label">Fecha y Hora:</span> <span class="valor">${fechaHoraAlerta}</span></div>
-            <div><span class="label">Ciudadano:</span> <span class="valor">${alerta.ciudadano}</span></div>
-            <div><span class="label">CI / Celular:</span> <span class="valor">${alerta.ci || "—"} / ${alerta.celular || "—"}</span></div>
-            <div><span class="label">Ubicación:</span> <span class="valor">${alerta.alerta_completa?.ubicacion || "—"}</span></div>
-            <div><span class="label">Clasificación Original:</span> <span class="valor">${clasificacionOriginal}</span></div>
-          </div>
-          <div class="campo"><span class="label">Descripción del Hecho:</span><br><span class="valor">${alerta.alerta_completa?.descripcion || "Sin descripción"}</span></div>
-        </div>
-
-        <div class="seccion">
-          <h2 style="color:#C13100">INFORMACIÓN DE DESESTIMACIÓN</h2>
-          <div class="rojo">
-            <div><span class="label">Motivo:</span> <span class="valor">${alerta.motivoDesestimacion}</span></div>
-            <div><span class="label">Fecha de Desestimación:</span> <span class="valor">${new Date(alerta.fecha_desestimo).toLocaleString('es-BO')}</span></div>
-            <div><span class="label">Justificación Adicional:</span><br><span class="valor">${alerta.justificacion || "No especificada"}</span></div>
-            <div><span class="label">Operador que desestimó:</span> <span class="valor">${alerta.nombre_operador_desestimo || "—"}</span></div>
-          </div>
-        </div>
-
-        <div class="firma">
-          Documento generado automáticamente por el Sistema de Tabulación<br>
-          ${new Date().toLocaleDateString()}
-        </div>
-      </body>
-      </html>
-    `;
-
-    const ventana = window.open();
-    ventana.document.write(contenidoHTML);
-    ventana.document.close();
-    ventana.print();
+  const alertaData = {
+    codigo_alerta: alerta.id,
+    ciudadano: alerta.ciudadano,
+    ci: alerta.ci,
+    celular: alerta.celular,
+    ubicacion: alerta.alerta_completa?.ubicacion,
+    descripcion: alerta.alerta_completa?.descripcion,
+    contravenciones: alerta.alerta_completa?.contravenciones,
+    delitos: alerta.alerta_completa?.delitos,
+    fecha_hora: alerta.alerta_completa?.fecha_hora,
+    motivo_desestimo: alerta.motivoDesestimacion,
+    justificacion: alerta.justificacion,
+    fecha_desestimo: alerta.fecha_desestimo,
+    nombre_operador_desestimo: alerta.nombre_operador_desestimo,
+    prioridad: alerta.alerta_completa?.prioridad,
   };
+
+  // 1. Obtener URL pública antes de generar
+const { data: urlData } = supabase.storage
+    .from("reportes")
+    .getPublicUrl(nombreArchivo);
+  const urlPublica = `${urlData.publicUrl}?t=${Date.now()}`;
+
+  // 2. Generar PDF con QR incluido
+  const pdfBlob = await exportPDFDesestimacion({
+    alerta: alertaData,
+    logoBase64,
+    filename: `Desestimada_${codigoAlerta}.pdf`,
+    qrData: urlPublica,
+  });
+
+  // 3. Subir ese mismo PDF a Supabase
+  const { error: uploadError } = await supabase.storage
+    .from("reportes")
+    .upload(nombreArchivo, pdfBlob, { contentType: "application/pdf", upsert: true });
+
+  if (uploadError) console.error("Error al subir PDF:", uploadError);
+
+  // 4. Descargar
+  const url = URL.createObjectURL(pdfBlob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Desestimada_${codigoAlerta}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
   const abrirDetalleDesestimada = (alerta) => {
     setSelectedDesestimada({
@@ -306,8 +306,63 @@ const ArchivoHistorico = ({
     setShowModalDesestimada(true);
   };
 
-  const exportarExcel = () => console.log("Exportar Excel", alertasFiltradas);
-  const exportarPDF = () => console.log("Exportar PDF general", alertasFiltradas);
+const exportarExcel = async () => {
+  try {
+    await exportExcelArchivoHis(alertasFiltradas, tabActiva, {
+      nombreAdmin: user?.nombre_completo || "ADMINISTRADOR DE TURNO",
+    });
+  } catch (err) {
+    console.error("Error al generar Excel de Archivo Histórico:", err);
+  }
+};
+
+const exportarPDF = async () => {
+    let logoBase64 = null;
+    try {
+      const res = await fetch("/logo_of.png");
+      const blob = await res.blob();
+      logoBase64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch (_) {}
+
+    try {
+      const nombreArchivo = `reportes/historico_${tabActiva.toLowerCase()}.pdf`;
+      const filenameFinal = `historico_${tabActiva.toLowerCase()}_${Date.now()}.pdf`;
+
+      // 1. Obtener URL pública antes de generar
+      const { data: urlData } = supabase.storage
+        .from("reportes")
+        .getPublicUrl(nombreArchivo);
+      const urlPublica = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      // 2. Generar PDF ya con el QR incluido
+      const pdfBlob = await exportPDFArchivoHis(alertasFiltradas, tabActiva, {
+        nombreAdmin: "ADMINISTRADOR DE TURNO",
+        nombreTabulador: user?.nombre_completo || "TABULADOR NO IDENTIFICADO",
+        logoBase64,
+        qrData: urlPublica,
+      });
+
+      // 3. Subir ese mismo PDF a Supabase
+      const { error: uploadError } = await supabase.storage
+        .from("reportes")
+        .upload(nombreArchivo, pdfBlob, { contentType: "application/pdf", upsert: true });
+      if (uploadError) console.error("Error al subir PDF:", uploadError);
+
+      // 4. Descargar (una sola vez)
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filenameFinal;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error al generar PDF de Archivo Histórico:", err);
+    }
+  };
 
   if (cargandoDesestimadas && alertasTabuladasConFormato.length === 0) {
     return (
@@ -331,7 +386,7 @@ const ArchivoHistorico = ({
                 tabActiva === "TABULADO" ? "bg-[#113e27] text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
               }`}
             >
-              <FaClipboardCheck size={12} /> FINALIZADOS
+              <FaClipboardCheck size={12} /> TABULADOS
             </button>
             <button 
               onClick={() => setTabActiva("DESESTIMADO")} 

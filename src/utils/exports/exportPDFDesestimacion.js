@@ -16,11 +16,10 @@ export async function exportPDFDesestimacion({
   const CW = PW - ML - MR;
 
   const VERDE  = [17, 62, 39];
-  const ROJO   = [193, 49, 0];
   const NEGRO  = [15, 15, 15];
   const BLANCO = [255, 255, 255];
   const GBORD  = [180, 180, 180];
-  const GTEXT  = [120, 120, 120];
+const GTEXT  = [94, 94, 94];
 
   const fmt = (v) =>
     v !== null && v !== undefined && String(v).trim() !== "" ? String(v) : "—";
@@ -64,15 +63,17 @@ export async function exportPDFDesestimacion({
   }
 
   const TX = ML + 20;
-  doc.setTextColor(...NEGRO);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("CENTRAL DE RADIO PATRULLAS", TX, 9 + OFFSET_Y);
-  doc.setFontSize(8);
-  doc.text("REPORTE DE ALERTA DESESTIMADA", TX, 14.5 + OFFSET_Y);
-  doc.setTextColor(...GTEXT);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+doc.setTextColor(...NEGRO);
+doc.setFont("helvetica", "bold");
+doc.setFontSize(12);  // ← CAMBIA AQUÍ el tamaño de CENTRAL DE RADIO PATRULLAS
+doc.text("CENTRAL DE RADIO PATRULLAS", TX, 9 + OFFSET_Y);
+doc.setTextColor(...NEGRO);
+doc.setFont("helvetica", "bold");
+doc.setFontSize(8);  // ← CAMBIA AQUÍ el tamaño de REPORTE DE TABULACIÓN
+doc.text("REPORTE DE ALERTA DESESTIMADA", TX, 14.5 + OFFSET_Y);
+doc.setTextColor(...NEGRO);
+doc.setFont("helvetica", "normal");
+doc.setFontSize(7.5);  // ← CAMBIA AQUÍ el tamaño de CÓDIGO · CATEGORÍ
   doc.text(`Código: ${fmt(alerta.codigo_alerta)}`, TX, 19 + OFFSET_Y);
 
   if (qrBase64) {
@@ -87,7 +88,7 @@ export async function exportPDFDesestimacion({
 
   const rightX = PW - MR - 14 - 6;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.5);
+  doc.setFontSize(7);
   doc.setTextColor(...NEGRO);
   doc.text(`Emisión: ${fechaEmision}`, rightX, 14.5 + OFFSET_Y, { align: "right" });
   doc.text(`Desestimado: ${fmtF(alerta.fecha_desestimo)}`, rightX, 19 + OFFSET_Y, { align: "right" });
@@ -98,7 +99,7 @@ export async function exportPDFDesestimacion({
   const CFG = {
     filaH: 13,
     celdaTxtH: 18,
-    cadenaH: 16,
+    cadenaH: 14,
     cadenaBarH: 5,
     labelSize: 7,
     valorSize: 10,
@@ -141,7 +142,7 @@ export async function exportPDFDesestimacion({
     Y += h;
   };
 
-  const celdaTxt = (label, valor, h = CFG.celdaTxtH, color = GTEXT) => {
+const celdaTxt = (label, valor, h = CFG.celdaTxtH, color = [94, 94, 94]) => {
     doc.setDrawColor(...GBORD);
     doc.setLineWidth(0.2);
     doc.rect(ML, Y, CW, h);
@@ -163,11 +164,10 @@ export async function exportPDFDesestimacion({
 
   // ── 1. DATOS DE LA ALERTA ────────────────────────────────────────────────
   secTit("1. Datos de la Alerta");
-  fila([
-    { w: C13, label: "Código de Alerta", valor: alerta.codigo_alerta, bold: true },
-    { w: C23 / 2, label: "Fecha / Hora", valor: fmtF(alerta.fecha_hora) },
-    { w: C23 / 2, label: "Prioridad", valor: alerta.prioridad },
-  ], 11);
+fila([
+  { w: C13, label: "Código de Alerta", valor: alerta.codigo_alerta, bold: true },
+  { w: C23, label: "Fecha / Hora", valor: fmtF(alerta.fecha_hora) },
+], 11);
   fila([
     { w: C13, label: "Nombre del Ciudadano", valor: alerta.ciudadano },
     { w: C23 / 2, label: "Cédula", valor: alerta.ci },
@@ -176,7 +176,7 @@ export async function exportPDFDesestimacion({
   fila([
     { w: CW, label: "Ubicación", valor: alerta.ubicacion },
   ], 11);
-  celdaTxt("Descripción del Hecho", alerta.descripcion, 20);
+  celdaTxt("Descripción del Hecho", alerta.descripcion, 20, [94, 94, 94]);
 
   if (alerta.contravenciones || alerta.delitos) {
     fila([
@@ -185,12 +185,12 @@ export async function exportPDFDesestimacion({
   }
 
   // ── 2. INFORMACIÓN DE DESESTIMACIÓN ──────────────────────────────────────
-  secTit("2. Información de Desestimación", ROJO);
+  secTit("2. Información de Desestimación", VERDE);
   fila([
     { w: C12, label: "Motivo de Desestimación", valor: alerta.motivo_desestimo, bold: true },
     { w: C12, label: "Fecha de Desestimación", valor: fmtF(alerta.fecha_desestimo) },
   ], 13);
-  celdaTxt("Justificación Adicional", alerta.justificacion, 20, [193, 49, 0]);
+  celdaTxt("Justificación Adicional", alerta.justificacion, 20, [94, 94, 94]);
 
   // ── 3. CADENA DE GESTIÓN ─────────────────────────────────────────────────
   secTit("3. Responsable del Proceso");
@@ -201,22 +201,21 @@ export async function exportPDFDesestimacion({
   ];
 
   // Centrado si solo hay uno
-  const startX = ML + CW / 4;
-  doc.setDrawColor(...GBORD);
-  doc.setLineWidth(0.2);
-  doc.rect(startX, Y, rW, CFG.cadenaH);
-  doc.setFillColor(...VERDE);
-  doc.rect(startX, Y, rW, CFG.cadenaBarH, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(...BLANCO);
-  doc.text("OPERADOR QUE DESESTIMÓ", startX + rW / 2, Y + CFG.cadenaBarH / 2 + 1, { align: "center" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...NEGRO);
-  const ls = doc.splitTextToSize(fmt(alerta.nombre_operador_desestimo), rW - 2);
-  doc.text(ls.slice(0, 2), startX + rW / 2, Y + CFG.cadenaBarH + 5, { align: "center" });
-  Y += CFG.cadenaH;
+doc.setDrawColor(...GBORD);
+doc.setLineWidth(0.2);
+doc.rect(ML, Y, CW, CFG.cadenaH);
+doc.setFillColor(...VERDE);
+doc.rect(ML, Y, CW, CFG.cadenaBarH, "F");
+doc.setFont("helvetica", "bold");
+doc.setFontSize(6.5);
+doc.setTextColor(...BLANCO);
+doc.text("OPERADOR QUE DESESTIMÓ", ML + 2, Y + CFG.cadenaBarH / 2 + 1, { align: "left" });
+doc.setFont("helvetica", "normal");
+doc.setFontSize(8.5);
+doc.setTextColor(...NEGRO);
+const ls = doc.splitTextToSize(fmt(alerta.nombre_operador_desestimo), CW - 2);
+doc.text(ls.slice(0, 2), ML + 2, Y + CFG.cadenaBarH + 5, { align: "left" });
+Y += CFG.cadenaH;
 
   // ── PIE ──────────────────────────────────────────────────────────────────
   const PIE_Y = PH - 35;
@@ -245,9 +244,6 @@ export async function exportPDFDesestimacion({
   doc.setTextColor(80, 80, 80);
   doc.text("Central de Radio Patrullas - 110", firmaDerX, PIE_Y + 22, { align: "center" });
 
-  const pdfBlob = doc.output("blob");
-  if (qrData) {
-    doc.save(filename);
-  }
+const pdfBlob = doc.output("blob");
   return pdfBlob;
 }

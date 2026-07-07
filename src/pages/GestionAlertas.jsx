@@ -326,8 +326,9 @@ await supabase.from("log_actividad").insert([{
       id_oficial: idOficial,
       id_alerta: alerta.id,
       accion: "OPERADOR",
-      descripcion: `Abrió alerta ${alerta.codigo || `#${alerta.id}`} — Ciudadano: ${alerta.ciudadano}`,
+      descripcion: `Abrió la alerta — Ciudadano: ${alerta.ciudadano}`,
     }]);
+
     setAlertaSeleccionada(alerta);
     setMostrarModal(true);
   };
@@ -383,7 +384,7 @@ await supabase.from("log_actividad").insert([{
       id_oficial: user?.id_oficial,
       id_alerta: idAlerta,
       accion: "OPERADOR",
-      descripcion: `Desestimó alerta #${idAlerta} — Motivo: ${motivo}`,
+      descripcion: `Desestimó la alerta — Motivo: ${motivo}`,
     }]);
 
 
@@ -439,7 +440,7 @@ await supabase.from("log_actividad").insert([{
         id_oficial: user?.id_oficial,
         id_alerta: idAlerta,
         accion: "OPERADOR",
-        descripcion: `Validó alerta #${idAlerta}`,
+        descripcion: `Validó la alerta y la envió a despacho`,
       },
     ]);
 

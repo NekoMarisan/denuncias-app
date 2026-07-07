@@ -182,13 +182,15 @@ if (error) {
       showToast("Error al cargar oficiales", "error");
     } else {
       setOficiales(data || []);
-      (data || []).forEach(o => console.log(o.nombre_completo, "|", o.rol, "|", o.estado));
-      const admin = (data || []).find((o) => o.estado === true && o.rol === "Admin");
+      const admin = (data || []).find((o) => {
+        const rolLower = (o.rol || "").trim().toLowerCase();
+        return o.estado === true && (rolLower === "admin" || rolLower === "administrador");
+      });
       if (admin) {
-setAdminActivo({
-  nombre: admin.nombre_completo || "ADMINISTRADOR DE TURNO",
-  cargo: "Administrador del Sistema",
-});
+        setAdminActivo({
+          nombre: admin.nombre_completo || "ADMINISTRADOR DE TURNO",
+          cargo: "Administrador del Sistema",
+        });
       }
     }
   }, [showToast]);
@@ -330,7 +332,7 @@ const eliminarOficial = async (id) => {
     const oficial = confirmarEliminar;
     setConfirmarEliminar(null);
 
-   const { error } = await supabase
+const { error } = await supabase
       .from("oficial")
       .delete()
       .eq("id_oficial", id);
@@ -340,10 +342,10 @@ const eliminarOficial = async (id) => {
     } else {
       showToast(`**Oficial** ${oficial?.nombre_completo} eliminado del sistema`, "error");
       await supabase.from("log_actividad").insert([{
-        id_oficial: null,
+        id_oficial: user?.id_oficial || null, 
         id_alerta: null,
         accion: "ADMINISTRADOR",
-        descripcion: `Eliminó al oficial ID #${id}`,
+        descripcion: `Eliminó al oficial con escalafón ${oficial?.numero_escalafon || id} — ${oficial?.nombre_completo}`,
       }]);
       await cargarOficiales();
     }
@@ -351,7 +353,7 @@ const eliminarOficial = async (id) => {
 
 const exportarPDF = async () => {
     await supabase.from("log_actividad").insert([{
-      id_oficial: null,
+      id_oficial: user?.id_oficial || null,
       id_alerta: null,
       accion: "ADMINISTRADOR",
       descripcion: `Exportó reporte PDF de ${tabActiva}`,
@@ -391,7 +393,15 @@ const headers =
           ]
     );
 
-    const nombreArchivo = `reportes/${tabActiva}_reporte.pdf`;
+const nombreArchivo = `reportes/${tabActiva}_reporte.pdf`;
+
+    // 1. Obtener la URL pública del archivo en Supabase Storage (mismo patrón que ActividadLog.jsx)
+    const { data: urlData } = supabase.storage
+      .from("reportes")
+      .getPublicUrl(nombreArchivo);
+    const urlPublica = `${urlData.publicUrl}?t=${Date.now()}`;
+
+    // 2. Generar el PDF ya con el QR apuntando a esa URL
     const pdfBlob = await exportPDF({
       titulo: tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS",
       subtitulo: tabActiva === "oficiales"
@@ -401,44 +411,32 @@ const headers =
       body,
       nombreAdmin: user?.nombre_completo || "ADMINISTRADOR DE TURNO",
       cargoAdmin: user?.cargo || "Administrador del Sistema",
-      logoBase64,
       filename: `Reporte_${tabActiva}.pdf`,
-      qrData: null,
+      logoBase64,
+      qrData: urlPublica,
     });
 
+    // 3. Subir ese mismo PDF
     const { error: uploadError } = await supabase.storage
       .from("reportes")
       .upload(nombreArchivo, pdfBlob, { contentType: "application/pdf", upsert: true });
 
     if (uploadError) {
       showToast("Error al subir el reporte", "error");
-      return;
     }
 
-    const { data: urlData } = supabase.storage
-      .from("reportes")
-      .getPublicUrl(nombreArchivo);
-
-    const urlPublica = urlData.publicUrl;
-
-    await exportPDF({
-      titulo: tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS",
-      subtitulo: tabActiva === "oficiales"
-        ? "Listado completo del personal policial registrado en el sistema"
-        : "Listado completo de ciudadanos registrados en el sistema",
-      headers,
-      body,
-      nombreAdmin: user?.nombre_completo || "ADMINISTRADOR DE TURNO",
-      cargoAdmin: user?.cargo || "Administrador del Sistema",
-      logoBase64,
-      filename: `Reporte_${tabActiva}.pdf`,
-      qrData: `${urlPublica}?tipo=${tabActiva}&total=${datosFiltrados.length}&admin=${encodeURIComponent(user?.nombre_completo || "ADMINISTRADOR")}&modulo=Usuarios&fecha=${new Date().toISOString()}`,
-    });
+    // 4. Descargar
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Reporte_${tabActiva}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const exportarExcel = async () => {
+const exportarExcel = async () => {
     await supabase.from("log_actividad").insert([{
-      id_oficial: null,
+      id_oficial: user?.id_oficial || null,
       id_alerta: null,
       accion: "ADMINISTRADOR",
       descripcion: `Exportó reporte Excel de ${tabActiva}`,
@@ -471,7 +469,7 @@ const headers =
       titulo: tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS",
       headers,
       body,
-      nombreAdmin: adminActivo.nombre,
+      nombreAdmin: user?.nombre_completo || "ADMINISTRADOR DE TURNO",
       filename: `Reporte_${tabActiva}.xlsx`,
     });
   };
@@ -894,18 +892,20 @@ const headers =
       </div>
 
       <NuevoPolicia
-        isOpen={mostrarModalPolicia}
-        onClose={() => setMostrarModalPolicia(false)}
-        onGuardado={cargarOficiales}
-        editandoPolicia={editandoPolicia}
-        onToast={showToast}
-      />
+  isOpen={mostrarModalPolicia}
+  onClose={() => setMostrarModalPolicia(false)}
+  onGuardado={cargarOficiales}
+  editandoPolicia={editandoPolicia}
+  onToast={showToast}
+  usuarioActual={user}
+/>
 
       <PerfilCiudadano
-        ciudadano={ciudadanoSeleccionado}
-        onClose={() => setCiudadanoSeleccionado(null)}
-        onActualizar={cargarCiudadanos}
-      />
+  ciudadano={ciudadanoSeleccionado}
+  onClose={() => setCiudadanoSeleccionado(null)}
+  onActualizar={cargarCiudadanos}
+  usuarioActual={user}
+/>
 
       {/* MODAL PERFIL OFICIAL */}
       <PerfilOficial

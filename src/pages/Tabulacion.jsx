@@ -1,13 +1,15 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
-  FaEye, FaClipboardList, FaChartLine, FaClock, FaFilePdf, FaChevronRight, FaSpinner
+  FaEye, FaClipboardList, FaChartLine, FaClock, FaFilePdf, FaChevronRight, FaSpinner, FaLock
 } from "react-icons/fa";
 import FormularioTabulacion from "../components/modals/FormularioTabulacion";
 import { contravenciones, delitos } from "../constants/CategoriasDelitos";
 import ArchivoHistorico from "./ArchivoHistorico";
 import { supabase } from '../services/supabase';
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { exportPDFTabulacion } from "../utils/exports/exportPDFTabulacion";
+
 
 const getColorByCategoria = (categoria) => {
   if (!categoria) return "bg-gray-300";
@@ -28,6 +30,7 @@ const getColorByCategoria = (categoria) => {
 
 function Tabulacion() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [renderKey] = useState(Date.now());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -47,9 +50,9 @@ useEffect(() => {
   window.dispatchEvent(new Event("tabulacion_view_change"));
 }, [verTodo]);
 
-  const cargarDatos = useCallback(async () => {
-    setCargando(true);
-    try {
+const cargarDatos = useCallback(async (silencioso = false) => {
+  if (!silencioso) setCargando(true);
+  try {
       // 1. Obtener alertas ya tabuladas
       const { data: tabData, error: tabErr } = await supabase
         .from("tabulacion_caso")
@@ -80,20 +83,21 @@ useEffect(() => {
   ubicacion,
   prioridad,
   id_operador_receptor,
+  bloqueado_por,
+  bloqueado_rol,
   usuario_ciudadano:id_usuario (
     nombre_completo,
     ci,
     celular
   )
 ),
-          patrullero:patrullero!id_patrullero (
-            placa,
-            epi,
-            id_oficial,
-            oficial:oficial (
-              numero_escalafon
-            )
-          )
+         patrullero:patrullero!id_patrullero (
+  placa,
+  epi,
+  oficial:oficial!fk_patrullero_oficial (
+    numero_escalafon
+  )
+)
         `)
         .order("fecha_tabulacion", { ascending: false });
 
@@ -104,6 +108,7 @@ useEffect(() => {
         placa: t.patrullero?.placa || '—',
         epi: t.patrullero?.epi || '—',
         numero_escalafon: t.patrullero?.oficial?.numero_escalafon || '—',
+        nombre_patrullero: t.patrullero?.oficial?.nombre_completo || '—',
         id_despachador: t.id_despachador || null,
         id_operador_receptor: t.id_operador_receptor || null,
         comuna: t.comuna || '',
@@ -122,12 +127,14 @@ useEffect(() => {
 
       // 2. Obtener todas las asignaciones activas (sin filtrar por estado de alerta)
       const { data: asigData, error: asigErr } = await supabase
-        .from("asignacion_patrulla")
-        .select(`
-          id_asignacion,
-          id_patrullero,
-          id_oficial_asignador,
-          alerta:id_alerta (
+  .from("asignacion_patrulla")
+  .select(`
+    id_asignacion,
+    id_patrullero,
+    id_oficial_asignador,
+    derivacion,
+    derivacion_por,
+    alerta:id_alerta (
   id_alerta,
   codigo_alerta,
   categoria,
@@ -137,7 +144,10 @@ useEffect(() => {
   fecha_hora,
   ubicacion,
   prioridad,
+  id_estado_actual,
   id_operador_receptor,
+  bloqueado_por,
+  bloqueado_rol,
   usuario_ciudadano:id_usuario (
     nombre_completo,
     ci,
@@ -145,18 +155,14 @@ useEffect(() => {
   )
 ),
           patrullero:patrullero!id_patrullero (
-            oficial:oficial (
+            oficial:oficial!fk_patrullero_oficial (
               numero_escalafon
             )
           )
         `)
         .order("id_asignacion", { ascending: false });
 
-      if (asigErr) {
-        console.error("Error asignaciones:", asigErr);
-        setAlertasPendientes([]);
-        return;
-      }
+      console.log("asigData recibido:", asigData);
 
       // Obtener alertas desestimadas
       const { data: desestimadas, error: desErr } = await supabase
@@ -165,10 +171,20 @@ useEffect(() => {
       if (desErr) console.error("Error al obtener desestimadas:", desErr);
       const idsDesestimadas = new Set((desestimadas || []).map(d => d.id_alerta));
 
+// Quedarnos solo con la asignación más reciente por alerta (asigData ya viene ordenado por id_asignacion DESC)
+      const asignacionesUnicasPorAlerta = [];
+      const idsAlertaVistos = new Set();
+      for (const a of (asigData || [])) {
+        if (a.alerta && !idsAlertaVistos.has(a.alerta.id_alerta)) {
+          idsAlertaVistos.add(a.alerta.id_alerta);
+          asignacionesUnicasPorAlerta.push(a);
+        }
+      }
+
       // Pendientes: todas las alertas con asignación que NO estén tabuladas
-      const pendientes = (asigData || [])
-        .filter(a => a.alerta && !idsTabulados.has(a.alerta.id_alerta))
-        .map(a => {
+      const pendientes = asignacionesUnicasPorAlerta
+  .filter(a => a.alerta && !idsTabulados.has(a.alerta.id_alerta) && a.alerta.id_estado_actual === 3)
+  .map(a => {
           let clasificacion = a.alerta.contravenciones || a.alerta.delitos;
           if (!clasificacion) clasificacion = a.alerta.categoria || a.alerta.descripcion || "Sin clasificar";
           
@@ -194,6 +210,7 @@ useEffect(() => {
   ubicacion: a.alerta.ubicacion || "",
   prioridad: a.alerta.prioridad || "—",
   fecha: a.alerta.fecha_hora?.split("T")[0] || fechaHoy,
+  bloqueadoPor: a.alerta.bloqueado_por || null,
 };
         });
 
@@ -207,23 +224,55 @@ useEffect(() => {
 
   // Suscripción en tiempo real
   useEffect(() => {
-    const subscription = supabase
-      .channel('tabulacion-realtime')
-      .on('postgres_changes', 
-  { event: 'INSERT', schema: 'public', table: 'alerta' }, 
-  () => cargarDatos()
-)
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'alerta_desestimada' }, 
-        () => cargarDatos()
-      )
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'tabulacion_caso' }, 
-        () => cargarDatos()
-      )
-      .subscribe();
+const subscription = supabase
+  .channel('tabulacion-realtime')
+  .on('postgres_changes', 
+    { event: '*', schema: 'public', table: 'alerta' }, 
+    () => cargarDatos(true)
+  )
+  .on('postgres_changes', 
+    { event: '*', schema: 'public', table: 'alerta_desestimada' }, 
+    () => cargarDatos(true)
+  )
+  .on('postgres_changes', 
+    { event: 'INSERT', schema: 'public', table: 'tabulacion_caso' }, 
+    () => cargarDatos(true)
+  )
+  .subscribe();
+
     return () => { supabase.removeChannel(subscription); };
   }, [cargarDatos]);
+
+  // Libera bloqueos abandonados (cualquier rol) al entrar y cada 3s
+  useEffect(() => {
+    const liberarBloqueos = async () => {
+      const idOficial = user?.id_oficial;
+      let q = supabase
+        .from("alerta")
+        .update({ bloqueado_por: null, bloqueado_en: null, bloqueado_rol: null })
+        .lt("bloqueado_en", new Date(Date.now() - 8000).toISOString())
+        .not("bloqueado_por", "is", null);
+      if (idOficial) q = q.neq("bloqueado_por", idOficial);
+      const { error } = await q;
+      if (!error) cargarDatos(true);
+    };
+    liberarBloqueos();
+    const intervalo = setInterval(liberarBloqueos, 3000);
+    return () => clearInterval(intervalo);
+  }, [user?.id_oficial, cargarDatos]);
+
+  // Heartbeat: mantiene vivo el bloqueo mientras el modal está abierto
+  useEffect(() => {
+    if (!isModalOpen || !alertaSeleccionada?.id_alerta || !user?.id_oficial) return;
+    const heartbeat = setInterval(async () => {
+      await supabase
+        .from("alerta")
+        .update({ bloqueado_en: new Date().toISOString() })
+        .eq("id_alerta", alertaSeleccionada.id_alerta)
+        .eq("bloqueado_por", user.id_oficial);
+    }, 4000);
+    return () => clearInterval(heartbeat);
+  }, [isModalOpen, alertaSeleccionada, user?.id_oficial]);
 
   useEffect(() => {
     cargarDatos();
@@ -263,10 +312,48 @@ useEffect(() => {
     return { tabuladasHoy, pendientes, ranking };
   }, [alertasPendientes, tabuladas, fechaHoy]);
 
-  const handleTabular = useCallback(async () => {
-    setIsModalOpen(false);
-    await cargarDatos();
-  }, [cargarDatos]);
+const handleTabular = useCallback(async () => {
+  if (alertaSeleccionada?.id_alerta && user?.id_oficial) {
+    await supabase.from("alerta").update({
+      bloqueado_por: null, bloqueado_en: null, bloqueado_rol: null,
+    }).eq("id_alerta", alertaSeleccionada.id_alerta).eq("bloqueado_por", user.id_oficial);
+  }
+  setIsModalOpen(false);
+  await cargarDatos();
+}, [cargarDatos, alertaSeleccionada, user]);
+
+const abrirTabulacion = async (alerta) => {
+  const idOficial = user?.id_oficial;
+
+  const { data: alertaDb } = await supabase
+    .from("alerta")
+    .select("bloqueado_por, oficial_bloqueador:bloqueado_por ( nombre_completo )")
+    .eq("id_alerta", alerta.id_alerta)
+    .maybeSingle();
+
+  if (alertaDb?.bloqueado_por && alertaDb.bloqueado_por !== idOficial) {
+    const nombreOtro = alertaDb.oficial_bloqueador?.nombre_completo || "otro tabulador";
+    showToast(`Esta alerta ya está siendo tabulada por ${nombreOtro}`, "error");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("alerta")
+    .update({
+      bloqueado_por: idOficial,
+      bloqueado_en: new Date().toISOString(),
+      bloqueado_rol: "tabulador",
+    })
+    .eq("id_alerta", alerta.id_alerta);
+
+  if (error) {
+    showToast("No se pudo bloquear la alerta", "error");
+    return;
+  }
+
+  setAlertaSeleccionada({ ...alerta, id_tabulador: idOficial });
+  setIsModalOpen(true);
+};
 
   const ultimasTabuladas = useMemo(() => tabuladas.slice(0, 4), [tabuladas]);
 
@@ -324,47 +411,61 @@ if (tab.id_patrullero && tab.id_alerta) {
   if (reporte?.descripcion_reporte) reportePatrullero = reporte.descripcion_reporte;
 }
 
+// Resolver nombre de quien derivó el caso (NUEVO)
+let nombreDerivacion = "—";
+const { data: asigDeriv } = await supabase
+  .from("asignacion_patrulla")
+  .select("derivacion_por")
+  .eq("id_alerta", tab.id_alerta)
+  .order("fecha_asignacion", { ascending: false })
+  .limit(1)
+  .maybeSingle();
+if (asigDeriv?.derivacion_por) {
+  const { data: ofDerivacion } = await supabase
+    .from("oficial")
+    .select("nombre_completo")
+    .eq("id_oficial", asigDeriv.derivacion_por)
+    .maybeSingle();
+  nombreDerivacion = ofDerivacion?.nombre_completo || "—";
+}
+
 const codigoAlerta = tab.alerta?.codigo_alerta || tab.id_alerta;
 const nombreArchivo = `reportes/tabulacion_${codigoAlerta}.pdf`;
+const nombreDescarga = `Tabulacion_${codigoAlerta}.pdf`;
 
-// 1. Generar sin QR y subir
+// 1. Obtener URL pública ANTES de generar
+const { data: urlData } = supabase.storage
+  .from("reportes")
+  .getPublicUrl(nombreArchivo);
+const urlPublica = `${urlData.publicUrl}?t=${Date.now()}`;
+
+// 2. Generar el PDF YA con el QR incluido (una sola vez)
 const pdfBlob = await exportPDFTabulacion({
   tab: { ...tab, reporte_patrullero: reportePatrullero },
   nombreOperador: nombresMap[tab.id_operador_receptor] || "—",
   nombreDespachador: nombresMap[tab.id_despachador] || "—",
   nombrePatrullero,
+  nombreDerivacion,
   nombreTabulador: user?.nombre_completo || "—",
   logoBase64,
-  filename: `Tabulacion_${codigoAlerta}.pdf`,
-  qrData: null,
-  returnBlob: true,
+  filename: nombreDescarga,
+  qrData: urlPublica,
 });
 
+// 3. Subir ese mismo PDF (una sola vez)
 const { error: uploadError } = await supabase.storage
   .from("reportes")
   .upload(nombreArchivo, pdfBlob, { contentType: "application/pdf", upsert: true });
 
-if (uploadError) {
-  console.error("Error al subir PDF:", uploadError);
-}
+if (uploadError) console.error("Error al subir PDF:", uploadError);
 
-const { data: urlData } = supabase.storage
-  .from("reportes")
-  .getPublicUrl(nombreArchivo);
-
-const urlPublica = urlData.publicUrl;
-
-// 2. Generar con QR y descargar
-await exportPDFTabulacion({
-  tab: { ...tab, reporte_patrullero: reportePatrullero },
-  nombreOperador: nombresMap[tab.id_operador_receptor] || "—",
-  nombreDespachador: nombresMap[tab.id_despachador] || "—",
-  nombrePatrullero,
-  nombreTabulador: user?.nombre_completo || "—",
-  logoBase64,
-  filename: `Tabulacion_${codigoAlerta}.pdf`,
-  qrData: urlPublica,
-});
+// 4. Descargar (una sola vez)
+const url = URL.createObjectURL(pdfBlob);
+const a = document.createElement("a");
+a.href = url;
+a.download = nombreDescarga;
+a.click();
+URL.revokeObjectURL(url);
   };
 
   const historicoAlertas = useMemo(() => {
@@ -375,13 +476,15 @@ await exportPDFTabulacion({
       fecha: t.fecha_tabulacion?.split("T")[0] || "—",
       incidente: t.resultado_final || t.alerta?.contravenciones || t.alerta?.delitos || "Sin clasificar",
       estado: "TABULADO",
-      motivoDesestimacion: null
+      motivoDesestimacion: null,
+      patrullero: t.numero_escalafon || "—",
+      remision_caso: t.remision_caso || "—"
     }));
   }, [tabuladas]);
 
-  useEffect(() => {
-  document.title = verTodo ? "ARCHIVO HISTÓRICO" : "TABULACIÓN Y ESTADÍSTICAS";
-}, [verTodo]);
+useEffect(() => {
+  document.title = "Sistema Policial 110";
+}, []);
 
 if (verTodo) {
   return (
@@ -457,11 +560,17 @@ if (verTodo) {
                           </td>
                         </tr>
                       ) : (
-                        alertasPendientes.map((alerta) => (
-                          <tr
-                            key={alerta.id_alerta}
-                            className="bg-white group transition-all duration-200 border-b border-gray-100 hover:shadow-lg hover:-translate-y-0.5"
-                          >
+                        alertasPendientes.map((alerta) => {
+  const bloqueadaPorOtro = alerta.bloqueadoPor && alerta.bloqueadoPor !== user?.id_oficial;
+  return (
+<tr
+  key={alerta.id_asignacion}
+  className={`bg-white group transition-all duration-200 border-b border-gray-100 ${
+    bloqueadaPorOtro
+      ? "opacity-50"
+      : "hover:shadow-lg hover:-translate-y-0.5"
+  }`}
+>
                             <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-5 md:py-6 text-[11px] font-bold text-slate-400 uppercase align-middle">
                               {alerta.id}
                             </td>
@@ -493,28 +602,33 @@ if (verTodo) {
                               </span>
                             </td>
                             <td className="py-5 md:py-6 align-middle">
-                              <span className={`inline-flex justify-center w-24 py-1.5 rounded-md text-[9px] font-bold text-white tracking-wider ${
-                                alerta.estado === "DESESTIMADA" ? "bg-gray-500" : "bg-[#088226]"
-                              }`}>
-                                {alerta.estado}
-                              </span>
-                            </td>
+  <span className={`inline-flex justify-center w-24 py-1.5 rounded-md text-[9px] font-bold text-white tracking-wider ${
+    alerta.estado === "DESESTIMADA" ? "bg-gray-500" : "bg-[#088226]"
+  }`}>
+    {alerta.estado}
+  </span>
+</td>
                             <td className="px-3 md:px-4 py-5 md:py-6 align-middle">
-                              <button
-                                onClick={() => {
-                                  setAlertaSeleccionada({
-                                    ...alerta,
-                                    id_tabulador: user?.id_oficial || null
-                                  });
-                                  setIsModalOpen(true);
-                                }}
-                                className="p-1.5 md:p-2 bg-amber-500 text-white rounded-lg shadow hover:scale-105 active:scale-95 transition-all flex items-center justify-center"
-                              >
-                                <FaClipboardList size={14} />
-                              </button>
+                            {bloqueadaPorOtro ? (
+  <button
+    onClick={() => {
+      showToast(`Esta alerta ya está siendo gestionada por otro tabulador`, "error");
+    }}
+    className="p-1.5 md:p-2 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center hover:bg-green-50 hover:text-[#113e27] transition-all duration-200"
+  >
+    <FaLock size={13} />
+  </button>
+) : (
+  <button
+    onClick={() => abrirTabulacion(alerta)}
+    className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#113e27] hover:text-white transition-all duration-200 flex items-center justify-center"
+  >
+    <FaClipboardList size={14} />
+  </button>
+)}
                             </td>
                           </tr>
-                        ))
+                        );})
                       )}
                     </tbody>
                   </table>
@@ -655,13 +769,20 @@ if (verTodo) {
         </>
       )}
 
-      <FormularioTabulacion
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        alerta={alertaSeleccionada}
-        onConfirm={handleTabular}
-        readOnly={false}
-      />
+<FormularioTabulacion
+  isOpen={isModalOpen}
+  onClose={async () => {
+    if (alertaSeleccionada?.id_alerta && user?.id_oficial) {
+      await supabase.from("alerta").update({
+        bloqueado_por: null, bloqueado_en: null, bloqueado_rol: null,
+      }).eq("id_alerta", alertaSeleccionada.id_alerta).eq("bloqueado_por", user.id_oficial);
+    }
+    setIsModalOpen(false);
+  }}
+  alerta={alertaSeleccionada}
+  onConfirm={handleTabular}
+  readOnly={false}
+/>
 
       <FormularioTabulacion
         isOpen={isViewModalOpen}

@@ -26,17 +26,6 @@ const Layout = ({ children }) => {
     return () => window.removeEventListener("tabulacion_view_change", handler);
   }, []);
 
-  useEffect(() => {
-    const handler = () => {
-      showToast(
-        "Tu sesión expirará en 2 minutos. Guarda tu proceso de gestión.",
-        "warning",
-      );
-    };
-    window.addEventListener("sesion_por_expirar", handler);
-    return () => window.removeEventListener("sesion_por_expirar", handler);
-  }, [showToast]);
-
   const getHeaderTitle = () => {
     const path = location.pathname;
     if (path === "/dashboard") return "DASHBOARD PRINCIPAL";

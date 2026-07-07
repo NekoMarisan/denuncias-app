@@ -2,15 +2,10 @@ import jsPDF from "jspdf";
 import QRCode from "qrcode";
 
 export async function exportPDFTabulacion({
-  tab,
-  nombreOperador = "—",
-  nombreDespachador = "—",
-  nombrePatrullero = "—",
-  nombreTabulador = "—",
-  logoBase64 = null,
-  filename = "tabulacion.pdf",
-  qrData = null,
-  returnBlob = false,
+  tab, nombreOperador = "—", nombreDespachador = "—",
+  nombrePatrullero = "—", nombreTabulador = "—",
+  nombreDerivacion = "—", // ← NUEVO
+  logoBase64 = null, filename = "tabulacion.pdf", qrData = null, returnBlob = false,
 }) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
 
@@ -75,7 +70,7 @@ doc.setTextColor(...NEGRO);
 doc.setFont("helvetica", "bold");
 doc.setFontSize(8);  // ← CAMBIA AQUÍ el tamaño de REPORTE DE TABULACIÓN
 doc.text("REPORTE DE TABULACIÓN DE CASO", TX, 14.5 + OFFSET_Y);
-doc.setTextColor(...GTEXT);
+doc.setTextColor(...NEGRO);
 doc.setFont("helvetica", "normal");
 doc.setFontSize(7.5);  // ← CAMBIA AQUÍ el tamaño de CÓDIGO · CATEGORÍA
 const categoriaAlerta = (alerta.tipo_alerta || "").toLowerCase().includes("emergencia")
@@ -96,7 +91,7 @@ const fechaEmision = new Date().toLocaleString("es-ES", {
 
 const rightX = PW - MR - 14 - 6;
 doc.setFont("helvetica", "normal");
-doc.setFontSize(7.5);
+doc.setFontSize(7);
 doc.text(`Emisión: ${fechaEmision}`, rightX, 14.5 + OFFSET_Y, { align: "right" });
 doc.text(`Tabulación: ${fmtF(tab.fecha_tabulacion)}`, rightX, 19 + OFFSET_Y, { align: "right" });
 
@@ -280,8 +275,9 @@ fila([
   // ════════════════════════════════════════════════════════════
   secTit("5. Tabulación para Secretaría");
 fila([
-  { w: C12, label: "Protagonistas del hecho", valor: tab.protagonistas },
-  { w: C12, label: "Remisión / Derivación del caso", valor: tab.remision_caso },
+  { w: CW * 0.4, label: "Protagonistas del hecho", valor: tab.protagonistas },
+  { w: CW * 0.3, label: "Remisión / Derivación del caso", valor: tab.remision_caso },
+  { w: CW * 0.3, label: "Derivado por", valor: nombreDerivacion }, // ← NUEVA CASILLA
 ], 15);
   celdaTxt("Resumen administrativo", tab.resumen_administrativo, 23);
 
@@ -289,13 +285,14 @@ fila([
   // VI. CADENA DE GESTIÓN
   // ════════════════════════════════════════════════════════════
   secTit("6. Cadena de Gestión del Caso");
-  const roles = [
-    { rol: "Operador Receptor", nombre: nombreOperador },
-    { rol: "Despachador",       nombre: nombreDespachador },
-    { rol: "Patrullero",        nombre: nombrePatrullero },
-    { rol: "Tabulador",         nombre: nombreTabulador },
-  ];
-  const rW = CW / 4;
+const roles = [
+  { rol: "Operador Receptor", nombre: nombreOperador },
+  { rol: "Despachador",       nombre: nombreDespachador },
+  { rol: "Patrullero",        nombre: nombrePatrullero },
+  { rol: "Derivación",        nombre: nombreDerivacion }, // ← NUEVA CASILLA
+  { rol: "Tabulador",         nombre: nombreTabulador },
+];
+const rW = CW / 5; // ← antes /4
   Y += 2;
   roles.forEach((r, i) => {
     const rx = ML + i * rW;
@@ -348,6 +345,5 @@ doc.setTextColor(80, 80, 80);
 doc.text("Central de Radio Patrullas - 110", firmaDerX, PIE_Y + 22, { align: "center" });
 
   const pdfBlob = doc.output("blob");
-  if (returnBlob) return pdfBlob;
-  doc.save(filename);
+  return pdfBlob;
 }

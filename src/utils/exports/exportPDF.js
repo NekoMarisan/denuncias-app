@@ -39,12 +39,8 @@ const GRIS_CLARO = [245, 245, 245];
   let qrBase64 = null;
 if (qrData) {
   qrBase64 = await QRCode.toDataURL(qrData, {
-    width: 120,
+    width: 80,
     margin: 1,
-    color: {
-      dark: "#000000",
-      light: "#FFFFFF",
-    },
   });
 }
 
@@ -80,18 +76,18 @@ if (qrData) {
     doc.setFontSize(6);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("CENTRAL DE RADIO PATRULLAS", textX, 10.5 + OFFSET_Y); // CAMBIO: +OFFSET_Y
+doc.setFontSize(12);
+doc.text("CENTRAL DE RADIO PATRULLAS", textX, 9 + OFFSET_Y);
 
-    doc.setTextColor(...NEGRO);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.text(titulo, textX, 15 + OFFSET_Y); 
+doc.setTextColor(...NEGRO);
+doc.setFont("helvetica", "bold");
+doc.setFontSize(8);
+doc.text(titulo, textX, 14.5 + OFFSET_Y);
 
-    doc.setTextColor(...GRIS_MED);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.text(subtitulo, textX, 18 + OFFSET_Y);
+doc.setTextColor(...NEGRO);
+doc.setFont("helvetica", "normal");
+doc.setFontSize(7.5);
+doc.text(subtitulo, textX, 19 + OFFSET_Y);
 
 // ── QR extremo derecho ──
     if (qrBase64) {
@@ -100,15 +96,15 @@ if (qrData) {
       doc.addImage(qrBase64, "PNG", qrX, 4 + OFFSET_Y, qrSize, qrSize);
     }
 
-    // ── Fecha y total (a la izquierda del QR con 10mm de espacio) ──
+    // ── Fecha y total 
     const rightX = PAGE_W - MARGIN_R - 14 - 6;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...NEGRO);
-    doc.text(`Fecha: ${fechaFormato}`, rightX, 14.5 + OFFSET_Y, { align: "right" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.text(`Total de registros: ${totalRegistros}`, rightX, 18 + OFFSET_Y, { align: "right" });
+    doc.setFontSize(7);
+doc.setTextColor(...NEGRO);
+doc.text(`Fecha: ${fechaFormato}`, rightX, 14.5 + OFFSET_Y, { align: "right" });
+doc.setFont("helvetica", "normal");
+doc.setFontSize(7);
+doc.text(`Total de registros: ${totalRegistros}`, rightX, 19 + OFFSET_Y, { align: "right" });
 
     // ── Título del reporte (debajo de la barra) ──
     return HEADER_H + 6;
@@ -204,8 +200,5 @@ columnStyles: {
   }
 
   const pdfBlob = doc.output("blob");
-  if (qrData) {
-    doc.save(filename);
-  }
   return pdfBlob;
 }

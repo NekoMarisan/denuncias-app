@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { FaTimes, FaEye, FaEyeSlash } from "react-icons/fa";
 import { supabase } from "../../services/supabase";
 
-const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null, onToast }) => {
+const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null, onToast, usuarioActual = null }) => {
   const [formData, setFormData] = useState({
     nombre_completo:  "",
     ci:               "",
@@ -357,7 +357,7 @@ const datosOficial = {
       }
 
 await supabase.from("log_actividad").insert([{
-        id_oficial: null,
+        id_oficial: usuarioActual?.id_oficial || null,
         id_alerta: null,
         accion: "ADMINISTRADOR",
         descripcion: editandoPolicia

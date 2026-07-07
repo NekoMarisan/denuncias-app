@@ -31,9 +31,10 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
   const [idDespachador, setIdDespachador] = useState(null);
   const [idOperadorReceptor, setIdOperadorReceptor] = useState(null);
 
-  const [nombreOperador, setNombreOperador] = useState('—');
+const [nombreOperador, setNombreOperador] = useState('—');
   const [nombreDespachador, setNombreDespachador] = useState('—');
   const [nombrePatrullero, setNombrePatrullero] = useState('—');
+  const [nombreDerivacion, setNombreDerivacion] = useState('—');
 
   const [escalafon, setEscalafon] = useState('—');
   const [placa, setPlaca] = useState('—');
@@ -117,6 +118,24 @@ const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = f
         if (alerta.protagonistas !== undefined) setProtagonistas(alerta.protagonistas || '');
         if (alerta.resumen_administrativo !== undefined) setResumenAdministrativo(alerta.resumen_administrativo || '');
         if (alerta.remision_caso !== undefined) setRemisionCaso(alerta.remision_caso || '');
+
+        if (alerta.id_alerta) {
+          const { data: asigDeriv } = await supabase
+  .from("asignacion_patrulla")
+  .select("derivacion_por")
+  .eq("id_alerta", alerta.id_alerta)
+  .order("fecha_asignacion", { ascending: false })
+  .limit(1)
+  .maybeSingle();
+          if (asigDeriv?.derivacion_por) {
+            const { data: ofDerivacion } = await supabase
+              .from("oficial")
+              .select("nombre_completo")
+              .eq("id_oficial", asigDeriv.derivacion_por)
+              .maybeSingle();
+            setNombreDerivacion(ofDerivacion?.nombre_completo || `Oficial #${asigDeriv.derivacion_por}`);
+          }
+        }
 
 if (alerta.id_patrullero && idAlerta) {
   const { data: reporteData } = await supabase
@@ -263,16 +282,27 @@ if (alerta.id_patrullero && idAlerta) {
         let derivacionEncontrada = null;
 
         const { data: asigRow } = await supabase
-          .from("asignacion_patrulla")
-          .select("id_asignacion, id_patrullero, id_oficial_asignador, derivacion")
-          .eq("id_alerta", idAlerta)
-          .maybeSingle();
+  .from("asignacion_patrulla")
+  .select("id_asignacion, id_patrullero, id_oficial_asignador, derivacion, derivacion_por")
+  .eq("id_alerta", idAlerta)
+  .order("fecha_asignacion", { ascending: false })
+  .limit(1)
+  .maybeSingle();
 
         if (asigRow) {
           idAsignacionEncontrada = asigRow.id_asignacion;
           idPatrulleroEncontrado = asigRow.id_patrullero;
           idDespachadorEncontrado = asigRow.id_oficial_asignador;
           derivacionEncontrada = asigRow.derivacion || '';
+
+          if (asigRow.derivacion_por) {
+            const { data: ofDerivacion } = await supabase
+              .from("oficial")
+              .select("nombre_completo")
+              .eq("id_oficial", asigRow.derivacion_por)
+              .maybeSingle();
+            setNombreDerivacion(ofDerivacion?.nombre_completo || `Oficial #${asigRow.derivacion_por}`);
+          }
         }
 
         setIdAsignacion(idAsignacionEncontrada);
@@ -395,6 +425,7 @@ if (alerta.id_patrullero && idAlerta) {
       setNombreOperador('—');
       setNombreDespachador('—');
       setNombrePatrullero('—');
+      setNombreDerivacion('—');
       setEscalafon('—');
       setPlaca('—');
       setEpi('—');
@@ -638,15 +669,30 @@ if (alerta.id_patrullero && idAlerta) {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 rounded-md">
             {/* DATOS DE LA ALERTA */}
             <section className={cardStyle}>
-              <HeaderSection icon={<FaFileAlt className="text-[#0C3DC2] text-[14px]"/>} title="DATOS DE LA ALERTA" bgColor="bg-blue-50 rounded-sm" />
-              <div className="grid grid-cols-2 gap-3 flex-1">
-                <div className="col-span-2">
-                  <LabelField label="NOMBRE DEL CIUDADANO" value={ciudadanoData?.nombre_completo || alerta?.ciudadano || "—"} readOnly required />
-                </div>
-                <LabelField label="CÉDULA" value={ciudadanoData?.ci || alerta?.ci || "—"} readOnly />
-                <LabelField label="CELULAR" value={ciudadanoData?.celular || alerta?.celular || "—"} readOnly />
-                <LabelField label="PRIORIDAD" value={alerta?.prioridad || "—"} readOnly />
-<div className="col-span-1">
+              <div className="flex items-center justify-between border-b border-slate-50 pb-2 mb-4 shrink-0">
+  <div className="flex items-center gap-2">
+    <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center">
+      <FaFileAlt className="text-[#0C3DC2] text-[14px]" />
+    </div>
+    <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">DATOS DE LA ALERTA</h2>
+  </div>
+  <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider text-white ${
+    (alerta?.prioridad || "").toUpperCase() === "ALTA"
+      ? "bg-[#C90A0A]"
+      : (alerta?.prioridad || "").toUpperCase() === "MEDIA"
+      ? "bg-[#0C3DC2]"
+      : "bg-[#e9b301]"
+  }`}>
+    {alerta?.prioridad || "—"}
+  </span>
+</div>
+<div className="grid grid-cols-2 gap-3 flex-1">
+  <div className="col-span-2">
+    <LabelField label="NOMBRE DEL CIUDADANO" value={ciudadanoData?.nombre_completo || alerta?.ciudadano || "—"} readOnly required />
+  </div>
+  <LabelField label="CÉDULA" value={ciudadanoData?.ci || alerta?.ci || "—"} readOnly />
+  <LabelField label="CELULAR" value={ciudadanoData?.celular || alerta?.celular || "—"} readOnly />
+<div className="col-span-2">
   <LabelField
     label="CLASIFICACIÓN DEL HECHO"
     value={clasificacionOriginal}
@@ -794,7 +840,7 @@ if (alerta.id_patrullero && idAlerta) {
             <h2 className="flex items-center gap-3 font-bold text-slate-400 uppercase text-[11px] tracking-wider mb-5">
                HISTORIAL DE PROCESO
             </h2>
-            <div className="flex flex-wrap md:flex-nowrap justify-center gap-5">
+           <div className="flex flex-wrap md:flex-nowrap justify-center gap-5">
               <HistoryCard 
                 role="OPERADOR" 
                 name={nombreOperador} 
@@ -812,6 +858,12 @@ if (alerta.id_patrullero && idAlerta) {
                 name={nombrePatrullero} 
                 icon={<FaUser size={12} />} 
                 splitName={splitNameLines(nombrePatrullero)}
+              />
+              <HistoryCard 
+                role="DERIVACIÓN" 
+                name={nombreDerivacion} 
+                icon={<FaBriefcase size={12} />} 
+                splitName={splitNameLines(nombreDerivacion)}
               />
               <HistoryCard 
                 role="TABULADOR" 

@@ -1,11 +1,18 @@
 import React from "react";
-import { FaCircle } from "react-icons/fa";
+import { FaCircle, FaLock } from "react-icons/fa";
 
-export const AlertaCard = ({ alerta, seleccionada, onClick }) => {
+export const AlertaCard = ({
+  alerta,
+  seleccionada,
+  onClick,
+  bloqueadaPorOtro,
+  bloqueadoNombre,
+}) => {
   const nombre = alerta?.nombre || "Usuario";
   const partes = nombre.split(" ");
 
-  const baseClasses = "p-3 rounded-xl border cursor-pointer transition-all duration-300";
+  const baseClasses =
+    "p-3 rounded-xl border cursor-pointer transition-all duration-300";
   const shadowClasses = "shadow hover:shadow-lg";
 
   const stateClasses = seleccionada
@@ -14,10 +21,12 @@ export const AlertaCard = ({ alerta, seleccionada, onClick }) => {
       : "border-blue-300 bg-blue-100/20 shadow-md"
     : "border-slate-200 bg-white hover:border-slate-300";
 
-  return (
+return (
     <div
       onClick={onClick}
-      className={`${baseClasses} ${shadowClasses} ${stateClasses}`}
+      className={`${baseClasses} ${shadowClasses} ${stateClasses} ${
+        bloqueadaPorOtro ? "opacity-50 cursor-not-allowed" : ""
+      }`}
     >
       <div className="flex items-center gap-2 mb-1">
         <div className="w-7 h-8 rounded-md bg-blue-50 text-blue-600 flex items-center shadow-inner justify-center font-black text-sm shrink-0">
@@ -39,6 +48,7 @@ export const AlertaCard = ({ alerta, seleccionada, onClick }) => {
           {alerta.tipo === "EMERGENCIA" ? "EMERGENCIA" : "INTERVENCIÓN"}
         </span>
       </div>
+
       <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-white/50 p-1.5 rounded-lg border border-slate-100">
         <FaCircle className="text-[6px]" />
         <span>{alerta.clasificacionHecho || "—"}</span>

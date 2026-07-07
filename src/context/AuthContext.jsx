@@ -1,36 +1,49 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
-import { supabase } from "../services/supabase";
+﻿import React, { createContext, useState, useContext, useEffect, useRef } from "react";
+import { supabase, setOficialHeader } from "../services/supabase";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-const DURACION_SESION_MS = 30 * 60 * 1000;
-const AVISO_MS = 28 * 60 * 1000;
+const [user, setUser] = useState(null);
+  const [cargando, setCargando] = useState(true);
+const DURACION_SESION_MS = 30 * 60 * 1000;   // 30 minutos total
+const AVISO_MS = 28 * 60 * 1000;             // aviso en el minuto 28
+const avisoDisparado = useRef(false);
 
-  useEffect(() => {
+useEffect(() => {
     const storedUser = sessionStorage.getItem("sistema_user");
     const sessionStart = sessionStorage.getItem("session_start");
 
     if (storedUser && sessionStart) {
       const tiempoTranscurrido = Date.now() - parseInt(sessionStart, 10);
       if (tiempoTranscurrido >= DURACION_SESION_MS) {
-        logout("expiracion");
-        return;
+        sessionStorage.removeItem("sistema_user");
+        sessionStorage.removeItem("session_start");
+        sessionStorage.removeItem("aviso_expiracion");
+        localStorage.removeItem("session_token");
+      } else {
+        try {
+  const parsedUser = JSON.parse(storedUser);
+  setUser(parsedUser);
+  setOficialHeader(parsedUser.id_oficial);
+} catch (_) {
+  sessionStorage.removeItem("sistema_user");
+}
       }
-      setUser(JSON.parse(storedUser));
     }
 
     if (localStorage.getItem("usuario")) {
       localStorage.removeItem("usuario");
     }
+
+    setCargando(false);
   }, []);
 
-// ANTES — no existe nada aquí
-
-// DESPUÉS — agregar esto
 useEffect(() => {
   if (!user) return;
+
+  let listo = false;
+  setTimeout(() => { listo = true; }, 3000);
 
   const channel = supabase
     .channel("acceso_oficial")
@@ -38,6 +51,7 @@ useEffect(() => {
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "oficial", filter: `id_oficial=eq.${user.id_oficial}` },
       (payload) => {
+        if (!listo) return;
         const nuevoAcceso = payload.new.acceso;
         if (nuevoAcceso === "FUERA DE SERVICIO") {
           window.dispatchEvent(new CustomEvent("sesion_bloqueada", { detail: { motivo: "fuera_de_servicio" } }));
@@ -53,27 +67,48 @@ useEffect(() => {
   return () => supabase.removeChannel(channel);
 }, [user]);
 
-  useEffect(() => {
+useEffect(() => {
     if (!user) return;
 
+    let ultimaActividad = Date.now();
+    let avisoMostrado = false;
+
+const registrarActividad = () => {
+      ultimaActividad = Date.now();
+      console.log("RESET actividad:", new Date().toLocaleTimeString());
+      if (avisoMostrado) {
+        avisoMostrado = false;
+        window.dispatchEvent(new CustomEvent("sesion_reiniciada"));
+      }
+    };
+
+    const eventos = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+    eventos.forEach((evento) => window.addEventListener(evento, registrarActividad));
+
+let yaExpiro = false;
+
     const intervalo = setInterval(() => {
-      const sessionStart = sessionStorage.getItem("session_start");
-      if (!sessionStart) return;
+      const inactivo = Date.now() - ultimaActividad;
+      console.log("Chequeo inactividad:", Math.round(inactivo / 1000), "seg | aviso:", avisoMostrado);
 
-      const tiempoTranscurrido = Date.now() - parseInt(sessionStart, 10);
-
-      if (tiempoTranscurrido >= DURACION_SESION_MS) {
+      if (inactivo >= DURACION_SESION_MS) {
+        if (yaExpiro) return;
+        yaExpiro = true;
         clearInterval(intervalo);
         logout("expiracion");
-      } else if (tiempoTranscurrido >= AVISO_MS) {
-        if (!sessionStorage.getItem("aviso_expiracion")) {
-          sessionStorage.setItem("aviso_expiracion", "1");
-          window.dispatchEvent(new CustomEvent("sesion_por_expirar"));
-        }
+      } else if (inactivo >= AVISO_MS && !avisoMostrado) {
+        avisoMostrado = true;
+        window.dispatchEvent(new CustomEvent("sesion_por_expirar"));
+      } else if (inactivo < AVISO_MS && avisoMostrado) {
+        avisoMostrado = false;
+        window.dispatchEvent(new CustomEvent("sesion_reiniciada"));
       }
-    }, 60 * 1000);
+    }, 500);
 
-    return () => clearInterval(intervalo);
+    return () => {
+      eventos.forEach((evento) => window.removeEventListener(evento, registrarActividad));
+      clearInterval(intervalo);
+    };
   }, [user]);
 
   const login = async (numero_escalafon, contrasena) => {
@@ -90,7 +125,7 @@ if (error || !data) {
     }
 
     if (data.acceso === "FUERA DE SERVICIO") {
-      return { success: false, error: "FUERA DE SERVICIO - Su cuenta está inactiva temporalmente." };
+      return { success: false, error: "FUERA DE SERVICIO - Su cuenta esta inactiva temporalmente." };
     }
     if (data.acceso === "DE BAJA") {
       return { success: false, error: "DADO DE BAJA - Su cuenta esta deshabilitada." };
@@ -103,11 +138,18 @@ if (error || !data) {
 
     if (updateError) console.error("Error al actualizar estado:", updateError);
 
-    let rolNormalizado = data.rol;
-    if (rolNormalizado === "Administrador" || rolNormalizado === "Admin") rolNormalizado = "admin";
-    if (rolNormalizado === "Operador") rolNormalizado = "operador";
-    if (rolNormalizado === "Despachador") rolNormalizado = "despachador";
-    if (rolNormalizado === "Tabulador") rolNormalizado = "tabulador";
+    let rolNormalizado = (data.rol || "").trim().toLowerCase();
+    if (rolNormalizado === "admin" || rolNormalizado === "administrador") rolNormalizado = "admin";
+    if (rolNormalizado === "operador") rolNormalizado = "operador";
+    if (rolNormalizado === "despachador") rolNormalizado = "despachador";
+    if (rolNormalizado === "tabulador") rolNormalizado = "tabulador";
+
+    const ACCION_POR_ROL = {
+      admin: "ADMINISTRADOR",
+      operador: "OPERADOR",
+      despachador: "DESPACHO",
+      tabulador: "TABULACION",
+    };
 
     const cleanUser = { ...data, rol: rolNormalizado };
     delete cleanUser.contrasena;
@@ -118,7 +160,6 @@ if (error || !data) {
     sessionStorage.removeItem("aviso_expiracion");
     sessionStorage.removeItem("bienvenida_mostrada");
 
-    // Crear token de sesión seguro via Edge Function
     try {
       const res = await fetch(
         `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/validar-acceso`,
@@ -140,12 +181,12 @@ if (error || !data) {
         localStorage.setItem("session_token", json.token);
       }
     } catch (fnErr) {
-      console.error("Error creando token de sesión:", fnErr);
+      console.error("Error creando token de sesion:", fnErr);
     }
 
     await supabase.from("log_actividad").insert({
-      accion: rolNormalizado,
-      descripcion: `Ha iniciado de sesión - Escalafón ${data.numero_escalafon}`,
+      accion: ACCION_POR_ROL[rolNormalizado] || rolNormalizado.toUpperCase(),
+      descripcion: `Ha iniciado de sesion - Escalafon ${data.numero_escalafon}`,
       id_oficial: data.id_oficial,
       fecha_hora: new Date().toISOString(),
     });
@@ -153,13 +194,20 @@ if (error || !data) {
     return { success: true, rol: rolNormalizado, nombre: cleanUser.nombre_completo };
   };
 
+  const ACCION_POR_ROL = {
+    admin: "ADMINISTRADOR",
+    operador: "OPERADOR",
+    despachador: "DESPACHO",
+    tabulador: "TABULACION",
+  };
+
   const logout = async (motivo = "manual") => {
     if (user) {
       await supabase.from("log_actividad").insert({
-        accion: user.rol,
+        accion: ACCION_POR_ROL[user.rol] || (user.rol || "").toUpperCase(),
         descripcion: motivo === "expiracion"
-          ? `Sesión expirada automáticamente — ${user.nombre_completo || user.numero_escalafon}`
-          : `Ha cerrado sesión — ${user.nombre_completo || user.numero_escalafon}`,
+          ? `Sesion expirada automaticamente - ${user.nombre_completo || user.numero_escalafon}`
+          : `Ha cerrado sesion - ${user.nombre_completo || user.numero_escalafon}`,
         id_oficial: user.id_oficial,
         fecha_hora: new Date().toISOString(),
       });
@@ -169,8 +217,14 @@ if (error || !data) {
         .update({ estado: false })
         .eq("id_oficial", user.id_oficial);
     }
-    setUser(null);
-    sessionStorage.removeItem("sistema_user");
+
+    if (motivo === "expiracion") {
+      window.dispatchEvent(new CustomEvent("sesion_expirada"));
+    }
+
+setOficialHeader(null);
+setUser(null);
+sessionStorage.removeItem("sistema_user");
     sessionStorage.removeItem("session_start");
     sessionStorage.removeItem("aviso_expiracion");
     localStorage.removeItem("usuario");
@@ -190,15 +244,16 @@ if (error || !data) {
     return permissions[user.rol]?.includes(module);
   };
 
-  return (
+return (
     <AuthContext.Provider
       value={{
   user,
+  cargando,
   login,
   logout,
   sessionStart: sessionStorage.getItem("session_start"),
   DURACION_SESION_MS,
-  userRole: user?.rol,           // <-- AGREGAR ESTA LÍNEA
+  userRole: user?.rol,
   isAdmin: user?.rol === "admin",
   isOperador: user?.rol === "operador",
   isDespachador: user?.rol === "despachador",

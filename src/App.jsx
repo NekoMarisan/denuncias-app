@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+﻿import React, { useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -18,17 +18,10 @@ import ActividadLog from "./pages/ActividadLog";
 import Reporte from "./pages/Reporte";
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const { user, logout, sessionStart, DURACION_SESION_MS } = useAuth();
+  const { user, cargando } = useAuth();
 
+  if (cargando) return null;
   if (!user) return <Navigate to="/" replace />;
-
-  if (sessionStart) {
-    const tiempoTranscurrido = Date.now() - parseInt(sessionStart, 10);
-    if (tiempoTranscurrido >= DURACION_SESION_MS) {
-      logout("expiracion");
-      return <Navigate to="/" replace />;
-    }
-  }
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(user.rol)) {
     return <Navigate to="/dashboard" replace />;
@@ -41,17 +34,48 @@ function AppRoutes() {
   const { showToast } = useToast();
   const { user } = useAuth();
 
-  useEffect(() => {
+useEffect(() => {
     const handler = (e) => {
       const { motivo } = e.detail;
       if (motivo === "fuera_de_servicio") {
-        showToast("Su cuenta está fuera de servicio temporalmente.", "error");
+        showToast("Su cuenta esta fuera de servicio temporalmente.", "error");
       } else if (motivo === "de_baja") {
         showToast("Su cuenta ha sido dada de baja. Ya no tiene acceso.", "error");
       }
     };
     window.addEventListener("sesion_bloqueada", handler);
     return () => window.removeEventListener("sesion_bloqueada", handler);
+  }, []);
+
+useEffect(() => {
+const handleAviso = () => {
+  showToast("Tu sesión expirará en 2 minutos. Guarda tu proceso de gestión.", "warning");
+};
+
+    const handleExpirada = () => {
+      showToast("Su sesión se cerró automáticamente por inactividad.", "error");
+    };
+    window.addEventListener("sesion_por_expirar", handleAviso);
+    window.addEventListener("sesion_expirada", handleExpirada);
+    return () => {
+      window.removeEventListener("sesion_por_expirar", handleAviso);
+      window.removeEventListener("sesion_expirada", handleExpirada);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOffline = () => {
+      showToast("Se perdio la señal de internet. Verifique su conexion de red.", "error");
+    };
+    const handleOnline = () => {
+      showToast("Conexion de red restablecida. Ya puede continuar usando el sistema.", "success");
+    };
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
   }, []);
 
   return (
@@ -124,7 +148,7 @@ function AppRoutes() {
         }
       />
 
-<Route path="/reporte" element={<Reporte />} />
+      <Route path="/reporte" element={<Reporte />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
 
