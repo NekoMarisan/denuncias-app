@@ -26,9 +26,10 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose, onExitComplete
   }
 
   return (
-    <AnimatePresence onExitComplete={onExitComplete}>
+    <AnimatePresence mode="wait" onExitComplete={onExitComplete}>
       {visible && alerta && (
         <motion.div
+          key={alerta.id}
           ref={ref}
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
@@ -36,27 +37,19 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose, onExitComplete
           transition={{ duration: 0.4, ease: "easeInOut" }}
           style={{ overflow: "visible" }}
         >
-          <div className="pt-3 relative z-20">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-md -mt-1">
-              <div className="flex justify-between items-start mb-5">
+          <div className="relative z-20 pt-1 mb-1.5">
+            <div className="bg-white p-5 py-4 rounded-2xl border border-slate-200 shadow-md">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-5">
                 <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-xl font-extrabold text-[#1e293b] uppercase">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h2 className="text-xl font-extrabold text-[#1e293b] uppercase tracking-wider">
                       {alerta.tipo === "EMERGENCIA" ? "Alerta de Emergencia" : "Alerta Ciudadana"} — {alerta.codigo}
                     </h2>
-                    <div className={`px-2.5 py-1 rounded-md text-[11px] tracking-wider font-extrabold text-white ${alerta.tipo === "EMERGENCIA" ? "bg-[#C90A0A]" : "bg-[#0C3DC2]"}`}>
+                    <div className={`px-2.5 py-1 rounded-md text-[11px] tracking-wider font-medium text-white ${alerta.tipo === "EMERGENCIA" ? "bg-[#C90A0A]" : "bg-[#0C3DC2]"}`}>
                       {alerta.tipo === "EMERGENCIA" ? "EMERGENCIA" : "INTERVENCIÓN"}
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="flex items-center gap-2 border-l-2 border-slate-300 pl-2">
-                      <FaUser size={12} className="text-slate-400" />
-                      <span className="text-sm font-bold text-[#474d56]">{alerta.nombre}</span>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider ${getPrioridadStyles(alerta.prioridad)}`}>
-                      {alerta.prioridad || "N/A"}
-                    </span>
-                  </div>
+
                 </div>
                 <button 
                   onClick={onClose} 
@@ -66,27 +59,36 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose, onExitComplete
                 </button>
               </div>
 
-              <div className="flex flex-col md:flex-row gap-6">
+              <div className="flex flex-col md:flex-row gap-6 -mt-2">
                 {/* Columna izquierda */}
                 <div className="flex-1 flex flex-col gap-4">
                   <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">
+                    <p className="text-[11px] font-medium text-slate-400 uppercase mb-2 tracking-wider">
                       {tipoClasificacion}
                     </p>
                     <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
-                      <FaFileAlt className="text-[#0C3DC2] text-sm shrink-0" />
-                      <span className="text-sm font-semibold text-slate-700 uppercase">
+
+                      <span className="text-sm font-semibold text-slate-800 uppercase tracking-wider">
                         {textoClasificacion}
                       </span>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Coordenadas</p>
-                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
-                      <FaMapMarkerAlt className="text-[#C90A0A] text-sm shrink-0" />
-                      <span className="text-sm font-semibold text-slate-700">
-                        {alerta.lat?.toFixed(6)}, {alerta.lng?.toFixed(6)}
-                      </span>
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <p className="text-[11px] font-medium text-slate-400 uppercase mb-2 tracking-wider">Coordenadas</p>
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
+                        <span className="text-sm font-semibold text-slate-800 tracking-wider">
+                          {alerta.lat?.toFixed(6)}, {alerta.lng?.toFixed(6)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[11px] font-medium text-slate-400 uppercase mb-2 tracking-wider">Prioridad</p>
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
+                        <span className="text-sm font-semibold text-slate-800 uppercase tracking-wider">
+                          {alerta.prioridad || "N/A"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -95,10 +97,10 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose, onExitComplete
                 <div className="hidden md:block w-px bg-slate-200 self-stretch"></div>
 
                 {/* Columna derecha */}
-                <div className="w-[500px] shrink-0">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Descripción</p>
+                <div className="w-full md:w-[640px] shrink-0">
+                  <p className="text-[11px] font-medium text-slate-400 uppercase mb-2 tracking-wider">Descripción</p>
                   <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-sm h-[130px] overflow-y-auto">
-                    <p className="text-sm text-slate-600 leading-relaxed">{alerta.relato || "—"}</p>
+                    <p className="text-sm text-slate-800 leading-relaxed">{alerta.relato || "—"}</p>
                   </div>
                 </div>
               </div>

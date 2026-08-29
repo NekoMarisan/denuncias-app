@@ -111,6 +111,23 @@ let yaExpiro = false;
     };
   }, [user]);
 
+  // Heartbeat de presencia: mientras haya sesión, renueva "ultima_actividad" cada 15s.
+  useEffect(() => {
+    if (!user) return;
+
+    const enviarLatido = async () => {
+      await supabase
+        .from("oficial")
+        .update({ estado: true, ultima_actividad: new Date().toISOString() })
+        .eq("id_oficial", user.id_oficial);
+    };
+
+    enviarLatido();
+    const intervaloHeartbeat = setInterval(enviarLatido, 15000);
+
+    return () => clearInterval(intervaloHeartbeat);
+  }, [user]);
+
   const login = async (numero_escalafon, contrasena) => {
     const { data, error } = await supabase
       .from("oficial")
@@ -124,6 +141,9 @@ if (error || !data) {
       return { success: false, error: "Credenciales incorrectas" };
     }
 
+if (data.acceso === "PENDIENTE") {
+      return { success: false, error: "CUENTA PENDIENTE - Su cuenta está a la espera de ser activada por el administrador." };
+    }
     if (data.acceso === "FUERA DE SERVICIO") {
       return { success: false, error: "FUERA DE SERVICIO - Su cuenta esta inactiva temporalmente." };
     }
@@ -131,9 +151,9 @@ if (error || !data) {
       return { success: false, error: "DADO DE BAJA - Su cuenta esta deshabilitada." };
     }
 
-    const { error: updateError } = await supabase
+const { error: updateError } = await supabase
       .from("oficial")
-      .update({ estado: true })
+      .update({ estado: true, ultima_actividad: new Date().toISOString() })
       .eq("id_oficial", data.id_oficial);
 
     if (updateError) console.error("Error al actualizar estado:", updateError);
@@ -212,9 +232,9 @@ if (error || !data) {
         fecha_hora: new Date().toISOString(),
       });
 
-      await supabase
+await supabase
         .from("oficial")
-        .update({ estado: false })
+        .update({ estado: false, ultima_actividad: null })
         .eq("id_oficial", user.id_oficial);
     }
 

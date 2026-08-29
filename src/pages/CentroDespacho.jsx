@@ -15,7 +15,9 @@ import { useToast } from "../context/ToastContext";
 import { getRoute } from "../services/orsService";
 import { AlertaCard } from "../components/AlertaCard";
 import { DetalleAlerta } from "../components/DatoAlerta";
+import { AlertaCardSkeleton } from "../components/ui/Skeleton";
 import { GestionPatrullas } from "../components/GestionPatrullas";
+
 
 const mapContainerStyle = { width: "100%", height: "100%" };
 const defaultCenter = { lat: -17.3912, lng: -66.142 };
@@ -88,6 +90,7 @@ const CentroDespacho = () => {
   const patrolPulseRef      = useRef(null);
   const zoomIntervalRef     = useRef(null);
   const detalleRef          = useRef(null);
+  const datosExtraRef       = useRef({});
   const panelCentralRef = useRef(null);
   const [sidebarHeight, setSidebarHeight] = useState(null);
   const [detalleVisible, setDetalleVisible] = useState(false);
@@ -220,6 +223,8 @@ const cargarAlertas = async (silencioso = false) => {
         const coords = parsearUbicacion(item.ubicacion);
         const esEmergencia = (item.categoria === "Panico");
 
+        const datosExtra = datosExtraRef.current[item.id_alerta] || {};
+
         const alertaObj = {
   id: item.id_alerta,
   codigo: item.codigo_alerta || String(item.id_alerta),
@@ -236,8 +241,9 @@ const cargarAlertas = async (silencioso = false) => {
           enIntervencion: !!asig,
           id_asignacion: asig?.id_asignacion || null,
           id_patrullero_asignado: asig?.id_patrullero || null,
-            reportePatrullero: null,
-  evidencias: [],
+            reportePatrullero: datosExtra.reportePatrullero ?? null,
+  idPatrulleroReporte: datosExtra.idPatrulleroReporte ?? null,
+  evidencias: datosExtra.evidencias ?? [],
   bloqueadoPor: item.bloqueado_por || null,
   bloqueadoNombre: item.oficial_bloqueador?.nombre_completo || null,
         };
@@ -267,7 +273,7 @@ const cargarAlertas = async (silencioso = false) => {
     ubicacion_actual,
     id_estado_patrullero,
     id_oficial,
-    oficial:oficial!fk_patrullero_oficial ( id_oficial, nombre_completo, cargo, estado ),
+    oficial:oficial!fk_patrullero_oficial ( id_oficial, nombre_completo, cargo, estado, numero_escalafon ),
     estado_patrullero ( id_estado_patrullero, nombre_estado )
   `);
 
@@ -279,6 +285,7 @@ const cargarAlertas = async (silencioso = false) => {
         id_estado: p.id_estado_patrullero,
         activo: p.oficial?.estado === true,
         nombre_oficial: p.oficial?.nombre_completo || "Sin oficial asignado",
+        numero_escalafon: p.oficial?.numero_escalafon || null,
       }));
 
       lista.sort((a, b) => {
@@ -453,15 +460,25 @@ useEffect(() => {
               ev => ev.id_evidencia === payload.new.id_evidencia
             );
             if (yaExiste) return a;
-            return { ...a, evidencias: [...(a.evidencias || []), payload.new] };
+            const nuevasEvidencias = [...(a.evidencias || []), payload.new];
+            datosExtraRef.current[idAlerta] = {
+              ...(datosExtraRef.current[idAlerta] || {}),
+              evidencias: nuevasEvidencias,
+            };
+            return { ...a, evidencias: nuevasEvidencias };
           }));
         }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "reporte_alerta" }, (payload) => {
         const idAlerta = payload.new?.id_alerta;
         if (idAlerta && idAlerta === intervencionSeleccionadaRef.current) {
+          const reportePatrullero = payload.new?.descripcion_reporte || null;
+          datosExtraRef.current[idAlerta] = {
+            ...(datosExtraRef.current[idAlerta] || {}),
+            reportePatrullero,
+          };
           setAlertasIntervencion(prev => prev.map(a =>
-            a.id === idAlerta ? { ...a, reportePatrullero: payload.new?.descripcion_reporte || null } : a
+            a.id === idAlerta ? { ...a, reportePatrullero } : a
           ));
         }
       })
@@ -562,11 +579,7 @@ const seleccionarAlerta = useCallback(async (alertaId, tipoTab) => {
     if (esNuevas) setAlertaSeleccionada(alertaId);
     else setIntervencionSeleccionada(alertaId);
 
-    setDetalleVisible(false);
-    setTimeout(() => {
-      setDetalleVisible(true);
-      setTimeout(() => detalleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
-    }, 80);
+setDetalleVisible(true);
 
     const alerta = [...alertasNuevas, ...alertasIntervencion].find(a => a.id === alertaId);
     if (!alerta) return;
@@ -775,19 +788,24 @@ showToast("Caso enviado a tabulación", "success");
   if (panelCentralRef.current) {
     setSidebarHeight(panelCentralRef.current.getBoundingClientRect().height);
   }
+  if (!mostrarScrollPanel) {
+    setScrollActivo(false);
+  }
 };
 
   useEffect(() => {
     if (!intervencionSeleccionada || tabActiva !== "intervencion") return;
     cargarReporte(intervencionSeleccionada).then(({ reporte, evidencias }) => {
+      const reportePatrullero = reporte?.descripcion_reporte || null;
+      const idPatrulleroReporte = reporte?.id_patrullero || null;
+      datosExtraRef.current[intervencionSeleccionada] = { reportePatrullero, idPatrulleroReporte, evidencias };
       setAlertasIntervencion(prev => prev.map(a =>
         a.id === intervencionSeleccionada
-          ? { ...a, reportePatrullero: reporte?.descripcion_reporte || null, evidencias }
+          ? { ...a, reportePatrullero, idPatrulleroReporte, evidencias }
           : a
       ));
     });
   }, [intervencionSeleccionada, tabActiva]);
-
 
 useEffect(() => {
   const observer = new ResizeObserver((entries) => {
@@ -833,6 +851,22 @@ useEffect(() => {
   return () => clearInterval(intervalo);
 }, [user?.id_oficial]);
 
+  const alertasVisibles = tabActiva === "nuevas" ? alertasNuevas : alertasIntervencion;
+  const alertaActual    = tabActiva === "nuevas"
+    ? alertasNuevas.find(a => a.id === alertaSeleccionada)
+    : alertasIntervencion.find(a => a.id === intervencionSeleccionada);
+const seleccionadaId  = tabActiva === "nuevas" ? alertaSeleccionada : intervencionSeleccionada;
+const mostrarScrollPanel = detalleVisible && !!alertaActual;
+const [scrollActivo, setScrollActivo] = useState(false);
+
+useEffect(() => {
+  if (mostrarScrollPanel) {
+    setScrollActivo(true);
+  }
+  // si mostrarScrollPanel pasa a false, NO apagamos scrollActivo aquí;
+  // se apaga en recalcularSidebarHeight, que se ejecuta cuando termina la animación de salida
+}, [mostrarScrollPanel]);
+
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
     libraries: GOOGLE_LIBRARIES,
@@ -840,53 +874,48 @@ useEffect(() => {
 
   if (loadError) return <div className="p-4 text-red-600">Error cargando Google Maps</div>;
 
-  const alertasVisibles = tabActiva === "nuevas" ? alertasNuevas : alertasIntervencion;
-  const alertaActual    = tabActiva === "nuevas"
-    ? alertasNuevas.find(a => a.id === alertaSeleccionada)
-    : alertasIntervencion.find(a => a.id === intervencionSeleccionada);
-  const seleccionadaId  = tabActiva === "nuevas" ? alertaSeleccionada : intervencionSeleccionada;
-
-  return (
-    <div className="-mt-2 w-full px-1 min-h-screen py-3 font-sans">
-      <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+return (
+<div className="min-h-screen w-full overflow-y-auto font-sans no-scrollbar">
+    <div className="-mt-8 w-full px-0 py-3">
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
 {/* SIDEBAR */}
 <div
-  className="w-full lg:w-[320px] shrink-0 flex flex-col bg-white rounded-2xl shadow-md lg:sticky top-3"
-  style={{ height: sidebarHeight ? `${sidebarHeight}px` : "auto", overflow: "hidden" }}
+  className="mt-5 w-full max-h-[88.5vh] overflow-hidden rounded-2xl bg-white shadow-md lg:sticky lg:-top-6 lg:h-[calc(100vh-2rem)] lg:w-[320px] lg:shrink-0"
 >
+  <div className="flex h-full flex-col">
   <div className="p-3 bg-white border-b border-slate-100 rounded-t-2xl">
-    <div className="mt-1 flex bg-slate-50 p-1 rounded-xl border border-slate-200">
+    <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-200">
       <button
         onClick={() => setTabActiva("nuevas")}
-        className={`flex-1 flex items-center justify-center py-2.5 rounded-lg font-bold text-[11px] uppercase transition-all tracking-wider ${tabActiva === "nuevas" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400 hover:bg-white"}`}
+        className={`flex-1 flex items-center justify-center py-3 rounded-lg font-medium text-[12px] uppercase transition-all tracking-wider ${tabActiva === "nuevas" ? "bg-[#474b29] text-white shadow-md" : "text-slate-400 hover:bg-white"}`}
       >
-        ALERTAS VALIDADAS
+        REVISADAS
       </button>
       <button
         onClick={() => setTabActiva("intervencion")}
-        className={`flex-1 flex items-center justify-center py-3 rounded-lg font-bold text-[11px] uppercase transition-all tracking-wider ${tabActiva === "intervencion" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400 hover:bg-white"}`}
+        className={`flex-1 flex items-center justify-center py-3 rounded-lg font-medium text-[12px] uppercase transition-all tracking-wider ${tabActiva === "intervencion" ? "bg-[#474b29] text-white shadow-md" : "text-slate-400 hover:bg-white"}`}
       >
         EN INTERVENCIÓN
       </button>
     </div>
   </div>
 
-  {/* Área de listas que ocupa todo el espacio restante */}
+  {/* Área de listas */}
   <div className="flex-1 overflow-hidden flex flex-col">
-    {cargando ? (
-      <div className="flex justify-center items-center flex-1">
-        <FaSpinner className="animate-spin text-green-800 text-2xl" />
+{cargando ? (
+      <div className="flex-1 overflow-hidden px-3 py-3 space-y-2.5">
+        {[0, 1, 2].map((i) => <AlertaCardSkeleton key={i} />)}
       </div>
     ) : (
       <>
         {/* Emergencias */}
-        <div className="flex-1 flex flex-col min-h-0 py-3">
-          <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3 shrink-0">
+        <div className="flex flex-col py-4">
+          <h3 className="text-[11px] font-medium text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3 shrink-0">
             <span className="w-1.5 h-1.5 bg-[#C90A0A] rounded-full animate-pulse" />
             Alertas de Emergencia
           </h3>
-          <div className="flex-1 overflow-y-auto min-h-0 px-3 space-y-3">
-            {alertasVisibles.filter(a => a.tipo === "EMERGENCIA").map(a => (
+<div className="overflow-y-auto min-h-0 px-3 space-y-3.5 scroll-hover h-[380px]">
+  {alertasVisibles.filter(a => a.tipo === "EMERGENCIA").map(a => (
               <AlertaCard
   key={a.id}
   alerta={a}
@@ -897,7 +926,7 @@ useEffect(() => {
 />
             ))}
             {alertasVisibles.filter(a => a.tipo === "EMERGENCIA").length === 0 && (
-              <p className="text-[10px] text-slate-400 text-center py-3">Sin emergencias</p>
+              <p className="text-[11px] text-slate-400 font-medium tracking-wider text-center py-3">Sin emergencias</p>
             )}
           </div>
         </div>
@@ -906,13 +935,13 @@ useEffect(() => {
         <div className="border-t-2 border-slate-100 mx-3 shrink-0" />
 
         {/* Ciudadanas */}
-        <div className="flex-1 flex flex-col min-h-0 py-3">
-          <h3 className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3 shrink-0">
+        <div className="flex flex-col py-4">
+          <h3 className="text-[11px] font-medium text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wider px-3 shrink-0">
             <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
             Alertas Ciudadanas
           </h3>
-          <div className="flex-1 overflow-y-auto min-h-0 px-3 space-y-3">
-            {alertasVisibles.filter(a => a.tipo === "CIUDADANA").map(a => (
+         <div className="overflow-y-auto min-h-0 px-3 space-y-3.5 scroll-hover h-[380px]">
+  {alertasVisibles.filter(a => a.tipo === "CIUDADANA").map(a => (
               <AlertaCard
   key={a.id}
   alerta={a}
@@ -923,21 +952,25 @@ useEffect(() => {
 />
             ))}
             {alertasVisibles.filter(a => a.tipo === "CIUDADANA").length === 0 && (
-              <p className="text-[10px] text-slate-400 text-center py-3">Sin alertas ciudadanas</p>
+              <p className="text-[11px] text-slate-400 font-medium text-center py-3 tracking-wider">Sin alertas ciudadanas</p>
             )}
           </div>
         </div>
       </>
     )}
   </div>
+  </div>
 </div>
 
         {/* PANEL CENTRAL */}
-        <div ref={panelCentralRef} className="flex-1 flex flex-col gap-4">
-          <div className="w-full h-[380px] shrink-0 bg-white rounded-2xl shadow-md overflow-hidden">
+<div
+  ref={panelCentralRef}
+  className="mt-5 flex-1 min-h-0 flex flex-col gap-4 lg:px-1 lg:pb-2 lg:sticky lg:-top-6 lg:h-[calc(100vh-7.2rem)]"
+>
+<div className="w-full h-[265px] shrink-0 overflow-hidden rounded-2xl bg-white shadow-md sm:h-[330px] lg:h-[390px]">
             {!isLoaded ? (
               <div className="flex items-center justify-center h-full gap-2">
-                <FaSpinner className="animate-spin text-blue-600 text-2xl" />
+                <FaSpinner className="animate-spin text-[#474b29] text-2xl" />
                 <span className="text-sm font-medium text-slate-600">Cargando mapa...</span>
               </div>
             ) : (
@@ -1009,7 +1042,7 @@ useEffect(() => {
             )}
           </div>
 
-          <div className="flex gap-4 flex-wrap text-[9px] font-bold uppercase tracking-wider text-slate-500">
+          <div className="flex gap-2.5 sm:gap-4 flex-wrap text-[8px] sm:text-[9.5px] font-medium uppercase tracking-widest text-slate-500">
             {[
               { hex: COLOR_EMERGENCIA, label: "Emergencia" },
               { hex: COLOR_CIUDADANA,  label: "Ciudadana" },
@@ -1018,12 +1051,17 @@ useEffect(() => {
             
             ].map(({ hex, label }) => (
               <span key={label} className="flex items-center gap-1.5">
-                <span style={{ background: hex }} className="w-2.5 h-2.5 rounded-full inline-block" />
+                <span style={{ background: hex }} className="w-2 h-2 rounded-full inline-block" />
                 {label}
               </span>
             ))}
           </div>
 
+       <div
+  className={`flex-1 min-h-0 flex flex-col gap-4 pb-1 transition-[padding] duration-500 ease-in-out ${
+    scrollActivo ? "overflow-y-auto pr-3 scroll-hover" : "overflow-hidden pr-0"
+  }`}
+>
           <DetalleAlerta
   ref={detalleRef}
   alerta={alertaActual}
@@ -1039,9 +1077,10 @@ useEffect(() => {
 />
 
 
-         <GestionPatrullas
+       <GestionPatrullas
   tabActiva={tabActiva}
   patrulleros={patrulleros}
+  cargandoPatrulleros={cargando}
   alertaSeleccionada={tabActiva === "nuevas" ? alertaSeleccionada : intervencionSeleccionada}
   alertaActual={alertaActual}
   pendingAsignaciones={pendingAsignaciones}
@@ -1054,7 +1093,9 @@ useEffect(() => {
   idOficialActual={user?.id_oficial}
 />
         </div>
+        </div>
       </div>
+    </div>
     </div>
   );
 };

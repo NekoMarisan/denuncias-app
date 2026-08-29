@@ -7,11 +7,14 @@ import DetalleEmergencia from "../components/modals/DetalleEmergencia";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { TablaAlertasSkeleton } from "../components/ui/Skeleton";
 
 const cacheDuracionAudio = new Map();
 
 const AudioDuration = ({ audioUrl }) => {
-  const [duracion, setDuracion] = useState(() => cacheDuracionAudio.get(audioUrl) || null);
+  const [duracion, setDuracion] = useState(
+    () => cacheDuracionAudio.get(audioUrl) || null,
+  );
   const [cargando, setCargando] = useState(false);
   const [errorCarga, setErrorCarga] = useState(false);
 
@@ -40,7 +43,8 @@ const AudioDuration = ({ audioUrl }) => {
       if (cancelado) return;
       const mins = Math.floor(segundos / 60);
       const secs = Math.floor(segundos % 60);
-      const texto = mins > 0 ? `${mins}:${secs.toString().padStart(2, "0")}` : `${secs}s`;
+      const texto =
+        mins > 0 ? `${mins}:${secs.toString().padStart(2, "0")}` : `${secs}s`;
       cacheDuracionAudio.set(audioUrl, texto);
       setDuracion(texto);
       setCargando(false);
@@ -64,7 +68,7 @@ const AudioDuration = ({ audioUrl }) => {
               setCargando(false);
             }
           },
-          { once: true }
+          { once: true },
         );
         return;
       }
@@ -100,9 +104,18 @@ const AudioDuration = ({ audioUrl }) => {
   }, [audioUrl]);
 
   if (!audioUrl) return <span className="text-slate-400">—</span>;
-  if (cargando) return <FaSpinner className="animate-spin text-slate-400" size={14} />;
-  if (duracion) return <span className="text-sm font-bold text-slate-700">{duracion}</span>;
-  return <span className="text-slate-400" title={errorCarga ? "No se pudo leer la duración" : undefined}>—</span>;
+  if (cargando)
+    return <FaSpinner className="animate-spin text-slate-400" size={14} />;
+  if (duracion)
+    return <span className="text-sm font-bold text-slate-700">{duracion}</span>;
+  return (
+    <span
+      className="text-slate-400"
+      title={errorCarga ? "No se pudo leer la duración" : undefined}
+    >
+      —
+    </span>
+  );
 };
 
 const calcularTiempoTranscurrido = (fechaHoraISO) => {
@@ -116,7 +129,8 @@ const calcularTiempoTranscurrido = (fechaHoraISO) => {
 
   if (diffMin < 1) return "hace unos segundos";
   if (diffMin < 60) return `hace ${diffMin} minuto${diffMin !== 1 ? "s" : ""}`;
-  if (diffHoras < 24) return `hace ${diffHoras} hora${diffHoras !== 1 ? "s" : ""}`;
+  if (diffHoras < 24)
+    return `hace ${diffHoras} hora${diffHoras !== 1 ? "s" : ""}`;
   if (diffDias < 7) return `hace ${diffDias} día${diffDias !== 1 ? "s" : ""}`;
   return fecha.toLocaleDateString("es-BO");
 };
@@ -137,20 +151,31 @@ function GestionAlertas() {
   const [alertasPanico, setAlertasPanico] = useState([]);
   const [alertasCiudadanas, setAlertasCiudadanas] = useState([]);
 
-  const dataActual = tabActiva === "ciudadana" ? alertasCiudadanas : alertasPanico;
+  const dataActual =
+    tabActiva === "ciudadana" ? alertasCiudadanas : alertasPanico;
 
   const transformarAlertas = (data) => {
     const panico = [];
     const ciudadanas = [];
 
     data.forEach((item) => {
+      const infoCiudadano = Array.isArray(item.usuario_ciudadano)
+        ? item.usuario_ciudadano[0]
+        : item.usuario_ciudadano;
+
       const base = {
         id: item.id_alerta,
-        ciudadano: item.usuario_ciudadano?.nombre_completo || `Usuario #${item.id_usuario}`,
+        ciudadano: infoCiudadano?.nombre_completo || `Usuario #${item.id_usuario}`,
+        verificado: Number(infoCiudadano?.id_estado_ciudadano) === 2,
         ubicacion: item.ubicacion || "Sin ubicación",
-        fecha: item.fecha_hora ? new Date(item.fecha_hora).toLocaleDateString("es-BO") : "—",
+        fecha: item.fecha_hora
+          ? new Date(item.fecha_hora).toLocaleDateString("es-BO")
+          : "—",
         hora: item.fecha_hora
-          ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })
+          ? new Date(item.fecha_hora).toLocaleTimeString("es-BO", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
           : "—",
         descripcion: item.descripcion || "",
         categoria: item.categoria || "",
@@ -173,8 +198,10 @@ function GestionAlertas() {
     return { panico, ciudadanas };
   };
 
-const liberarBloqueos = async () => {
-    const idOficialActivo = alertaSeleccionadaRef.current ? user?.id_oficial : null;
+  const liberarBloqueos = async () => {
+    const idOficialActivo = alertaSeleccionadaRef.current
+      ? user?.id_oficial
+      : null;
     let query = supabase
       .from("alerta")
       .update({ bloqueado_por: null, bloqueado_en: null, bloqueado_rol: null })
@@ -191,7 +218,9 @@ const liberarBloqueos = async () => {
     try {
       const { data, error } = await supabase
         .from("alerta")
-        .select(`*, usuario_ciudadano (nombre_completo), oficial_bloqueador:bloqueado_por (nombre_completo)`)
+        .select(
+          `*, usuario_ciudadano (nombre_completo, id_estado_ciudadano), oficial_bloqueador:bloqueado_por (nombre_completo)`,
+        )
         .eq("id_estado_actual", 1)
         .order("fecha_hora", { ascending: false });
 
@@ -214,7 +243,7 @@ const liberarBloqueos = async () => {
     }
   };
 
-const mostrarModalRef = useRef(false);
+  const mostrarModalRef = useRef(false);
   const alertaSeleccionadaRef = useRef(null);
 
   // Sincronización inmediata (no en useEffect para evitar delay de un render)
@@ -226,11 +255,15 @@ const mostrarModalRef = useRef(false);
 
     const canal = supabase
       .channel("alertas-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "alerta" }, () => {
-        if (!mostrarModalRef.current) {
-          cargarAlertas(true);
-        }
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "alerta" },
+        () => {
+          if (!mostrarModalRef.current) {
+            cargarAlertas(true);
+          }
+        },
+      )
       .subscribe();
 
     // Cada 5s libera bloqueos vencidos y recarga si no hay modal abierto
@@ -255,7 +288,8 @@ const mostrarModalRef = useRef(false);
         setFilaResaltada(state.selectedId);
         setTimeout(() => {
           const fila = document.getElementById(`fila-${state.selectedId}`);
-          if (fila) fila.scrollIntoView({ behavior: "smooth", block: "center" });
+          if (fila)
+            fila.scrollIntoView({ behavior: "smooth", block: "center" });
         }, 200);
         setTimeout(() => setFilaResaltada(null), 2000);
       }
@@ -264,16 +298,16 @@ const mostrarModalRef = useRef(false);
   }, [location.state]);
 
   // Bloquea el scroll de la página mientras esta vista está activa
-useEffect(() => {
-  const bodyOverflowOriginal = document.body.style.overflow;
-  const htmlOverflowOriginal = document.documentElement.style.overflow;
-  document.body.style.overflow = "hidden";
-  document.documentElement.style.overflow = "hidden";
-  return () => {
-    document.body.style.overflow = bodyOverflowOriginal;
-    document.documentElement.style.overflow = htmlOverflowOriginal;
-  };
-}, []);
+  useEffect(() => {
+    const bodyOverflowOriginal = document.body.style.overflow;
+    const htmlOverflowOriginal = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = bodyOverflowOriginal;
+      document.documentElement.style.overflow = htmlOverflowOriginal;
+    };
+  }, []);
 
   const abrirModal = async (alerta) => {
     const idOficial = user?.id_oficial;
@@ -307,7 +341,10 @@ useEffect(() => {
       id_operador_receptor: idOficial,
     };
 
-    let updateQuery = supabase.from("alerta").update(updateFields).eq("id_alerta", alerta.id);
+    let updateQuery = supabase
+      .from("alerta")
+      .update(updateFields)
+      .eq("id_alerta", alerta.id);
 
     if (!bloqueadoPor) {
       updateQuery = updateQuery.is("bloqueado_por", null);
@@ -322,12 +359,14 @@ useEffect(() => {
       return;
     }
 
-await supabase.from("log_actividad").insert([{
-      id_oficial: idOficial,
-      id_alerta: alerta.id,
-      accion: "OPERADOR",
-      descripcion: `Abrió la alerta — Ciudadano: ${alerta.ciudadano}`,
-    }]);
+    await supabase.from("log_actividad").insert([
+      {
+        id_oficial: idOficial,
+        id_alerta: alerta.id,
+        accion: "OPERADOR",
+        descripcion: `Abrió la alerta — Ciudadano: ${alerta.ciudadano}`,
+      },
+    ]);
 
     setAlertaSeleccionada(alerta);
     setMostrarModal(true);
@@ -336,7 +375,7 @@ await supabase.from("log_actividad").insert([{
   useEffect(() => {
     if (!mostrarModal || !alertaSeleccionada || !user?.id_oficial) return;
 
-// Renueva el bloqueo cada 4s (umbral de expiración: 8s)
+    // Renueva el bloqueo cada 4s (umbral de expiración: 8s)
     const heartbeat = setInterval(async () => {
       await supabase
         .from("alerta")
@@ -344,7 +383,7 @@ await supabase.from("log_actividad").insert([{
         .eq("id_alerta", alertaSeleccionada.id)
         .eq("bloqueado_por", user.id_oficial);
     }, 4000);
-    
+
     return () => clearInterval(heartbeat);
   }, [mostrarModal, alertaSeleccionada, user?.id_oficial]);
 
@@ -380,15 +419,17 @@ await supabase.from("log_actividad").insert([{
       return;
     }
 
-await supabase.from("log_actividad").insert([{
-      id_oficial: user?.id_oficial,
-      id_alerta: idAlerta,
-      accion: "OPERADOR",
-      descripcion: `Desestimó la alerta — Motivo: ${motivo}`,
-    }]);
+    await supabase.from("log_actividad").insert([
+      {
+        id_oficial: user?.id_oficial,
+        id_alerta: idAlerta,
+        accion: "OPERADOR",
+        descripcion: `Desestimó la alerta — Motivo: ${motivo}`,
+      },
+    ]);
 
-
-    const listaOrigen = tabActiva === "emergencia" ? alertasPanico : alertasCiudadanas;
+    const listaOrigen =
+      tabActiva === "emergencia" ? alertasPanico : alertasCiudadanas;
     const alertaEncontrada = listaOrigen.find((a) => a.id === idAlerta);
     if (alertaEncontrada) {
       setAlertasArchivadas((prev) => [
@@ -403,7 +444,9 @@ await supabase.from("log_actividad").insert([{
       if (tabActiva === "emergencia") {
         setAlertasPanico(alertasPanico.filter((a) => a.id !== idAlerta));
       } else {
-        setAlertasCiudadanas(alertasCiudadanas.filter((a) => a.id !== idAlerta));
+        setAlertasCiudadanas(
+          alertasCiudadanas.filter((a) => a.id !== idAlerta),
+        );
       }
     }
     cerrarModal();
@@ -428,7 +471,10 @@ await supabase.from("log_actividad").insert([{
       }
     }
 
-    const { error } = await supabase.from("alerta").update(updateData).eq("id_alerta", idAlerta);
+    const { error } = await supabase
+      .from("alerta")
+      .update(updateData)
+      .eq("id_alerta", idAlerta);
 
     if (error) {
       console.error("Error al enviar a despacho:", error);
@@ -454,18 +500,12 @@ await supabase.from("log_actividad").insert([{
   };
 
   if (cargando) {
-    return (
-<div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-[#113e27] font-bold text-lg">Cargando alertas...</div>
-        </div>
-      </div>
-    );
+    return <TablaAlertasSkeleton filas={6} />;
   }
 
   if (errorCarga) {
     return (
-<div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col">
+      <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 h-[100dvh] overflow-hidden flex flex-col">
         <div className="bg-red-100 border-l-4 border-red-600 p-4 rounded shadow-md mx-4">
           <p className="text-red-700 font-bold">Error al cargar las alertas</p>
           <p className="text-sm text-red-600">{errorCarga}</p>
@@ -481,14 +521,16 @@ await supabase.from("log_actividad").insert([{
   }
 
   return (
-<div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 h-[100dvh] max-h-[90dvh] overflow-hidden flex flex-col">
+    <div className="-mt-4 w-full px-1 py-5 space-y-5 bg-gray-50/30 h-[calc(100%+2.5rem)] overflow-hidden flex flex-col">
       {/* SELECTOR DE TABS */}
-      <div className="px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2">
+      <div className="px-3 sm:px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2 shrink-0 -mt-1">
         <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
           <button
             onClick={() => setTabActiva("emergencia")}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${
-              tabActiva === "emergencia" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"
+            className={`flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-lg font-medium text-[12.5px] transition-all tracking-widest ${
+              tabActiva === "emergencia"
+                ? "bg-[#474b29] text-white shadow-md"
+                : "text-slate-400"
             }`}
           >
             <span className="hidden sm:inline">ALERTAS DE PÁNICO</span>
@@ -496,125 +538,154 @@ await supabase.from("log_actividad").insert([{
           </button>
           <button
             onClick={() => setTabActiva("ciudadana")}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg font-bold text-xs transition-all tracking-wider ${
-              tabActiva === "ciudadana" ? "bg-[#113e27] text-white shadow-md" : "text-slate-400"
+            className={`flex items-center gap-2 px-3 md:px-5 py-2 rounded-lg font-medium text-[12.5px] transition-all tracking-widest ${
+              tabActiva === "ciudadana"
+                ? "bg-[#474b29] text-white shadow-md"
+                : "text-slate-400"
             }`}
           >
             <span className="hidden sm:inline">ALERTAS CIUDADANAS</span>
             <span className="sm:hidden">CIUDADANAS</span>
           </button>
         </div>
-        <div className="bg-gray-50 text-gray-500 px-4 py-2.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wider border border-gray-200">
-          ● {dataActual.length} Registros activos
+        <div className="bg-gray-50 text-slate-500 px-4 py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-widest border border-gray-200">
+          {dataActual.length} Registros activos
         </div>
       </div>
 
       {/* TABLA */}
-    <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0">
-
-        <h2 className="text-lg font-extrabold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wider flex-shrink-0">
-          {tabActiva === "emergencia" ? "Bandeja de Emergencias" : "Reportes Ciudadanos"}
+      <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0 max-h-[79svh] overflow-hidden">
+        <h2 className="text-[18px] font-bold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wider flex-shrink-0">
+          {tabActiva === "emergencia"
+            ? "Bandeja de Emergencias"
+            : "Reportes Ciudadanos"}
         </h2>
 
-        <div className="overflow-auto flex-1 min-h-0 -mx-4 md:mx-0 px-4 md:px-0">
-          <table className="min-w-full border-collapse text-left">
-            <thead className="sticky top-0 bg-white z-10 shadow-sm">
-              <tr className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">
-                <th className="pl-3 md:pl-4 pr-1 md:pr-2 py-2 w-[12%] md:w-[15%]">ID</th>
-                <th className="py-2 w-[28%] md:w-[30%]">Ciudadano</th>
-                <th className="py-2 w-[15%]">Duración del audio</th>
-                <th className="py-2 w-[20%]">Tiempo</th>
-                <th className="py-2 w-[12%] md:w-[15%]">Estado</th>
-                <th className="px-3 md:px-4 py-2 w-[10%]">Acciones</th>
-               </tr>
-            </thead>
-            <tbody>
-              {dataActual.map((item) => {
-                const bloqueadaPorOtro = item.bloqueadoPor && item.bloqueadoPor !== user?.id_oficial;
-                return (
-                  <tr
-                    key={item.id}
-                    id={`fila-${item.id}`}
-                    className={`bg-white group transition-all duration-200 border-b border-slate-100 ${
-                      filaResaltada === item.id
-                        ? "ring-2 bg-slate-50"
-                        : bloqueadaPorOtro
-                        ? "opacity-50"
-                        : "hover:shadow-lg hover:-translate-y-0.5"
-                    }`}
-                  >
-                    <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-5 md:py-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider align-middle">
-                      {item.codigo || item.id}
-                    </td>
-                    <td className="py-5 md:py-6 align-middle">
-                      <div className="flex items-center gap-2 md:gap-3">
-                        <div className="w-6 h-8 rounded-md flex items-center justify-center font-black text-xs shadow-inner shrink-0 bg-blue-50 text-[#0C3DC2]">
-                          {item.ciudadano.charAt(0)}
+        <div className="relative flex-1 min-h-0">
+          <div className="h-full overflow-auto -mx-4 md:mx-0 px-4 md:px-0 pb-3 scroll-hover">
+            <table className="min-w-full border-separate border-spacing-0 table-fixed">
+              <thead>
+                <tr className="text-slate-400 text-[11px] font-medium uppercase tracking-widest">
+                  <th className="sticky top-0 z-10 bg-white pl-3 border-b border-slate-200 md:pl-4 pr-1 md:pr-2 pb-2 pt-1 w-[14%] text-left">
+                    ID
+                  </th>
+                  <th className="sticky top-0 z-10 bg-white pb-2 pt-1 border-b border-slate-200 w-[28%] text-left">
+                    Ciudadano
+                  </th>
+                  <th className="sticky top-0 z-10 bg-white pb-2 pt-1 border-b border-slate-200 w-[13%] hidden sm:table-cell text-left">
+                    Duración del audio
+                  </th>
+                  <th className="sticky top-0 z-10 bg-white pb-2 pt-1 border-b border-slate-200 w-[12%] text-left">
+                    Tiempo
+                  </th>
+                  <th className="sticky top-0 z-10 bg-white pb-2 pt-1 border-b border-slate-200 w-[12%] text-left">
+                    Estado
+                  </th>
+                  <th className="sticky top-0 z-10 bg-white px-3 pb-2 pt-1 border-b border-slate-200 w-[8%] text-left">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {dataActual.map((item) => {
+                  const bloqueadaPorOtro =
+                    item.bloqueadoPor && item.bloqueadoPor !== user?.id_oficial;
+                  return (
+                    <tr
+                      key={item.id}
+                      id={`fila-${item.id}`}
+                      className={`bg-white group transition-all duration-200 border-b border-slate-100 ${
+                        filaResaltada === item.id
+                          ? "ring-2 bg-slate-50"
+                          : bloqueadaPorOtro
+                            ? "opacity-50"
+                            : "hover:shadow-lg hover:-translate-y-0.5"
+                      }`}
+                    >
+                      <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-6 md:py-7 text-[11px] font-medium text-slate-500/90 uppercase tracking-wider align-middle border-b border-slate-200/60">
+                        {item.codigo || item.id}
+                      </td>
+                      <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+                        <div className="flex items-center gap-2 md:gap-3">
+                          <div className="w-6 h-8 rounded-md flex items-center justify-center font-black text-xs shadow-inner shrink-0 bg-blue-50 text-[#270cb2]">
+                            {item.ciudadano.charAt(0)}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[12.5px] font-medium text-[#1e293b] truncate max-w-[120px] md:max-w-none">
+                              {item.ciudadano}
+                            </span>
+                            <span className="mt-0.5 text-[8.5px] font-medium uppercase tracking-wider text-slate-400">
+                              {item.verificado ? "Verificado" : "No verificado"}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[12px] font-bold text-[#1e293b] truncate max-w-[120px] md:max-w-none">
-                            {item.ciudadano}
-                          </span>
-                          <span className="mt-0.5 text-[8px] text-gray-400 font-semibold uppercase tracking-wider">
-                            {item.prioridad} prioridad
-                          </span>
+                      </td>
+                      <td className="py-5 md:py-6 align-middle hidden sm:table-cell border-b border-slate-200/60">
+                        <span className="text-[10px] font-mono tracking-wider">
+                          <AudioDuration audioUrl={item.audio_30s} />
+                        </span>
+                      </td>
+                      <td className="py-5 md:py-6 text-[11px] font-medium text-slate-500 align-middle border-b border-slate-200/60 tracking-wider">
+                        {calcularTiempoTranscurrido(item.fecha_hora)}
+                      </td>
+                      <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+                        <span
+                          className={`inline-flex items-center justify-center gap-1.5 w-16 md:w-24 py-1.5 px-2 rounded-md text-[11px] font-medium tracking-wider text-white ${
+                            item.estado.toUpperCase() === "EMERGENCIA"
+                              ? "bg-[#C90A0A]"
+                              : "bg-[#e9b301]"
+                          }`}
+                        >
+                          {item.estado.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-3 md:px-4 py-5 md:py-6 align-middle text-left border-b border-slate-200/60">
+                        <div className="flex justify-start">
+                          {bloqueadaPorOtro ? (
+                            <button
+                              onClick={() => {
+                                showToast(
+                                  `Operador: ${item.bloqueadoNombre || "Otro operador"} ya está gestionando esta alerta`,
+                                  "error",
+                                );
+                              }}
+                              className="p-2 md:p-2.5 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center hover:bg-green-50 hover:text-[#3a3e21] transition-all duration-200"
+                              title={`En uso por ${item.bloqueadoNombre || "otro operador"}`}
+                            >
+                              <FaLock size={14} />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => abrirModal(item)}
+                              className="p-2 md:p-2.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
+                            >
+                              <LuZoomIn size={15} />
+                            </button>
+                          )}
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-5 md:py-6 align-middle">
-                      <span className="text-[10px] font-mono">
-                        <AudioDuration audioUrl={item.audio_30s} />
-                      </span>
-                    </td>
-                    <td className="py-5 md:py-6 text-[11px] font-bold text-slate-500 align-middle">
-                      {calcularTiempoTranscurrido(item.fecha_hora)}
-                    </td>
-                    <td className="py-5 md:py-6 align-middle">
-                      <span
-                        className={`inline-flex justify-center w-16 md:w-20 py-1.5 rounded-md text-[9px] font-bold text-white tracking-wider ${
-                          item.estado.toUpperCase() === "EMERGENCIA" ? "bg-[#C90A0A]" : "bg-[#EBB615]"
-                        }`}
-                      >
-                        {item.estado.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-3 md:px-4 py-5 md:py-6 align-middle">
-                      {bloqueadaPorOtro ? (
-                        <button
-                          onClick={() => {
-                            showToast(`Operador: ${item.bloqueadoNombre || "Otro operador"} ya está gestionando esta alerta`, "error");
-                          }}
-                          className="p-1.5 md:p-2 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center hover:bg-green-50 hover:text-[#113e27] transition-all duration-200"
-                          title={`En uso por ${item.bloqueadoNombre || "otro operador"}`}
-                        >
-                          <FaLock size={13} />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => abrirModal(item)}
-                          className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#113e27] hover:text-white transition-all duration-200 flex items-center justify-center"
-                        >
-                          <LuZoomIn size={14} />
-                        </button>
-                      )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {dataActual.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan="6"
+                      className="text-center py-12 text-gray-400 font-medium border-b border-slate-200/60"
+                    >
+                      No hay alertas en esta bandeja
                     </td>
                   </tr>
-                );
-              })}
-              {dataActual.length === 0 && (
-                <tr>
-                  <td colSpan="6" className="text-center py-12 text-gray-400 font-medium">
-                    No hay alertas en esta bandeja
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       {/* MODAL */}
-      {mostrarModal && alertaSeleccionada &&
+      {mostrarModal &&
+        alertaSeleccionada &&
         (tabActiva === "emergencia" ? (
           <DetalleEmergencia
             alerta={alertaSeleccionada}

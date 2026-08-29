@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  FaEdit,
-  FaTrashAlt,
   FaShieldAlt,
   FaUserTie,
   FaUsers,
@@ -13,9 +11,12 @@ import {
   FaFileExcel,
   FaPowerOff,
   FaUserSlash,
-  FaEye,
+  FaTrashAlt,
   FaTimes,
+  FaUserShield,
+  FaClock,
 } from "react-icons/fa";
+import { FiEye, FiEdit2, FiTrash2 } from "react-icons/fi";
 import { exportPDF } from "../utils/exports/exportPDF";
 import { exportExcel } from "../utils/exports/exportExcel";
 import { supabase } from "../services/supabase";
@@ -24,124 +25,120 @@ import NuevoPolicia from "../components/modals/NuevoPolicia";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
 
-// ─── Modal de perfil de oficial (solo lectura) ───────────────────────────────
+// ─── Modal de perfil de oficial — ALTERNATIVA 2 "ficha de reporte" ──────────
+// Mismo contrato de props que el original: { oficial, onClose }
 function PerfilOficial({ oficial, onClose }) {
   if (!oficial) return null;
 
-  const estaConectado = oficial.estado === true;
-  const accesoLabel =
-    oficial.acceso === "FUERA DE SERVICIO"
-      ? "Fuera de servicio"
-      : oficial.acceso === "DE BAJA"
-      ? "De baja"
-      : "En servicio";
-  const accesoColor =
-    oficial.acceso === "EN SERVICIO"
-      ? "text-green-700 bg-green-50"
-      : "text-red-700 bg-red-50";
+const estaConectado = oficial.estado === true;
+  const deBaja = oficial.acceso === "DE BAJA";
+  const fueraDeServicio = oficial.acceso === "FUERA DE SERVICIO";
+  const pendiente = oficial.acceso === "PENDIENTE";
+
+  const estadoTexto = deBaja
+    ? "Dado de baja"
+    : pendiente
+      ? "Pendiente de activación"
+      : fueraDeServicio
+        ? "Fuera de servicio"
+        : estaConectado
+          ? "En línea"
+          : "Desconectado";
+
+  const estadoColor = deBaja
+    ? "#6b7280"
+    : pendiente
+      ? "#d97706"
+      : fueraDeServicio
+        ? "#C90A0A"
+        : estaConectado
+          ? "#007942"
+          : "#94a3b8";
+
+  const Fila = ({ label, value }) => (
+    <div className="space-y-1">
+      <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+        {label}
+      </label>
+      <div className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[12px] font-medium text-slate-600">
+        {value || "—"}
+      </div>
+    </div>
+  );
 
   return (
-    // ─── NUEVA ESTRUCTURA DE FONDO (igual que PerfilCiudadano) ───
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden flex flex-col h-fit max-h-[85vh] animate-fadeIn">
-        {/* Header (sin cambios) */}
-        <div className="bg-[#113e27] px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center border border-white/20">
-              <FaShieldAlt size={22} className="text-white" />
-            </div>
-            <div>
-              <p className="text-white font-black text-base uppercase tracking-widest">
-                Perfil del Oficial
-              </p>
-              <p className="text-white/50 text-[11px] font-bold uppercase tracking-wider mt-0.5">
-                ROF-{String(oficial.id_oficial).padStart(4, "0")} · {oficial.rol || "—"}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all"
-          >
-            <FaTimes size={13} />
-          </button>
-        </div>
 
-        {/* Banner estado (sin cambios) */}
-{(() => {
-          const deBaja = oficial.acceso === "DE BAJA";
-          return (
-            <div className={`px-6 py-2.5 flex items-center gap-2 ${deBaja ? "bg-slate-100 border-b border-slate-200" : estaConectado ? "bg-[#113e27]/10 border-b border-green-100" : "bg-[#C90A0A]/5 border-b border-red-100"}`}>
-              <span className={`w-2 h-2 rounded-full ${deBaja ? "bg-slate-400" : estaConectado ? "bg-[#113e27] animate-pulse" : "bg-[#b40909]"}`} />
-              <span className={`text-[11px] font-black uppercase tracking-widest ${deBaja ? "text-slate-500" : estaConectado ? "text-green-900" : "text-[#b40909]"}`}>
-                {deBaja ? "Oficial dado de baja" : estaConectado ? "Oficial en línea" : "Oficial desconectado"}
-              </span>
-            </div>
-          );
-        })()}
+      <div className="relative bg-white rounded-lg shadow-2xl w-full max-w-lg mx-auto overflow-hidden flex flex-col h-fit max-h-[92vh] animate-fadeIn">
+{/* Barra verde */}
+<div className="relative bg-[#474b29] py-4 shrink-0 flex items-center pl-24 pr-4">
+  <div>
+    <h2 className="text-white text-[17px] font-bold uppercase tracking-wider leading-none ml-1">
+      Perfil Oficial
+    </h2>
+    <p className="text-[11px] font-bold text-white/70 uppercase tracking-wider mt-2 ml-1">
+      ROF-{String(oficial.id_oficial).padStart(4, "0")} ·{" "}
+      {oficial.rol || "—"}
+    </p>
+  </div>
+  <button
+    type="button"
+    onClick={onClose}
+    className="absolute top-3 right-3 hover:bg-white/20 p-1.5 rounded-md transition-colors text-white"
+  >
+    <FaTimes size={15} />
+  </button>
+</div>
 
-{/* Body */}
-        <div className="px-6 py-6 space-y-4 overflow-y-auto">
-          <div>
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Nombre Completo</label>
-            <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
-              {oficial.nombre_completo || "—"}
+{/* Ícono cuadrado, sobresaliendo de la barra */}
+<div className="relative pl-4 pt-2 pb-6 shrink-0">
+  <div className="relative w-16 h-16 -mt-12 ml-2">
+    <div className="w-16 h-16 rounded-2xl bg-[#474b29] border-[3px] border-white shadow-lg flex items-center justify-center">
+      <FaUserShield className="text-white" size={26} />
+    </div>
+    <span
+      className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white"
+      style={{ backgroundColor: estadoColor }}
+    />
+  </div>
+</div>
+
+        
+
+        {/* Datos en formato de tarjetas tipo "textbox" */}
+        <div className="px-6 pb-4 overflow-y-auto">
+          <div className="mt-1 grid grid-cols-2 gap-x-7 gap-y-4">
+            <div className="col-span-2">
+              <Fila label="Nombre completo" value={oficial.nombre_completo} />
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">CI</label>
-              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
-                {oficial.ci || "—"}
-              </div>
-            </div>
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Celular</label>
-              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
-                {oficial.celular || "—"}
-              </div>
-            </div>
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Escalafón</label>
-              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
-                {oficial.numero_escalafon || "—"}
-              </div>
-            </div>
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Rango</label>
-              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
-                {oficial.cargo || "—"}
-              </div>
-            </div>
-          </div>
-<div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Rol en el sistema</label>
-              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md font-bold text-[12px] text-slate-600">
-                {oficial.rol || "—"}
-              </div>
-            </div>
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Estado de servicio</label>
-              <div className="mt-1 w-full px-4 py-3 bg-slate-50 border border-slate-200 uppercase rounded-md font-bold text-[12px] text-slate-600">
-                {oficial.acceso === "EN SERVICIO"
+            <Fila label="Cédula de identidad" value={oficial.ci} />
+            <Fila label="Celular" value={oficial.celular} />
+            <Fila label="N.º de escalafón" value={oficial.numero_escalafon} />
+            <Fila label="Rango" value={oficial.cargo} />
+            <Fila label="Rol en el sistema" value={oficial.rol} />
+          <Fila
+              label="Estado de servicio"
+              value={
+                oficial.acceso === "EN SERVICIO"
                   ? "En servicio"
                   : oficial.acceso === "FUERA DE SERVICIO"
-                  ? "Fuera de servicio"
-                  : oficial.acceso === "DE BAJA"
-                  ? "De baja"
-                  : "—"}
-              </div>
-            </div>
+                    ? "Fuera de servicio"
+                    : oficial.acceso === "DE BAJA"
+                      ? "De baja"
+                      : oficial.acceso === "PENDIENTE"
+                        ? "Pendiente de activación"
+                        : "—"
+              }
+            />
           </div>
         </div>
 
-        {/* Footer (sin cambios) */}
-        <div className="px-6 pb-5">
+        {/* Footer */}
+        <div className="mt-4 flex justify-end gap-4 px-5 sm:px-6 py-3 border-t border-slate-200 bg-slate-50 shrink-0">
           <button
             onClick={onClose}
-            className="w-full py-2.5 bg-slate-100 hover:bg-[#113e27] hover:text-white text-slate-500 font-bold text-[11px] uppercase rounded-xl transition-all duration-200 tracking-wider"
+            className="px-4 py-2 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider"
           >
             Cerrar
           </button>
@@ -152,8 +149,8 @@ function PerfilOficial({ oficial, onClose }) {
 }
 
 function Usuarios() {
-const { showToast } = useToast();
-const { user } = useAuth();
+  const { showToast } = useToast();
+  const { user } = useAuth();
   const [tabActiva, setTabActiva] = useState("oficiales");
   const [filtroActivo, setFiltroActivo] = useState("Todos");
   const [busquedaOficiales, setBusquedaOficiales] = useState("");
@@ -165,9 +162,12 @@ const { user } = useAuth();
   const [ciudadanoSeleccionado, setCiudadanoSeleccionado] = useState(null);
   const [oficialSeleccionado, setOficialSeleccionado] = useState(null);
   const [mostrarModalPolicia, setMostrarModalPolicia] = useState(false);
-const [editandoPolicia, setEditandoPolicia] = useState(null);
-const [adminActivo, setAdminActivo] = useState({ nombre: "ADMINISTRADOR DE TURNO", cargo: "Administrador del Sistema" });
-const [confirmarEliminar, setConfirmarEliminar] = useState(null);
+  const [editandoPolicia, setEditandoPolicia] = useState(null);
+  const [adminActivo, setAdminActivo] = useState({
+    nombre: "ADMINISTRADOR DE TURNO",
+    cargo: "Administrador del Sistema",
+  });
+  const [confirmarEliminar, setConfirmarEliminar] = useState(null);
 
   const [oficiales, setOficiales] = useState([]);
   const [ciudadanos, setCiudadanos] = useState([]);
@@ -177,14 +177,17 @@ const [confirmarEliminar, setConfirmarEliminar] = useState(null);
       .from("oficial")
       .select("*")
       .order("id_oficial", { ascending: true });
-if (error) {
+    if (error) {
       console.error("Error oficiales:", error);
       showToast("Error al cargar oficiales", "error");
     } else {
       setOficiales(data || []);
       const admin = (data || []).find((o) => {
         const rolLower = (o.rol || "").trim().toLowerCase();
-        return o.estado === true && (rolLower === "admin" || rolLower === "administrador");
+        return (
+          o.estado === true &&
+          (rolLower === "admin" || rolLower === "administrador")
+        );
       });
       if (admin) {
         setAdminActivo({
@@ -229,7 +232,7 @@ if (error) {
   const actualizarEstadoSegunAdvertencias = async (
     idUsuario,
     advertencias,
-    estadoActual
+    estadoActual,
   ) => {
     if (estadoActual === 1 || estadoActual === 5) return estadoActual;
 
@@ -255,10 +258,12 @@ if (error) {
           },
         ]);
 
-        const ciudadano = ciudadanos.find(c => c.id_usuario === idUsuario);
+        const ciudadano = ciudadanos.find((c) => c.id_usuario === idUsuario);
         const nombre = ciudadano?.nombre_completo || `Ciudadano #${idUsuario}`;
-        if (nuevoEstado === 3) showToast(`${nombre} tiene ${advertencias} advertencia(s)`, "error");
-        if (nuevoEstado === 4) showToast(`${nombre} ha sido suspendido`, "error");
+        if (nuevoEstado === 3)
+          showToast(`${nombre} tiene ${advertencias} advertencia(s)`, "error");
+        if (nuevoEstado === 4)
+          showToast(`${nombre} ha sido suspendido`, "error");
 
         return nuevoEstado;
       }
@@ -282,7 +287,7 @@ if (error) {
         const nuevoEstado = await actualizarEstadoSegunAdvertencias(
           ciudadano.id_usuario,
           advertencias,
-          estadoAnterior
+          estadoAnterior,
         );
         ciudadanosActualizados.push({
           ...ciudadano,
@@ -316,14 +321,24 @@ if (error) {
     return () => clearInterval(interval);
   }, [recargarTodo]);
 
-  useEffect(() => {
+useEffect(() => {
     const handleFocus = () => recargarTodo();
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
   }, [recargarTodo]);
 
-const eliminarOficial = async (id) => {
-    const oficial = oficiales.find(o => o.id_oficial === id);
+  // Fuerza un re-render cada 10s para que el badge Conectado/Desconectado
+  // "venza" solo aunque no lleguen cambios nuevos desde Supabase.
+  const [, forzarRefrescoVisual] = useState(0);
+  useEffect(() => {
+    const intervaloVisual = setInterval(() => {
+      forzarRefrescoVisual((n) => n + 1);
+    }, 10000);
+    return () => clearInterval(intervaloVisual);
+  }, []);
+
+  const eliminarOficial = async (id) => {
+    const oficial = oficiales.find((o) => o.id_oficial === id);
     setConfirmarEliminar(oficial);
   };
 
@@ -332,7 +347,7 @@ const eliminarOficial = async (id) => {
     const oficial = confirmarEliminar;
     setConfirmarEliminar(null);
 
-const { error } = await supabase
+    const { error } = await supabase
       .from("oficial")
       .delete()
       .eq("id_oficial", id);
@@ -340,24 +355,31 @@ const { error } = await supabase
       console.error("Error al eliminar:", error);
       showToast("Error al eliminar oficial", "error");
     } else {
-      showToast(`**Oficial** ${oficial?.nombre_completo} eliminado del sistema`, "error");
-      await supabase.from("log_actividad").insert([{
-        id_oficial: user?.id_oficial || null, 
-        id_alerta: null,
-        accion: "ADMINISTRADOR",
-        descripcion: `Eliminó al oficial con escalafón ${oficial?.numero_escalafon || id} — ${oficial?.nombre_completo}`,
-      }]);
+      showToast(
+        `**Oficial** ${oficial?.nombre_completo} eliminado del sistema`,
+        "error",
+      );
+      await supabase.from("log_actividad").insert([
+        {
+          id_oficial: user?.id_oficial || null,
+          id_alerta: null,
+          accion: "ADMINISTRADOR",
+          descripcion: `Eliminó al oficial con escalafón ${oficial?.numero_escalafon || id} — ${oficial?.nombre_completo}`,
+        },
+      ]);
       await cargarOficiales();
     }
   };
 
-const exportarPDF = async () => {
-    await supabase.from("log_actividad").insert([{
-      id_oficial: user?.id_oficial || null,
-      id_alerta: null,
-      accion: "ADMINISTRADOR",
-      descripcion: `Exportó reporte PDF de ${tabActiva}`,
-    }]);
+  const exportarPDF = async () => {
+    await supabase.from("log_actividad").insert([
+      {
+        id_oficial: user?.id_oficial || null,
+        id_alerta: null,
+        accion: "ADMINISTRADOR",
+        descripcion: `Exportó reporte PDF de ${tabActiva}`,
+      },
+    ]);
 
     let logoBase64 = null;
     try {
@@ -368,9 +390,11 @@ const exportarPDF = async () => {
         reader.onloadend = () => resolve(reader.result);
         reader.readAsDataURL(blob);
       });
-    } catch (_) { logoBase64 = null; }
+    } catch (_) {
+      logoBase64 = null;
+    }
 
-const headers =
+    const headers =
       tabActiva === "oficiales"
         ? ["Escalafón", "Oficial", "Rol", "Rango", "Celular", "Estado"]
         : ["Ciudadano", "Cédula", "Celular", "Estado"];
@@ -390,10 +414,10 @@ const headers =
             item.ci || "—",
             item.celular || "—",
             getEstadoDisplay(item),
-          ]
+          ],
     );
 
-const nombreArchivo = `reportes/${tabActiva}_reporte.pdf`;
+    const nombreArchivo = `reportes/${tabActiva}_reporte.pdf`;
 
     // 1. Obtener la URL pública del archivo en Supabase Storage (mismo patrón que ActividadLog.jsx)
     const { data: urlData } = supabase.storage
@@ -403,10 +427,14 @@ const nombreArchivo = `reportes/${tabActiva}_reporte.pdf`;
 
     // 2. Generar el PDF ya con el QR apuntando a esa URL
     const pdfBlob = await exportPDF({
-      titulo: tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS",
-      subtitulo: tabActiva === "oficiales"
-        ? "Listado completo del personal policial registrado en el sistema"
-        : "Listado completo de ciudadanos registrados en el sistema",
+      titulo:
+        tabActiva === "oficiales"
+          ? "PERSONAL POLICIAL"
+          : "REGISTRO DE CIUDADANOS",
+      subtitulo:
+        tabActiva === "oficiales"
+          ? "Listado completo del personal policial registrado en el sistema"
+          : "Listado completo de ciudadanos registrados en el sistema",
       headers,
       body,
       nombreAdmin: user?.nombre_completo || "ADMINISTRADOR DE TURNO",
@@ -419,7 +447,10 @@ const nombreArchivo = `reportes/${tabActiva}_reporte.pdf`;
     // 3. Subir ese mismo PDF
     const { error: uploadError } = await supabase.storage
       .from("reportes")
-      .upload(nombreArchivo, pdfBlob, { contentType: "application/pdf", upsert: true });
+      .upload(nombreArchivo, pdfBlob, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
 
     if (uploadError) {
       showToast("Error al subir el reporte", "error");
@@ -434,13 +465,15 @@ const nombreArchivo = `reportes/${tabActiva}_reporte.pdf`;
     URL.revokeObjectURL(url);
   };
 
-const exportarExcel = async () => {
-    await supabase.from("log_actividad").insert([{
-      id_oficial: user?.id_oficial || null,
-      id_alerta: null,
-      accion: "ADMINISTRADOR",
-      descripcion: `Exportó reporte Excel de ${tabActiva}`,
-    }]);
+  const exportarExcel = async () => {
+    await supabase.from("log_actividad").insert([
+      {
+        id_oficial: user?.id_oficial || null,
+        id_alerta: null,
+        accion: "ADMINISTRADOR",
+        descripcion: `Exportó reporte Excel de ${tabActiva}`,
+      },
+    ]);
 
     const headers =
       tabActiva === "oficiales"
@@ -462,11 +495,14 @@ const exportarExcel = async () => {
             item.ci || "—",
             item.celular || "—",
             getEstadoDisplay(item),
-          ]
+          ],
     );
 
     exportExcel({
-      titulo: tabActiva === "oficiales" ? "PERSONAL POLICIAL" : "REGISTRO DE CIUDADANOS",
+      titulo:
+        tabActiva === "oficiales"
+          ? "PERSONAL POLICIAL"
+          : "REGISTRO DE CIUDADANOS",
       headers,
       body,
       nombreAdmin: user?.nombre_completo || "ADMINISTRADOR DE TURNO",
@@ -498,16 +534,17 @@ const exportarExcel = async () => {
 
       if (termino === "") return cumpleFiltro;
 
-      const palabras = termino.split(/\s+/);
+const palabras = termino.split(/\s+/);
       const campos = [
         item.nombre_completo?.toLowerCase() || "",
         item.ci?.toLowerCase() || "",
         item.numero_escalafon?.toLowerCase() || "",
         item.rol?.toLowerCase() || "",
         item.cargo?.toLowerCase() || "",
+        item.celular?.toLowerCase() || "",
       ];
       const cumpleBusqueda = palabras.every((palabra) =>
-        campos.some((campo) => campo.includes(palabra))
+        campos.some((campo) => campo.includes(palabra)),
       );
 
       return cumpleBusqueda && cumpleFiltro;
@@ -519,39 +556,42 @@ const exportarExcel = async () => {
     const campos = [
       item.nombre_completo?.toLowerCase() || "",
       item.ci?.toLowerCase() || "",
+      item.celular?.toLowerCase() || "",
     ];
     return palabras.every((palabra) =>
-      campos.some((campo) => campo.includes(palabra))
+      campos.some((campo) => campo.includes(palabra)),
     );
   });
 
   if (cargando) {
     return (
       <div className="-mt-4 w-full px-1 py-5 bg-gray-50/30 min-h-screen flex items-center justify-center">
-        <div className="text-green-800 font-bold text-lg">Cargando usuarios...</div>
+        <div className="text-green-800 font-bold text-lg">
+          Cargando usuarios...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="-mt-4 w-full px-1 py-4 space-y-5 animate-fadeIn pb-6 bg-slate-50/30">
+    <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 h-[100dvh] overflow-hidden flex flex-col">
       {/* SELECTOR DE TABS */}
-      <div className="w-full bg-white p-3 rounded-2xl shadow-md border border-slate-100 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4 flex-1">
-          <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100 shrink-0">
+      <div className="px-3 sm:px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center gap-2.5 shrink-0 -mt-1">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          {/* Tabs Oficiales / Ciudadanos */}
+          <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
             <button
               onClick={() => {
                 setTabActiva("oficiales");
                 setFiltroActivo("Todos");
                 setBusquedaCiudadanos("");
               }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${
+              className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${
                 tabActiva === "oficiales"
-                  ? "bg-[#113e27] text-white shadow-sm"
+                  ? "bg-[#474b29] text-white shadow-md"
                   : "text-slate-400 hover:text-slate-600"
               }`}
             >
-              <FaUserTie size={12} />
               <span className="hidden sm:inline">OFICIALES</span>
             </button>
             <button
@@ -560,27 +600,27 @@ const exportarExcel = async () => {
                 setFiltroActivo("Todos");
                 setBusquedaOficiales("");
               }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-[12px] transition-all tracking-wider ${
+              className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${
                 tabActiva === "ciudadanos"
-                  ? "bg-[#113e27] text-white shadow-sm"
+                  ? "bg-[#474b29] text-white shadow-md"
                   : "text-slate-400 hover:text-slate-600"
               }`}
             >
-              <FaUsers size={12} />
               <span className="hidden sm:inline">CIUDADANOS</span>
             </button>
           </div>
 
-          <div className="relative flex-1">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
+          {/* Buscador */}
+          <div className="relative flex-1 min-w-[160px]">
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-slate-400" />
             <input
               type="text"
-              placeholder={
+placeholder={
                 tabActiva === "oficiales"
-                  ? "Buscar por nombre, CI, escalafón, rol o rango..."
-                  : "Buscar por nombre o CI..."
+                  ? "Buscar por nombre, CI, celular, escalafón, rol o rango..."
+                  : "Buscar por nombre, CI o celular..."
               }
-              className="w-full h-10 pl-8 pr-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[11px] font-bold text-slate-700 transition-all border-b focus:bg-white focus:border-slate-400"
+              className="w-full pl-8 pr-3 py-3 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[12px] font-bold text-slate-700 transition-all border-b focus:bg-white focus:border-slate-400/60"
               value={busqueda}
               onChange={(e) =>
                 tabActiva === "oficiales"
@@ -590,44 +630,47 @@ const exportarExcel = async () => {
             />
           </div>
 
-          {tabActiva === "oficiales" && (
+{/* Nuevo oficial -> ahora a la izquierda */}
+      {tabActiva === "oficiales" && (
             <button
               onClick={() => {
                 setEditandoPolicia(null);
                 setMostrarModalPolicia(true);
               }}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-bold text-[11px] uppercase shadow text-white bg-[#113e27] hover:bg-[#164a2f] transition-all shrink-0"
+              className="relative flex items-center gap-2 px-5 py-3  rounded-lg font-bold text-xs uppercase shadow text-white bg-[#474b29] hover:bg-[#3a3e21] transition-all shrink-0"
             >
-              <FaPlus size={10} /> Nuevo oficial
+              <FaPlus size={11} /> Nuevo oficial
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Filtros Todos / Conectado / Desconectado -> ahora a la derecha */}
           {tabActiva === "oficiales" && (
-            <div className="flex bg-gray-50 p-0.5 rounded-xl border border-gray-100">
+            <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0 whitespace-nowrap">
               {["Todos", "conectado", "desconectado"].map((f) => (
                 <button
                   key={f}
                   onClick={() => setFiltroActivo(f)}
-                  className={`px-6 py-2.5 rounded-lg font-bold text-[11px] uppercase transition-all ${
+                  className={`flex items-center gap-2 px-3 py-3 rounded-lg uppercase font-bold text-xs transition-all tracking-wider whitespace-nowrap ${
                     filtroActivo === f
-                      ? "bg-[#113e27] text-white"
-                      : "text-gray-400 hover:text-gray-600"
+                      ? "bg-[#474b29] text-white shadow-md"
+                      : "text-slate-400 hover:text-slate-600"
                   }`}
                 >
                   {f === "conectado"
                     ? "Conectado"
                     : f === "desconectado"
-                    ? "Desconectado"
-                    : "Todos"}
+                      ? "Desconectado"
+                      : "Todos"}
                 </button>
               ))}
             </div>
           )}
 
-          <div className="relative group">
-            <button className="flex items-center gap-2 px-3 py-2.5 bg-white border-2 border-gray-200 text-slate-700 rounded-lg font-bold uppercase text-[11px] hover:border-slate-300 transition-all">
+          {/* Exportar */}
+          <div className="relative group shrink-0">
+            <button className="flex items-center gap-2 px-3 py-2.5 bg-white border-2 border-gray-200 text-slate-700 rounded-lg font-bold uppercase text-[11px] hover:border-slate-300 transition-all whitespace-nowrap">
               <FaFileDownload size={11} /> <span>Exportar</span>
             </button>
             <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
@@ -635,7 +678,8 @@ const exportarExcel = async () => {
                 onClick={exportarExcel}
                 className="w-full px-3 py-2 text-left hover:bg-green-50 text-black font-bold text-[10px] flex items-center gap-2"
               >
-                <FaFileExcel className="text-green-800" size={11} /> Excel (.xls)
+                <FaFileExcel className="text-green-800" size={11} /> Excel
+                (.xls)
               </button>
               <button
                 onClick={exportarPDF}
@@ -649,263 +693,323 @@ const exportarExcel = async () => {
       </div>
 
       {/* Tabla */}
-      <div className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-50 text-left">
-        <div className="flex justify-between items-center mb-5">
-          <h2 className="text-xl font-black uppercase tracking-tight text-[#1e293b]">
-            {tabActiva === "oficiales" ? "Personal Policial" : "Registro de Ciudadanos"}
+      <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0 max-h-[77svh] overflow-hidden">
+      <div className="flex items-center justify-between mb-4 md:mb-6 flex-shrink-0 flex-wrap gap-2">
+          <h2 className="text-lg font-bold uppercase text-[#1e293b] tracking-wider">
+            {tabActiva === "oficiales"
+              ? "Personal Policial"
+              : "Registro de Ciudadanos"}
           </h2>
+          {tabActiva === "oficiales" &&
+            oficiales.filter((o) => o.acceso === "PENDIENTE").length > 0 && (
+              <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg border bg-gray-50  font-extrabold uppercase tracking-wider  border-gray-200">
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                 ● {oficiales.filter((o) => o.acceso === "PENDIENTE").length} pendiente(s) a activar
+                </span>
+              </div>
+            )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-separate border-spacing-y-3 table-fixed">
-            <thead>
-              <tr className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
-                <th className="px-3 pb-2 w-[8%] text-left">ID</th>
-                <th className="pb-2 w-[22%] text-left">
-                  {tabActiva === "oficiales" ? "Oficial" : "Ciudadano"}
-                </th>
-                {tabActiva === "oficiales" ? (
-                  <>
-                    <th className="pb-2 w-[18%] text-left">Escalafón / Rol</th>
-                    <th className="pb-2 w-[12%] text-left">Rango</th>
-                    <th className="pb-2 w-[12%] text-left">Celular</th>
-                    <th className="px-0 pb-2 w-[12%] text-left">Estado</th>
-                  </>
-                ) : (
-                  <>
-                    <th className="pb-2 w-[12%] text-left">Cédula</th>
-                    <th className="pb-2 w-[12%] text-left">Celular</th>
-                    <th className="px-0 pb-2 w-[14%] text-left">Estado</th>
-                  </>
-                )}
-                <th className="px-4 pb-2 w-[10%] text-left">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {datosFiltrados.map((item, i) => {
-                const esOficial = tabActiva === "oficiales";
-                const idMostrar = esOficial
-                  ? `ROF-${String(item.id_oficial).padStart(4, "0")}`
-                  : `REGC-${String(item.id_usuario).padStart(4, "0")}`;
+        <div className="relative flex-1 min-h-0">
+          <div className="h-full overflow-auto -mx-4 md:mx-0 px-4 md:px-0 pb-3">
+            <table className="min-w-full border-separate border-spacing-0 table-fixed">
+              <thead>
+                <tr className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">
+                  <th className="sticky top-0 z-10 bg-white px-3 pb-3 pt-1 border-b border-slate-200 w-[10%] text-left md:pr-2">
+                    ID
+                  </th>
+                  <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[30%] text-left">
+                    {tabActiva === "oficiales" ? "Oficial" : "Ciudadano"}
+                  </th>
+                  {tabActiva === "oficiales" ? (
+                    <>
+                      <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[12%] text-left">
+                        Escalafón / Rol
+                      </th>
+                      <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
+                        Rango
+                      </th>
+                      <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
+                        Celular
+                      </th>
+                      <th className="sticky top-0 z-10 bg-white px-0 pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
+                        Estado
+                      </th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
+                        Cédula
+                      </th>
+                      <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
+                        Celular
+                      </th>
+                      <th className="sticky top-0 z-10 bg-white px-0 pb-3 pt-1 border-b border-slate-200 w-[12%] text-left">
+                        Estado
+                      </th>
+                    </>
+                  )}
+                  <th className="sticky top-0 z-10 bg-white px-4 pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {datosFiltrados.map((item, i) => {
+                  const esOficial = tabActiva === "oficiales";
+                  const idMostrar = esOficial
+                    ? `ROF-${String(item.id_oficial).padStart(4, "0")}`
+                    : `REGC-${String(item.id_usuario).padStart(4, "0")}`;
 
-                let estaConectado = false;
-                if (esOficial) {
-                  estaConectado = item.estado === true;
-                }
+               const UMBRAL_CONEXION_MS = 45000; // 3x el intervalo del heartbeat (15s)
+                  const estaConectado =
+                    esOficial &&
+                    item.estado === true &&
+                    item.ultima_actividad &&
+                    Date.now() - new Date(item.ultima_actividad).getTime() < UMBRAL_CONEXION_MS;
 
-                const advertencias = !esOficial ? (item.advertencias ?? 0) : 0;
-                const estadoDisplay = !esOficial ? getEstadoDisplay(item) : null;
-                const mostrarContador =
-                  !esOficial && estadoDisplay === "ADVERTIDO";
+                  const advertencias = !esOficial
+                    ? (item.advertencias ?? 0)
+                    : 0;
+                  const estadoDisplay = !esOficial
+                    ? getEstadoDisplay(item)
+                    : null;
+                  const mostrarContador =
+                    !esOficial && estadoDisplay === "ADVERTIDO";
 
-                return (
-                  <tr
-                    key={i}
-                    className="bg-white group transition-all duration-150 hover:shadow-lg hover:-translate-y-0.5"
-                  >
-                    <td className="px-3 py-3 text-[10px] font-bold text-slate-400 border-y border-l rounded-l-xl border-gray-50 uppercase text-left">
-                      {idMostrar}
-                    </td>
-                    <td className="py-3 border-y border-gray-50">
-                      <div className="flex items-center gap-3 text-left">
-                        <div
-                          className={`w-6 h-8 rounded-md flex items-center justify-center font-black text-sm shrink-0 shadow-inner ${
-                            !esOficial
-                              ? "bg-blue-50 text-[#0C3DC2]"
-                              : "bg-green-50 text-green-700"
-                          }`}
-                        >
-                          {!esOficial ? (
-                            item.nombre_completo?.charAt(0)
-                          ) : (
-                            <FaShieldAlt size={14} />
-                          )}
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-bold text-[#1e293b] leading-tight truncate">
-                            {item.nombre_completo}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    {esOficial ? (
-                      <>
-                        <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">
-                          {item.numero_escalafon || "—"} - {item.rol || "—"}
-                        </td>
-                        <td className="py-3 text-[11px] font-extrabold text-slate-600 border-y border-gray-50 text-left">
-                          {item.cargo || "—"}
-                        </td>
-                        <td className="py-3 text-[10px] font-bold text-slate-500 border-y border-gray-50 text-left">
-                          {item.celular || "—"}
-                        </td>
-                        <td className="py-3 border-y border-gray-50 text-left">
-                          <div className="flex flex-col items-start gap-1">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`inline-flex py-1.5 w-16px md:w-24 rounded-md text-[9px] font-bold tracking-wider text-white justify-center uppercase shadow-sm ${
-                                  estaConectado ? "bg-[#007942]" : "bg-[#C90A0A]"
-                                }`}
-                              >
-                                {estaConectado ? "Conectado" : "Desconectado"}
+                  return (
+                    <tr
+                      key={i}
+                      className="bg-white group transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
+                    >
+                      <td className="px-3 py-5 md:py-6 border-b border-slate-200/60 text-[11px] font-bold text-slate-400 uppercase tracking-wider align-middle">
+                        {idMostrar}
+                      </td>
+                      <td className="py-5 md:py-6 border-b border-slate-200/60 align-middle">
+                        <div className="flex items-center gap-3 text-left">
+                          <div
+                            className={`w-6 h-8 rounded-md flex items-center justify-center font-black text-sm shrink-0 shadow-inner ${
+                              !esOficial
+                                ? "bg-blue-50 text-[#270cb2]"
+                                : "bg-[#474b29]/10 text-[#474b29]"
+                            }`}
+                          >
+                            {!esOficial ? (
+                              item.nombre_completo?.charAt(0)
+                            ) : (
+                              <FaShieldAlt size={14} />
+                            )}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[12px] font-bold text-[#1e293b] leading-tight truncate">
+                              {item.nombre_completo}
+                            </span>
+                            {esOficial && item.ci && (
+                              <span className="text-[10px] text-slate-500/80 font-semibold uppercase tracking-wide mt-0.5">
+                                CI {item.ci}
                               </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      {esOficial ? (
+                        <>
+                          <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+                            <div className="flex flex-col">
+                              <span className="text-[12px] font-extrabold text-slate-600">
+                                {item.numero_escalafon || "—"}
+                              </span>
+                              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wide">
+                                {item.rol || "—"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="border-b border-slate-200/60 py-5 md:py-6 text-[11px] uppercase font-semibold text-slate-600 align-middle">
+                            {item.cargo || "—"}
+                          </td>
+                          <td className="py-5 md:py-6 border-b border-slate-200/60 text-[12px] font-bold text-slate-500 align-middle">
+                            {item.celular || "—"}
+                          </td>
+                          <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+                            <div className="flex flex-col items-start gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`inline-flex py-1.5 w-16px md:w-24 rounded-md text-[10px] font-bold tracking-wider justify-center uppercase shadow-sm ${
+                                    estaConectado
+                                      ? "bg-[#007942] text-white"
+                                      : "bg-slate-100 text-slate-600 border borde-slate-200"
+                                  }`}
+                                >
+                                  {estaConectado ? "Conectado" : "Desconectado"}
+                                </span>
+                                {item.acceso === "FUERA DE SERVICIO" && (
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-slate-500/80 text-slate-500/80  shadow-sm">
+                                    <FaPowerOff size={10} />
+                                  </div>
+                                )}
+                              {item.acceso === "DE BAJA" && (
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#C90A0A] text-[#C90A0A] shadow-sm">
+                                    <FaUserSlash size={10} />
+                                  </div>
+                                )}
+                                {item.acceso === "PENDIENTE" && (
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-amber-500 text-amber-500 shadow-sm">
+                                    <FaClock size={10} />
+                                  </div>
+                                )}
+                              </div>
                               {item.acceso === "FUERA DE SERVICIO" && (
-                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#C90A0A] text-[#C90A0A] shadow-sm">
-                                  <FaPowerOff size={10} />
-                                </div>
+                                <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500/80 leading-none mt-0.5">
+                                  FUERA DE SERVICIO
+                                </span>
                               )}
                               {item.acceso === "DE BAJA" && (
-                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#C90A0A] text-[#C90A0A] shadow-sm">
-                                  <FaUserSlash size={10} />
-                                </div>
+                                <span className="text-[9px] font-bold uppercase tracking-wide text-[#C90A0A] leading-none mt-0.5">
+                                  DADO DE BAJA
+                                </span>
+                              )}
+                              {item.acceso === "PENDIENTE" && (
+                                <span className="text-[9px] font-bold uppercase tracking-wide text-amber-500 leading-none mt-0.5">
+                                  PENDIENTE DE ACTIVACIÓN
+                                </span>
                               )}
                             </div>
-                            {item.acceso === "FUERA DE SERVICIO" && (
-                              <span className="text-[8px] font-bold uppercase tracking-wide text-[#C90A0A] leading-none">
-                                FUERA DE SERVICIO
-                              </span>
-                            )}
-                            {item.acceso === "DE BAJA" && (
-                              <span className="text-[8px] font-bold uppercase tracking-wide text-[#C90A0A] leading-none">
-                                DADO DE BAJA
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="py-3 text-[11px] font-bold text-slate-500 border-y border-gray-50 text-left">
-                          {item.ci || "—"}
-                        </td>
-                        <td className="py-3 text-[11px] font-extrabold text-slate-600 border-y border-gray-50 text-left">
-                          {item.celular || "—"}
-                        </td>
-                        <td className="py-3 border-y border-gray-50 text-left">
-                          <div className="flex flex-col items-start justify-center gap-1">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`inline-flex py-1.5 px-2.5 rounded-md text-[10px] font-bold tracking-wider uppercase text-white ${
-                                  estadoDisplay === "VERIFICADO"
-                                    ? "bg-[#0172e3]"
-                                    : estadoDisplay === "NO VERIFICADO"
-                                    ? "bg-[#9da1a3]"
-                                    : estadoDisplay === "ADVERTIDO"
-                                    ? "bg-[#c64114]"
-                                    : estadoDisplay === "SUSPENDIDO"
-                                    ? "bg-[#C90A0A]"
-                                    : "bg-[#9da1a3]"
-                                }`}
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                         <td className="py-5 border-b border-slate-200/60 md:py-6 text-[11px] uppercase font-semibold text-slate-600 align-middle">
+                            {item.ci || "—"}
+                          </td>
+                         <td className="border-b border-slate-200/60 py-5 md:py-6 text-[12px] font-bold text-slate-500 align-middle">
+                            {item.celular || "—"}
+                          </td>
+                          <td className="py-5 md:py-6 border-b border-slate-200/60 align-middle">
+                            <div className="flex flex-col items-start justify-center gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`inline-flex py-1.5 w-16px md:w-24 rounded-md text-[10px] font-bold tracking-wider justify-center uppercase shadow-sm text-white ${
+                                    estadoDisplay === "VERIFICADO"
+                                      ? "bg-[#0172e3]"
+                                      : estadoDisplay === "NO VERIFICADO"
+                                        ? "bg-[#9da1a3]"
+                                        : estadoDisplay === "ADVERTIDO"
+                                          ? "bg-[#c64114]"
+                                          : estadoDisplay === "SUSPENDIDO"
+                                            ? "bg-[#C90A0A]"
+                                            : "bg-[#9da1a3]"
+                                  }`}
+                                >
+                                  {estadoDisplay}
+                                </span>
+                                {mostrarContador && (
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#e67402] text-[#e67402] text-[10px] font-black shadow-sm">
+                                    {advertencias}
+                                  </div>
+                                )}
+                              </div>
+                              {estadoDisplay === "ADVERTIDO" && (
+                                <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-[#e67402] leading-none">
+                                  ALERTAS DESESTIMADAS
+                                </span>
+                              )}
+                              {estadoDisplay === "SUSPENDIDO" && (
+                                <span className="mt-0.5 text-[9px] font-bold uppercase tracking-tighter text-[#C90A0A] leading-none">
+                                  LÍMITE DE ADVERTENCIAS
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </>
+                      )}
+                      <td className="px-4 py-5 md:py-6 border-b border-slate-200/60 align-middle">
+                        <div className="flex items-center gap-3">
+                          {esOficial ? (
+                            <>
+                              <button
+                                onClick={() => setOficialSeleccionado(item)}
+                                className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                title="Ver perfil"
                               >
-                                {estadoDisplay}
-                              </span>
-                              {mostrarContador && (
-                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#e67402] text-[#e67402] text-[10px] font-black shadow-sm">
-                                  {advertencias}
-                                </div>
-                              )}
-                            </div>
-                            {estadoDisplay === "ADVERTIDO" && (
-                              <span className="text-[8px] font-bold uppercase tracking-wide text-[#e67402] leading-none">
-                                ALERTAS DESESTIMADAS
-                              </span>
-                            )}
-                            {estadoDisplay === "SUSPENDIDO" && (
-                              <span className="text-[8px] font-black uppercase tracking-tighter text-[#C90A0A] leading-none">
-                                LÍMITE DE ADVERTENCIAS
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </>
-                    )}
-                    <td className="px-4 py-3 border-y border-r rounded-r-xl border-gray-50 text-left">
-                      <div className="flex items-center gap-2">
-                        {esOficial ? (
-                          <>
+                                <FiEye size={14} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditandoPolicia(item);
+                                  setMostrarModalPolicia(true);
+                                }}
+                                className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                title="Editar"
+                              >
+                                <FiEdit2 size={14} />
+                              </button>
+                              <button
+                                onClick={() => eliminarOficial(item.id_oficial)}
+                                className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#C90A0A] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                title="Eliminar"
+                              >
+                                <FiTrash2 size={14} />
+                              </button>
+                            </>
+                          ) : (
                             <button
-                              onClick={() => setOficialSeleccionado(item)}
-                              className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#113e27] hover:text-white transition-all duration-200"
+                              onClick={() =>
+                                setCiudadanoSeleccionado({
+                                  nombre: item.nombre_completo,
+                                  id: item.id_usuario,
+                                  ci: item.ci,
+                                  celular: item.celular,
+                                  email: item.email,
+                                  foto_ci: item.foto_ci,
+                                  selfie: item.selfie,
+                                  id_estado_ciudadano: item.id_estado_ciudadano,
+                                  fecha_registro: item.fecha_registro,
+                                  advertencias: item.advertencias,
+                                  motivo_rechazo: item.motivo_rechazo,
+                                })
+                              }
+                              className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
                               title="Ver perfil"
                             >
-                              <FaEye size={11} />
+                              <FiEye size={14} />
                             </button>
-                            <button
-                              onClick={() => {
-                                setEditandoPolicia(item);
-                                setMostrarModalPolicia(true);
-                              }}
-                              className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#113e27] hover:text-white transition-all duration-200"
-                              title="Editar"
-                            >
-                              <FaEdit size={11} />
-                            </button>
-                            <button
-                              onClick={() => eliminarOficial(item.id_oficial)}
-                              className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#C90A0A] hover:text-white transition-all duration-200"
-                              title="Eliminar"
-                            >
-                              <FaTrashAlt size={11} />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              setCiudadanoSeleccionado({
-                                nombre: item.nombre_completo,
-                                id: item.id_usuario,
-                                ci: item.ci,
-                                celular: item.celular,
-                                email: item.email,
-                                foto_ci: item.foto_ci,
-                                selfie: item.selfie,
-                                id_estado_ciudadano: item.id_estado_ciudadano,
-                                fecha_registro: item.fecha_registro,
-                                advertencias: item.advertencias,
-                                motivo_rechazo: item.motivo_rechazo,
-                              })
-                            }
-                            className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#113e27] hover:text-white transition-all duration-200"
-                            title="Ver perfil"
-                          >
-                            <FaEye size={11} />
-                          </button>
-                        )}
-                      </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {datosFiltrados.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={tabActiva === "oficiales" ? 7 : 6}
+                      className="border-b border-slate-200/60 text-center py-12 text-gray-400 font-medium"
+                    >
+                      No hay registros
                     </td>
                   </tr>
-                );
-              })}
-              {datosFiltrados.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={tabActiva === "oficiales" ? 7 : 6}
-                    className="text-center py-12 text-gray-400 font-medium"
-                  >
-                    No hay registros
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       <NuevoPolicia
-  isOpen={mostrarModalPolicia}
-  onClose={() => setMostrarModalPolicia(false)}
-  onGuardado={cargarOficiales}
-  editandoPolicia={editandoPolicia}
-  onToast={showToast}
-  usuarioActual={user}
-/>
+        isOpen={mostrarModalPolicia}
+        onClose={() => setMostrarModalPolicia(false)}
+        onGuardado={cargarOficiales}
+        editandoPolicia={editandoPolicia}
+        onToast={showToast}
+        usuarioActual={user}
+      />
 
       <PerfilCiudadano
-  ciudadano={ciudadanoSeleccionado}
-  onClose={() => setCiudadanoSeleccionado(null)}
-  onActualizar={cargarCiudadanos}
-  usuarioActual={user}
-/>
+        ciudadano={ciudadanoSeleccionado}
+        onClose={() => setCiudadanoSeleccionado(null)}
+        onActualizar={cargarCiudadanos}
+        usuarioActual={user}
+      />
 
       {/* MODAL PERFIL OFICIAL */}
       <PerfilOficial
@@ -918,10 +1022,12 @@ const exportarExcel = async () => {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
           <div className="relative bg-white rounded-2xl shadow-2xl min-w-[500px] max-w-sm overflow-hidden min-h-[360px] flex flex-col justify-between">
-            <div className="bg-[#113e27] px-6 py-4 flex items-center justify-between">
+            <div className="bg-[#474b29] px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <FaTrashAlt className="text-white" size={16} />
-                <h2 className="text-white font-extrabold text-[15px] uppercase tracking-wider">Eliminar Oficial</h2>
+                <h2 className="text-white font-extrabold text-[15px] uppercase tracking-wider">
+                  Eliminar Oficial
+                </h2>
               </div>
               <button
                 onClick={() => setConfirmarEliminar(null)}
@@ -940,16 +1046,16 @@ const exportarExcel = async () => {
               <p className="text-[11px] text-slate-400 text-center font-bold uppercase tracking-wider">
                 Esta acción no se puede deshacer
               </p>
-             <div className="flex justify-center bg-slate-100/80 -mx-6 gap-6 px-3 py-4 absolute bottom-0 left-0 right-0">
+              <div className="flex justify-center bg-slate-100/80 -mx-6 gap-6 px-3 py-4 absolute bottom-0 left-0 right-0">
                 <button
                   onClick={() => setConfirmarEliminar(null)}
-                  className="w-40 px-6 py-3 bg-slate-200 hover:bg-slate-300 rounded-lg font-bold text-[11px] uppercase tracking-wider text-slate-600 border-b border-slate-300 transition-all shadow-sm"
+                  className="w-40 px-6 py-3 bg-slate-200 hover:bg-slate-300 rounded-full font-bold text-[11px] uppercase tracking-wider text-slate-600 border-b border-slate-300 transition-all shadow-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={confirmarEliminarOficial}
-                  className="w-64 px-12 py-3 bg-[#113e27] hover:bg-[#164a2f] rounded-lg font-bold text-[11px] uppercase tracking-wider text-white transition-all shadow-md"
+                  className="w-64 px-12 py-3 bg-[#474b29] hover:bg-[#3a3e21] rounded-full font-bold text-[11px] uppercase tracking-wider text-white transition-all shadow-md"
                 >
                   Sí, eliminar
                 </button>

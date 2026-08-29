@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { FaTimes } from "react-icons/fa";
 
 const motivosDesestimo = [
@@ -9,111 +9,67 @@ const motivosDesestimo = [
 ];
 
 const DesestimarAlerta = ({
-  onConfirm,
-  onCancel,
-  cargandoInicial = false,
-  showToast,
+  motivo,
+  onMotivoChange,
+  justificacion,
+  onJustificacionChange,
+  topSpacingClass = "pt-2",
 }) => {
-  const [motivoSeleccionado, setMotivoSeleccionado] = useState("");
-  const [justificacion, setJustificacion] = useState("");
-  const [cargando, setCargando] = useState(cargandoInicial);
-
-  const handleConfirm = async () => {
-    if (!motivoSeleccionado) {
-      if (showToast) showToast("Seleccionar un MOTIVO", "error");
-      return;
-    }
-    if (!justificacion.trim()) {
-      if (showToast) showToast("Completar el campo JUSTIFICACIÓN ADICIONAL", "error");
-      return;
-    }
-    setCargando(true);
-    await onConfirm(motivoSeleccionado, justificacion);
-    setCargando(false);
-  };
-
-  const limpiarJustificacion = () => {
-    setJustificacion("");
-  };
-
-  return (
-    <div className="flex flex-col h-full w-full -mt-1">
-      <div className="mb-2">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 ">
-          Desestimar Alerta
-        </h3>
-      </div>
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-md flex-1">
-        <div className="border-l-4 border-[#c64114] pl-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">
-          Motivo de desestimación (único)
-        </div>
-        <div className="space-y-2 mb-2 -mt-1">
-          {motivosDesestimo.map((motivo) => (
-            <label
-              key={motivo}
-              className={`flex items-center gap-3 p-2 rounded-md border text-[11px] font-semibold cursor-pointer transition-all ${
-                motivoSeleccionado === motivo
-                  ? "bg-white border-slate-300 text-slate-700 shadow-sm"
-                  : "text-slate-600 hover:bg-white hover:border-white"
+return (
+    <div className="flex flex-col gap-5 w-full">
+      {/* Motivo de desestimación */}
+<div>
+                <div className={`border-t border-slate-200 ${topSpacingClass}`}>
+                  <h4 className="text-[14px] font-medium uppercase text-slate-600 tracking-wider">Motivo de desestimación</h4>
+                </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+          {motivosDesestimo.map((m) => (
+         <label
+              key={m}
+              className={`flex items-center gap-2 px-3 py-3 rounded-xl border text-[12px] text-slate-500 cursor-pointer transition-colors font-medium tracking-wider
+                           ${
+                motivo === m
+                  ? "border-[#474b29] bg-[#474b29]/5"
+                  : "border-slate-200 hover:bg-slate-50"
               }`}
             >
               <input
                 type="radio"
                 name="motivoDesestimo"
-                className="accent-[#c64114] w-3.5 h-3.5 cursor-pointer"
-                checked={motivoSeleccionado === motivo}
-                onChange={() => setMotivoSeleccionado(motivo)}
+                className="accent-[#474b29] w-3.5 h-3.5 cursor-pointer shrink-0"
+                checked={motivo === m}
+                onChange={() => onMotivoChange(m)}
               />
-              <span>{motivo}</span>
+              <span className="leading-tight">{m}</span>
             </label>
           ))}
         </div>
+      </div>
 
-        <div className="mb-3">
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-            Justificación adicional
-          </label>
-          <div className="relative">
-
-
-            
-            <textarea
-              className="mt-1 w-full h-14 min-h-14 p-2 pr-8 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:border-slate-300 resize-y bg-white"
-              placeholder="Agregue el detalle de la desestimación (obligatorio)"
-              value={justificacion}
-              onChange={(e) => setJustificacion(e.target.value)}
-              required
-            />
-            {justificacion && (
-              <button
-                type="button"
-                onClick={limpiarJustificacion}
-                className="absolute top-3 right-2 text-slate-400 hover:text-slate-600 transition-colors"
-                title="Limpiar justificación"
-              >
-                <FaTimes size={12} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex gap-2 -mt-1">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={cargando}
-            className="flex-1 py-2 bg-slate-200 hover:bg-slate-300 rounded-md text-[11px] font-bold uppercase tracking-wider text-slate-700 transition-colors disabled:opacity-40"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={cargando} 
-            className="flex-1 py-2 bg-[#c64114] hover:bg-[#c03e12] text-white rounded-md text-[11px] font-bold uppercase tracking-wider disabled:opacity-40 transition-all flex items-center justify-center"
-          >
-            {cargando ? "Desestimando..." : "Desestimar alerta"}
-          </button>
+      {/* Justificación */}
+      <div>
+        <label className="block text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">
+          Justificación adicional
+        </label>
+        <div className="relative border border-slate-200 rounded-xl px-3.5 py-3 focus-within:border-slate-300">
+<textarea
+  className="block w-full min-h-[44px] text-[12px] text-slate-500 font-medium bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 resize-y tracking-wider  
+              "
+  placeholder="Agregue el detalle de la desestimación (obligatorio)"
+  value={justificacion}
+  onChange={(e) => onJustificacionChange(e.target.value)}
+  required
+/>
+          {justificacion && (
+            <button
+              type="button"
+              onClick={() => onJustificacionChange("")}
+              className="absolute top-2.5 sm:top-3 right-3 text-slate-500 hover:text-slate-600 transition-colors"
+              title="Limpiar justificación"
+            >
+              <FaTimes size={12} />
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import {
-  FaUser, FaFileAlt, FaMapMarkerAlt,
-  FaShieldAlt, FaBriefcase, FaTimes, FaHistory, FaSpinner, FaCheckCircle
+  FaUser, FaFileAlt, FaMapMarkerAlt, FaChevronDown,
+  FaShieldAlt, FaBriefcase, FaTimes, FaHistory, FaSpinner, FaCheckCircle, FaUserShield
 } from 'react-icons/fa';
 import { supabase } from "../../services/supabase";
 import { contravenciones, delitos } from "../../constants/CategoriasDelitos";
 import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext'; 
+import { useToast } from '../../context/ToastContext';
+import { FormularioTabulacionSkeleton } from '../ui/Skeleton';
 
 const FormularioTabulacion = ({ isOpen, onClose, alerta, onConfirm, readOnly = false, clasificacionTabulador = null, derivacion = null }) => {
   const { user } = useAuth();
@@ -58,10 +59,12 @@ const [nombreOperador, setNombreOperador] = useState('—');
   // --------------------------------------------------------------
   // Cuando es readOnly, cargamos todos los campos guardados
   // --------------------------------------------------------------
-  useEffect(() => {
-    if (readOnly && isOpen && alerta) {
-      const loadReadOnlyData = async () => {
-        if (alerta.fecha_tabulacion) {
+    useEffect(() => {
+      if (readOnly && isOpen && alerta) {
+        const loadReadOnlyData = async () => {
+          setCargandoDatos(true);
+          try {
+          if (alerta.fecha_tabulacion) {
           setFechaTabulacion(alerta.fecha_tabulacion);
         } else {
           const { data: tabData } = await supabase
@@ -228,6 +231,11 @@ if (alerta.id_patrullero && idAlerta) {
         }
 
         if (derivacion) setRemisionCaso(derivacion);
+          } catch (err) {
+            console.error("Error cargando datos de solo lectura:", err);
+          } finally {
+            setCargandoDatos(false);
+          }
       };
       loadReadOnlyData();
     }
@@ -563,7 +571,7 @@ if (alerta.id_patrullero && idAlerta) {
     }
   };
 
-  const cardStyle = "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full";
+const cardStyle = "bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_10px_10px_-8px_rgba(15,23,42,0.25)] flex flex-col h-full";
 
   const mostrarClasificacionElegida = () => {
     if (readOnly && clasificacionTabulador) {
@@ -611,8 +619,8 @@ if (alerta.id_patrullero && idAlerta) {
     return { first: parts[0], last: parts.slice(1).join(' ') };
   };
 
-  const inputEditableClass = "w-full bg-slate-100/40 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-500 outline-none focus:ring-1 focus:ring-slate-300 transition-all";
-  const inputReadonlyClass = "w-full bg-slate-100/40 border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-500 outline-none";
+const inputEditableClass = "w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-[12px] font-medium text-slate-600 outline-none focus:border-slate-300 transition-colors";
+  const inputReadonlyClass = "w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[12px] font-medium text-slate-500 outline-none";
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -620,63 +628,61 @@ if (alerta.id_patrullero && idAlerta) {
       
       <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[85vh]">
         {/* BARRA SUPERIOR */}
-        <div className="bg-[#113e27] py-4 px-6 text-white w-full shrink-0">
+       <div className="bg-[#474b29] py-4 px-5 sm:px-6 text-white shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="bg-white/10 p-2 rounded-md flex items-center justify-center shrink-0">
-                <FaShieldAlt className="text-white" size={30} />
+                <FaShieldAlt className="text-white" size={22} />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <h2 className="text-[18px] font-bold uppercase tracking-wide leading-none mt-0.5">
-                  {readOnly ? "ALERTA TABULADA · REPORTE FINAL" : "TABULACIÓN DE ALERTAS"}
-                </h2>
-                {readOnly && (
-  <div className="flex flex-wrap gap-3 text-[11px] font-bold text-white/70 mt-0.5">
-    <span>
-      Código: {alerta?.codigo_alerta || alerta?.id || `ALT-${String(idAlerta).padStart(4, "0")}` || "—"}
-    </span>
-    <span className='ml-3'>
-      Archivado: {formatFechaHora(fechaTabulacion || alerta?.fecha_tabulacion)}
-    </span>
-  </div>
-)}
-                {!readOnly && alerta?.id && (
-                  <div className="flex flex-wrap gap-2 text-[10px] font-medium text-white/70 mt-0.5">
-                    <span>{alerta.id}</span>
-                  </div>
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-[17px] font-bold uppercase tracking-wider leading-none">
+                    {readOnly ? "ALERTA TABULADA · REPORTE FINAL" : "TABULACIÓN DE ALERTAS"}
+                  </h2>
+                </div>
+                {readOnly ? (
+                  <p className="text-[11px] font-medium text-white/70 mt-1.5">
+                    Código: {alerta?.codigo_alerta || alerta?.id || `ALT-${String(idAlerta).padStart(4, "0")}` || "—"}
+                    <span className="ml-3">
+                      Archivado: {formatFechaHora(fechaTabulacion || alerta?.fecha_tabulacion)}
+                    </span>
+                  </p>
+                ) : (
+                  alerta?.id && (
+                    <p className="text-[11px] font-medium text-white/70 mt-1.5">
+                      {alerta.id}
+                    </p>
+                  )
                 )}
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="hover:bg-white/20 p-1.5 rounded-md transition-colors shrink-0 mt-1"
+              className="hover:bg-white/20 p-1.5 rounded-md transition-colors shrink-0"
             >
-              <FaTimes size={16} />
+              <FaTimes size={15} />
             </button>
           </div>
         </div>
 
-        {/* CUERPO CON SCROLL */}
-        <div className="overflow-y-auto p-6 bg-white">
-          {cargandoDatos && (
-            <div className="flex items-center justify-center py-4 gap-2 text-slate-400">
-              <FaSpinner className="animate-spin" size={14} />
-              <span className="text-[11px] font-bold uppercase">CARGANDO DATOS...</span>
-            </div>
-          )}
-
+{/* CUERPO CON SCROLL */}
+        <div className="overflow-y-auto p-6 bg-slate-50/60">
+          {cargandoDatos ? (
+            <FormularioTabulacionSkeleton />
+          ) : (
+          <>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 rounded-md">
             {/* DATOS DE LA ALERTA */}
             <section className={cardStyle}>
               <div className="flex items-center justify-between border-b border-slate-50 pb-2 mb-4 shrink-0">
   <div className="flex items-center gap-2">
-    <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center">
+    <div className="w-7 h-7 bg-blue-50 rounded-lg shadow-sm flex items-center justify-center">
       <FaFileAlt className="text-[#0C3DC2] text-[14px]" />
     </div>
-    <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">DATOS DE LA ALERTA</h2>
+   <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">DATOS DE LA ALERTA</h2>
   </div>
-  <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider text-white ${
+  <span className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider text-white ${
     (alerta?.prioridad || "").toUpperCase() === "ALTA"
       ? "bg-[#C90A0A]"
       : (alerta?.prioridad || "").toUpperCase() === "MEDIA"
@@ -699,44 +705,46 @@ if (alerta.id_patrullero && idAlerta) {
     readOnly
   />
 </div>
-                <div className="col-span-2">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2">RELATO DEL HECHO</label>
-                  <textarea readOnly value={alerta?.descripcion || ""}
-                    className="w-full bg-slate-100/40 border border-slate-100 rounded-xl p-3 text-xs font-medium italic text-slate-500 outline-none mt-1 h-20 resize-none" />
+               <div className="col-span-2">
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">RELATO DEL HECHO</label>
+                  <div className="relative border border-slate-200 rounded-xl px-3.5 py-3 mt-1">
+                   <textarea readOnly value={alerta?.descripcion || ""}
+                      className="block w-full h-8 text-[12px] text-slate-600 bg-transparent border-none focus:outline-none resize-y" />
+                  </div>
                 </div>
               </div>
             </section>
 
             {/* DIRECCIÓN */}
-            <section className={cardStyle}>
+           <section className={cardStyle}>
               <HeaderSection icon={<FaMapMarkerAlt className="text-green-900 text-sm"/>} title="DIRECCIÓN Y DESCRIPCIÓN" bgColor="bg-green-50" />
               <div className="grid grid-cols-2 gap-3 flex-1">
-                <div className="space-y-0.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">ÁREA URBANA</label>
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">ÁREA URBANA</label>
                   <input value={areaUrbana} onChange={e => !readOnly && setAreaUrbana(e.target.value)} placeholder="Zona de área urbana"
                     className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
-                <div className="space-y-0.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">ÁREA RURAL</label>
+               <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">ÁREA RURAL</label>
                   <input value={areaRural} onChange={e => !readOnly && setAreaRural(e.target.value)} placeholder="Zona de área rural"
                     className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
-                <div className="space-y-0.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">COMUNA</label>
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">COMUNA</label>
                   <input value={comuna} onChange={e => !readOnly && setComuna(e.target.value)} placeholder="Comuna"
                     className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
-                <div className="space-y-0.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">DISTRITO</label>
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">DISTRITO</label>
                   <input value={distrito} onChange={e => !readOnly && setDistrito(e.target.value)} placeholder="Distrito"
                     className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
-                <div className="col-span-2 space-y-0.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">SUBDISTRITO</label>
+                <div className="col-span-2 space-y-1">
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">SUBDISTRITO</label>
                   <input value={subdistrito} onChange={e => !readOnly && setSubdistrito(e.target.value)} placeholder="Subdistrito"
                     className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
@@ -764,58 +772,56 @@ if (alerta.id_patrullero && idAlerta) {
                   onChange={handleDelitoChange}
                   disabled={readOnly}
                 />
-                <div className="mt-2 p-2 bg-slate-50 rounded-xl text-center">
+                <div className="h-16 mt-2 p-2 bg-slate-50 rounded-xl text-center">
                   <p className="text-[11px] font-bold text-slate-400 tracking-wider uppercase">
                     {contravencionValue || delitoValue || (readOnly && clasificacionTabulador) ? "CLASIFICACIÓN FINAL" : "CLASIFICACIÓN ACTUAL"}
                   </p>
-                  <p className="mt-1 tracking-wide text-[11px] font-bold text-slate-700 uppercase">
+                  <p className="mt-1 tracking-wider text-[11px] font-bold text-slate-700 uppercase">
                     {clasificacionActual ? (
                       `${clasificacionActual.tipo}: ${clasificacionActual.texto}`
                     ) : (
                       "SIN CLASIFICACIÓN"
                     )}
                   </p>
-                  {!readOnly && !contravencionValue && !delitoValue && clasificacionOriginal !== "NO CLASIFICADA" && (
-                    <p className="text-[11px] text-slate-400 mt-1">(Clasificación a guardar)</p>
-                  )}
                 </div>
               </div>
             </section>
 
             {/* INFORME POLICIAL */}
-            <section className={`${cardStyle} !bg-white !border-slate-200 shadow-md p-6`}>
-              <HeaderSection icon={<FaShieldAlt className="text-amber-600"/>} title="INFORME POLICIAL" bgColor="bg-amber-50" />
+            <section className={`${cardStyle} p-6`}>
+              <HeaderSection icon={<FaUserShield className="text-amber-600"/>} title="INFORME POLICIAL" bgColor="bg-amber-50" />
               <div className="grid grid-cols-2 gap-3 flex-1">
                 <LabelField label="ESCALAFÓN" value={escalafon} readOnly />
                 <LabelField label="PLACA" value={placa} readOnly />
                 <LabelField label="EPI" value={epi} readOnly />
-                <div className="col-span-2 space-y-0.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2">REPORTE PATRULLERO</label>
-                  <div className="mt-1 p-3 bg-white border border-slate-200 rounded-lg text-xs italic text-slate-400 h-20 overflow-y-auto">
-                    {reportePatrullero ? (
-                      <p className="text-[11px] text-slate-600 font-medium">{reportePatrullero}</p>
-                    ) : (
-                      <p className="text-xs text-slate-400">"NO SE HA REGISTRADO UN REPORTE DEL PATRULLERO."</p>
-                    )}
+             <div className="col-span-2 space-y-0.5">
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">REPORTE PATRULLERO</label>
+                  <div className="relative border border-slate-200 rounded-xl px-3.5 py-3 mt-1">
+                    <textarea
+                      readOnly
+                      value={reportePatrullero}
+                      placeholder="Sin reporte enviado aún."
+                      className="block w-full h-10 text-[12px] text-slate-600 bg-transparent border-none focus:outline-none resize-y placeholder:italic placeholder:text-slate-400"
+                    />
                   </div>
                 </div>
               </div>
             </section>
           </div>
 
-          {/* SECRETARÍA */}
-          <section className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mt-8">
-            <HeaderSection icon={<FaBriefcase className="text-purple-600 text-sm"/>} title="TABULACIÓN PARA SECRETARÍA" bgColor="bg-purple-50" />
+          {/* TABULACIÓN PARA SECRETARÍA */}
+          <section className="bg-white p-5 rounded-2xl border border-slate-200 shadow-[0_6px_16px_-4px_rgba(15,23,42,0.15)] mt-8">
+            <HeaderSection icon={<FaBriefcase className="text-purple-700 text-sm"/>} title="TABULACIÓN PARA SECRETARÍA" bgColor="bg-purple-100/80" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-3">
                 <div className="space-y-0.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2">PROTAGONISTAS</label>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">PROTAGONISTAS</label>
                   <input value={protagonistas} onChange={e => !readOnly && setProtagonistas(e.target.value)} placeholder="Nombres..."
                     className={!readOnly ? inputEditableClass : inputReadonlyClass}
                     disabled={readOnly} />
                 </div>
                 <div className="space-y-0.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2">REMISIÓN DEL CASO (DERIVACIÓN)</label>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">REMISIÓN DEL CASO (DERIVACIÓN)</label>
                   <input
                     value={remisionCaso}
                     onChange={e => !readOnly && !isDerivacionLocked && setRemisionCaso(e.target.value)}
@@ -825,19 +831,21 @@ if (alerta.id_patrullero && idAlerta) {
                   />
                 </div>
               </div>
-              <div className="flex flex-col mt-1.5">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2 mb-1">RESUMEN ADMINISTRATIVO</label>
-                <textarea value={resumenAdministrativo} onChange={e => !readOnly && setResumenAdministrativo(e.target.value)}
-                  placeholder="Resumen administrativo obligatorio..."
-                  className={`${!readOnly ? inputEditableClass : inputReadonlyClass} min-h-[114px] resize-y`}
-                  disabled={readOnly} />
+             <div className="flex flex-col space-y-1">
+                <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">RESUMEN ADMINISTRATIVO</label>
+                <div className="relative border border-slate-200 rounded-lg px-3.5 py-3 focus-within:border-slate-300 transition-colors">
+                  <textarea value={resumenAdministrativo} onChange={e => !readOnly && setResumenAdministrativo(e.target.value)}
+                    placeholder="Resumen administrativo obligatorio..."
+                    className="block w-full min-h-[86px] text-[12px] text-slate-600 bg-transparent border-none focus:outline-none resize-y"
+                    disabled={readOnly} />
+                </div>
               </div>
             </div>
           </section>
 
           {/* HISTORIAL DE PROCESO */}
           <div className="pt-6 px-2 mt-4">
-            <h2 className="flex items-center gap-3 font-bold text-slate-400 uppercase text-[11px] tracking-wider mb-5">
+           <h2 className="flex items-center gap-3 font-semibold text-slate-400 uppercase text-[11px] tracking-wider mb-5">
                HISTORIAL DE PROCESO
             </h2>
            <div className="flex flex-wrap md:flex-nowrap justify-center gap-5">
@@ -873,23 +881,25 @@ if (alerta.id_patrullero && idAlerta) {
                 splitName={splitNameLines(user?.nombre_completo || "EN CURSO")}
               />
             </div>
-          </div>
+        </div>
+          </>
+          )}
+        </div>
 
-          {/* BOTONES */}
-          <div className="flex justify-end gap-4 pt-4 border-t border-slate-100 mt-6">
+        {/* BOTONES */}
+        <div className="flex justify-end gap-4 px-5 sm:px-6 py-4 border-t border-slate-200 bg-slate-50 shrink-0">
             <button type="button" onClick={onClose}
-              className="px-6 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-400 font-black rounded-xl uppercase text-[9px] tracking-[0.15em] transition-all">
+              className="px-4 py-2 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider">
               {readOnly ? "CERRAR" : "DESCARTAR"}
             </button>
             {!readOnly && (
               <button type="submit" disabled={guardando} onClick={handleSubmit}
-                className="px-6 py-2.5 bg-[#1a5336] hover:bg-[#133d28] text-white font-black rounded-xl uppercase text-[9px] tracking-[0.15em] transition-all shadow flex items-center gap-2 disabled:opacity-60">
+                className="px-8 py-2.5 rounded-lg font-medium text-[11.5px] bg-[#474b29] uppercase hover:bg-[#3a3e21] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed tracking-wider flex items-center justify-center gap-2">
                 {guardando && <FaSpinner className="animate-spin" size={10} />}
                 {guardando ? "GUARDANDO..." : "FINALIZAR TABULACIÓN"}
               </button>
             )}
           </div>
-        </div>
       </div>
     </div>
   );
@@ -899,38 +909,46 @@ if (alerta.id_patrullero && idAlerta) {
 const HeaderSection = memo(({ icon, title, bgColor }) => (
   <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-4 shrink-0">
     <div className={`w-7 h-7 ${bgColor} rounded-lg flex items-center justify-center`}>{icon}</div>
-    <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">{title}</h2>
+    <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{title}</h2>
   </div>
 ));
 
 const SelectField = memo(({ label, options, value, onChange, disabled }) => (
-  <div className="flex flex-col">
-    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-2 mb-1">{label}</label>
-    <select value={value} onChange={onChange} disabled={disabled}
-      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#1a5336] transition-all disabled:opacity-60 disabled:bg-gray-100 disabled:border-slate-100">
-      <option value="">Seleccionar...</option>
-      {options.map((item, i) => <option key={i} value={item}>{item}</option>)}
-    </select>
+  <div className="flex flex-col space-y-1">
+    <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+      {label}
+    </label>
+    <div className="relative">
+      <select value={value} onChange={onChange} disabled={disabled}
+        className="w-full h-11 pl-3 pr-7 border border-slate-200 rounded-xl text-[12px] text-slate-600 outline-none appearance-none focus:border-slate-400 transition-colors disabled:opacity-60 disabled:bg-slate-50 disabled:border-slate-100">
+        <option value="">Seleccionar...</option>
+        {options.map((item, i) => <option key={i} value={item}>{item}</option>)}
+      </select>
+      <FaChevronDown
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+        size={11}
+      />
+    </div>
   </div>
 ));
 
 // Componente LabelField unificado para campos de solo lectura (ahora con label estilizado)
 const LabelField = memo(({ label, value, readOnly = true, required = false }) => (
-  <div className="space-y-0.5">
-    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1.5">{label}</label>
+  <div className="space-y-1">
+    <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</label>
     <input
       required={required}
       type="text"
       readOnly={readOnly}
       value={value || '—'}
-      className="w-full rounded-xl p-2.5 text-xs font-bold outline-none border bg-slate-100/40 border-slate-100 text-slate-600"
+      className="w-full rounded-xl px-3.5 py-2.5 text-[12px] font-medium outline-none border border-slate-200 bg-slate-50 text-slate-600"
     />
   </div>
 ));
 
 const HistoryCard = memo(({ role, name, icon, highlight, splitName }) => {
   return (
-    <div className={`flex-1 flex flex-col items-center min-w-[96px] rounded-xl p-2 transition-all ${highlight ? 'bg-green-50 border border-green-200 shadow-md' : 'bg-white border border-slate-300 shadow-md'}`}>
+    <div className={`flex-1 flex flex-col items-center min-w-[96px] rounded-xl p-2 transition-all ${highlight ? 'bg-green-50 border border-green-200 shadow-[0_6px_16px_-4px_rgba(15,23,42,0.15)]' : 'bg-white border border-slate-300 shadow-[0_6px_16px_-4px_rgba(15,23,42,0.15)]'}`}>
       <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${highlight ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
         {icon}
       </div>
