@@ -53,7 +53,7 @@ const subtitulo = esDesestimado
   const MARGIN_L = 18;
   const MARGIN_R = 18;
 
-  const VERDE      = [17, 62, 39];
+  const VERDE      = [71, 75, 41];
   const NEGRO      = [15, 15, 15];
   const GRIS_CLARO = [245, 245, 245];
   const BLANCO     = [255, 255, 255];
@@ -109,7 +109,7 @@ const subtitulo = esDesestimado
     doc.setFontSize(12);
     doc.text("CENTRAL DE RADIO PATRULLAS", textX, 9 + OFFSET_Y);
 
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.text(titulo, textX, 14.5 + OFFSET_Y);
 
@@ -159,7 +159,7 @@ const subtitulo = esDesestimado
     doc.setLineWidth(0.2);
     doc.line(PAGE_W - MARGIN_R - 55, PIE_Y + 15, PAGE_W - MARGIN_R, PIE_Y + 15);
 
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(...NEGRO);
     doc.text("SELLO INSTITUCIONAL", firmaDerX, PIE_Y + 18.5, { align: "center" });
@@ -183,7 +183,7 @@ autoTable(doc, {
     headStyles: {
       fillColor: VERDE,
       textColor: BLANCO,
-      fontStyle: "bold",
+      fontStyle: "normal",
       fontSize: 8,
       cellPadding: { top: 2, bottom: 2, left: 2.5, right: 2.5 },
       halign: "left",
@@ -196,7 +196,7 @@ autoTable(doc, {
       minCellHeight: 0,
     },
     columnStyles: {
-      0: { fontStyle: "bold", textColor: [...VERDE] },
+      0: { fontStyle: "normal", textColor: [...VERDE] },
     },
     didDrawPage: (data) => {
       dibujarEncabezado();   // ← ahora se dibuja SIEMPRE, no solo si pageNumber > 1 (igual que en exportPDFLog.js)

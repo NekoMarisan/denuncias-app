@@ -51,7 +51,7 @@ const PAGE_H = 215.9;
   const MARGIN_L = 18;
   const MARGIN_R = 18;
 
-  const VERDE      = [17, 62, 39];
+  const VERDE      = [71, 75, 41];
   const NEGRO      = [15, 15, 15];
   const GRIS_CLARO = [245, 245, 245];
   const BLANCO     = [255, 255, 255];
@@ -103,7 +103,7 @@ const PAGE_H = 215.9;
     doc.setFontSize(12);
     doc.text("CENTRAL DE RADIO PATRULLAS", textX, 9 + OFFSET_Y);
 
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.text(titulo, textX, 14.5 + OFFSET_Y);
 
@@ -165,7 +165,7 @@ autoTable(doc, {
     headStyles: {
       fillColor: VERDE,
       textColor: BLANCO,
-      fontStyle: "bold",
+      fontStyle: "normal",
       fontSize: 8,
       cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
       halign: "left",
@@ -179,7 +179,7 @@ autoTable(doc, {
       minCellHeight: 0, 
     },
     columnStyles: {
-      0: { fontStyle: "bold", textColor: [...VERDE], cellWidth: 34, halign: "left" }, // OFICIAL
+      0: { fontStyle: "normal", textColor: [...VERDE], cellWidth: 34, halign: "left" }, // OFICIAL
       1: { cellWidth: 26, fontSize: 6.5, halign: "left" },                            // ROL
       2: { cellWidth: "auto", halign: "left" },                                       // DESCRIPCIÓN
       3: { cellWidth: 30, halign: "left" },                                           // ALERTA

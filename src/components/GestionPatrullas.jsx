@@ -44,12 +44,12 @@ export const GestionPatrullas = ({
       if (!error && data) setInstituciones(data);
       else
         setInstituciones([
-  { id: 1, nombre: "FELCC (Fuerza Especial de Lucha Contra el Crimen)" },
-  { id: 2, nombre: "FELCV (Fuerza Especial de Lucha Contra la Violencia)" },
-  { id: 3, nombre: "FELCN (Fuerza Especial de Lucha Contra el Narcotráfico)" },
-  { id: 4, nombre: "Defensoría de la Niñez y Adolescencia" },
-  { id: 5, nombre: "SLIM (Servicio Legal Integral Municipal)" },
-  { id: 6, nombre: "Tránsito" },
+  { id: 1, nombre: "FELCC (FUERZA ESPECIAL DE LUCHA CONTRA EL CRIMEN)" },
+  { id: 2, nombre: "FELCV (FUERZA ESPECIAL DE LUCHA CONTRA LA VIOLENCIA)" },
+  { id: 3, nombre: "FELCN (FUERZA ESPECIAL DE LUCHA CONTRA EL NARCOTRÁFICO)" },
+  { id: 4, nombre: "DEFENSORÍA DE LA NIÑEZ Y ADOLESCENCIA" },
+  { id: 5, nombre: "SLIM (SERVICIO LEGAL INTEGRAL MUNICIPAL)" },
+  { id: 6, nombre: "TRÁNSITO" },
 ]);
     };
     cargar();
@@ -434,7 +434,7 @@ await supabase.from("log_actividad").insert([{
     className="w-full h-11 pl-3 pr-7 border border-slate-200 rounded-xl text-[12px] text-slate-500 outline-none appearance-none focus:border-[#474b29] transition-colors font-medium tracking-wider"
   >
       <option value="">Seleccionar derivación</option>
-      <option value="SIN DERIVACIÓN">Sin derivación</option>
+      <option value="SIN DERIVACIÓN">SIN DERIVACIÓN</option>
       {instituciones.map((inst) => (
         <option key={inst.id} value={inst.nombre}>
           {inst.nombre}

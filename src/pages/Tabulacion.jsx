@@ -47,6 +47,7 @@ function Tabulacion() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [alertaSeleccionada, setAlertaSeleccionada] = useState(null);
   const [alertaVista, setAlertaVista] = useState(null);
+  const [tabVistaCompleta, setTabVistaCompleta] = useState(null);
   const [verTodo, setVerTodo] = useState(false);
   const [cargando, setCargando] = useState(true);
 
@@ -832,9 +833,10 @@ function Tabulacion() {
                             remision_caso: tab.remision_caso,
                             resumen_administrativo: tab.resumen_administrativo,
                           });
+                          setTabVistaCompleta(tab);
                           setIsViewModalOpen(true);
                         }}
-                        className="h-52 mb-1 bg-white rounded-xl p-3 border border-slate-200 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md group overflow-hidden cursor-pointer"
+                        className="h-[14.5svh] mb-1 bg-white rounded-xl p-3 border border-slate-200 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md group overflow-hidden cursor-pointer"
                       >
                         <div className="absolute left-0 top-0 bottom-0 w-2 bg-[#474b29] rounded-l-2xl" />
                         <div className="flex justify-between items-center mb-3 pl-3">
@@ -865,17 +867,6 @@ function Tabulacion() {
                           <p className="text-[10px] font-medium tracking-wider text-slate-500 uppercase leading-relaxed">
                             {clasificacion}
                           </p>
-                        </div>
-                        <div className="flex justify-end gap-3 ml-3 mb-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleGenerarPDF(tab);
-                            }}
-                            className="px-6 py-2.5 rounded-lg font-medium text-[11.5px] bg-[#474b29] uppercase hover:bg-[#3a3e21] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed tracking-wider flex items-center justify-center gap-2 -mt-1"
-                          >
-                            PDF
-                          </button>
                         </div>
                       </div>
                     );
@@ -915,6 +906,7 @@ function Tabulacion() {
           readOnly={true}
           onConfirm={() => {}}
           clasificacionTabulador={alertaVista?.resultado_final}
+          onGenerarPDF={() => handleGenerarPDF(tabVistaCompleta)}
         />
       </div>
     </div>

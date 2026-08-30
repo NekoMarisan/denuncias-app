@@ -7,30 +7,33 @@ import {
 import { FormularioDesestimadosSkeleton } from '../ui/Skeleton';
 
 // Componentes auxiliares (mismos estilos que en FormularioTabulacion)
-const HeaderSection = ({ icon, title, bgColor }) => (
-  <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-4 shrink-0">
-    <div className={`w-7 h-7 ${bgColor} rounded-lg flex items-center justify-center`}>{icon}</div>
-    <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{title}</h2>
+const HeaderSection = ({ title }) => (
+  <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-2 shrink-0">
+    <h2 className="text-[18px] font-bold uppercase text-[#1e293b] tracking-wider">
+      {title}
+    </h2>
   </div>
 );
 
 const Field = ({ label, value }) => (
   <div className="space-y-1">
-    <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</label>
+    <label className="block text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1">
+      {label}
+    </label>
     <input
       type="text"
       readOnly
       value={value || '—'}
-      className="w-full rounded-xl px-3.5 py-2.5 text-[12px] font-medium outline-none border border-slate-200 bg-slate-50 text-slate-600"
+      className="w-full rounded-xl px-3.5 py-2.5 text-[12px] font-medium tracking-wider outline-none border border-slate-200 bg-slate-50 text-slate-600"
     />
   </div>
 );
 
 const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
-  // ✅ Estado de carga para el botón de generar PDF de este modal
+  // Estado de carga para el botón de generar PDF de este modal
   const [generandoPDF, setGenerandoPDF] = useState(false);
 
-  // ✅ Estado de carga (esqueleto) al abrir el modal, igual que en FormularioTabulacion
+  // Estado de carga (esqueleto) al abrir el modal, igual que en FormularioTabulacion
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
@@ -172,14 +175,14 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
         </div>
 
         {/* CUERPO CON SCROLL */}
-        <div className="overflow-y-auto p-6 bg-slate-50/60">
+<div className="overflow-y-auto scroll-hover p-4 pr-3 bg-slate-50/60">
           {cargando ? (
             <FormularioDesestimadosSkeleton />
           ) : (
           <>
           {/* DATOS DE LA ALERTA */}
-          <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_10px_10px_-8px_rgba(15,23,42,0.25)] flex flex-col h-full mb-6">
-          <HeaderSection icon={<FaInfoCircle className="text-blue-600 text-sm" />} title="DATOS DE LA ALERTA" bgColor="bg-blue-50" />
+          <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_10px_10px_-8px_rgba(15,23,42,0.25)] flex flex-col h-full">
+          <HeaderSection title="DATOS DE LA ALERTA" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="NOMBRE DEL CIUDADANO" value={ciudadano} />
               <Field label="CÉDULA" value={ci} />
@@ -190,10 +193,10 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
               </div>
               <div className="md:col-span-2">
                 <div className="space-y-1">
-                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">RELATO DEL HECHO</label>
+                  <label className="block text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1">RELATO DEL HECHO</label>
                   <div className="relative border border-slate-200 rounded-xl px-3.5 py-3 mt-1">
                     <textarea readOnly value={descripcion || "Sin descripción"}
-                      className="block w-full h-20 text-[12px] text-slate-600 bg-transparent border-none focus:outline-none resize-y" />
+                      className="block w-full h-10 text-[12px] font-medium tracking-wider text-slate-600 bg-transparent border-none focus:outline-none resize-y" />
                   </div>
                 </div>
               </div>
@@ -206,39 +209,36 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
           </section>
 
           {/* INFORMACIÓN DE DESESTIMACIÓN */}
-          <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_10px_10px_-8px_rgba(15,23,42,0.25)] flex flex-col h-full mb-6">
-            <HeaderSection icon={<FaExclamationTriangle className="text-red-600 text-sm" />} title="INFORMACIÓN DE DESESTIMACIÓN" bgColor="bg-red-50" />
+          <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_10px_10px_-8px_rgba(15,23,42,0.25)] flex flex-col h-full mt-3.5">
+            <HeaderSection title="INFORMACIÓN DE DESESTIMACIÓN" />
             <div className="grid grid-cols-1 gap-4">
               <Field label="MOTIVO" value={motivo_desestimo} />
               <Field label="FECHA DE DESESTIMACIÓN" value={formatFechaHora(fecha_desestimo)} />
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">JUSTIFICACIÓN ADICIONAL</label>
+                <label className="block text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1">JUSTIFICACIÓN ADICIONAL</label>
                 <div className="relative border border-slate-200 rounded-xl px-3.5 py-3">
                   <textarea
                     readOnly
                     value={justificacion || "No especificada"}
-                    className="block w-full h-16 text-[12px] text-slate-600 bg-transparent border-none focus:outline-none resize-y"
+                    className="block w-full h-10 text-[12px] font-medium tracking-wider text-slate-600 bg-transparent border-none focus:outline-none resize-y"
                   />
                 </div>
               </div>
             </div>
           </section>
 
-          {/* HISTORIAL DE PROCESO - estilo similar al de tabulación */}
-          <div className="pt-6 px-2 mt-4">
-            <h2 className="flex items-center gap-3 font-semibold text-slate-400 uppercase text-[11px] tracking-wider mb-5">
-              HISTORIAL DE PROCESO
-            </h2>
-            <div className="flex flex-wrap md:flex-nowrap justify-center gap-5">
+          {/* HISTORIAL DE PROCESO */}
+          <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_10px_10px_-8px_rgba(15,23,42,0.25)] flex flex-col h-full mt-3.5">
+            <HeaderSection title="HISTORIAL DE PROCESO" />
+            <div className="flex items-start justify-center pt-2">
               <HistoryCard
                 role="OPERADOR QUE DESESTIMÓ"
                 name={nombre_operador_desestimo || "—"}
-                icon={<FaUserCheck size={12} />}
-                highlight
+                icon={<FaUserCheck size={14} />}
                 splitName={splitNameLines(nombre_operador_desestimo || "—")}
               />
             </div>
-          </div>
+          </section>
           </>
           )}
         </div>
@@ -249,7 +249,7 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
     type="button"
     onClick={onClose}
     disabled={generandoPDF}
-    className="px-4 py-2 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+    className="px-4 py-3 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider"
   >
     CERRAR
   </button>
@@ -258,7 +258,7 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
       type="button"
       onClick={handleGenerarPDFClick}
       disabled={generandoPDF || cargando}
-      className="flex items-center justify-center gap-2 px-5 py-2 bg-[#474b29] hover:bg-[#3a3e21] text-white rounded-lg shadow-sm transition-all font-medium text-[11.5px] uppercase tracking-wider disabled:opacity-70 disabled:cursor-wait"
+      className="px-8 py-3 rounded-lg font-medium text-[11.5px] bg-[#474b29] uppercase hover:bg-[#3a3e21] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed tracking-wider flex items-center justify-center gap-2"
     >
       {generandoPDF ? (
         <>
@@ -267,7 +267,6 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
         </>
       ) : (
         <>
-          <FaFilePdf size={11} />
           <span>Generar PDF</span>
         </>
       )}
@@ -280,17 +279,27 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
 };
 
 const HistoryCard = ({ role, name, icon, highlight, splitName }) => (
-  <div className={`flex-1 flex flex-col items-center min-w-[96px] rounded-xl p-2 transition-all ${highlight ? 'bg-green-50 border border-green-200 shadow-[0_6px_16px_-4px_rgba(15,23,42,0.15)]' : 'bg-white border border-slate-300 shadow-[0_6px_16px_-4px_rgba(15,23,42,0.15)]'}`}>
-    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${highlight ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+  <div className="flex-1 flex flex-col items-center min-w-[88px]">
+    <div
+      className={`w-10 h-10 rounded-lg flex items-center justify-center mb-2 ring-4 ring-white shadow-sm transition-transform hover:scale-105 ${
+        highlight ? "bg-[#474b29] text-white" : "bg-slate-100 text-slate-500"
+      }`}
+    >
       {icon}
     </div>
-    <p className="text-[9px] font-bold text-slate-400 uppercase text-center">{role}</p>
+    <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wider text-center">
+      {role}
+    </p>
     <div className="text-center mt-1">
-      <p className={`text-[9px] font-bold uppercase leading-tight ${highlight ? 'text-green-700' : 'text-slate-600'}`}>
+      <p
+        className={`text-[10px] font-medium uppercase tracking-wider leading-tight ${highlight ? "text-[#474b29]" : "text-slate-600"}`}
+      >
         {splitName.first}
       </p>
       {splitName.last && (
-        <p className={`text-[9px] font-bold uppercase leading-tight ${highlight ? 'text-green-700' : 'text-slate-600'}`}>
+        <p
+          className={`text-[10px] font-medium uppercase tracking-wider leading-tight ${highlight ? "text-[#474b29]" : "text-slate-600"}`}
+        >
           {splitName.last}
         </p>
       )}

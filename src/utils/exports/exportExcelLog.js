@@ -45,8 +45,8 @@ export async function exportExcelLog({
     hour12: false,
   }).replace(",", "");
 
-  const VERDE       = "FF113E27";
-  const VERDE_CLARO = "FFE8F0EB";
+  const VERDE       = "FF474B29";
+  const VERDE_CLARO = "FFEEF0E4";
   const BLANCO      = "FFFFFFFF";
   const GRIS        = "FFF5F5F5";
   const NEGRO       = "FF0F0F0F";
@@ -121,7 +121,7 @@ export async function exportExcelLog({
 
   // ── Título del reporte ──
   aplicarFila([titulo], {
-    bgColor: VERDE_CLARO, fontColor: NEGRO, bold: true, size: 11, align: "left", height: 22,
+    bgColor: VERDE_CLARO, fontColor: NEGRO, bold: false, size: 11, align: "left", height: 22,
   });
 
   ws.addRow([]);
@@ -135,10 +135,9 @@ export async function exportExcelLog({
 
   // ── Headers de tabla (con wrap por si el título de columna es largo) ──
   const headerRow = aplicarFila(headers, {
-    bgColor: VERDE, fontColor: BLANCO, bold: true, size: 10,
+    bgColor: VERDE, fontColor: BLANCO, bold: false, size: 10,
     align: "left", border: true, height: 26, wrap: true,
   });
-
   // ── Helper: calcula cuántas líneas ocupará un texto según el ancho de columna ──
   // (aproximación: ExcelJS/Excel no calculan auto-height con wrapText, hay que estimarlo)
   const calcularLineasNecesarias = (texto, anchoColumna) => {
@@ -171,7 +170,7 @@ export async function exportExcelLog({
       cell.font = {
         name: "Arial",
         color: { argb: NEGRO },
-        bold: colNumber === 1, // solo primera columna (OFICIAL) en negrita
+        bold: false,
         size: 9.5,
       };
       cell.alignment = {

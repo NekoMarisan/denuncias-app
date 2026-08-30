@@ -15,7 +15,7 @@ export async function exportPDFDesestimacion({
   const MR = 18;
   const CW = PW - ML - MR;
 
-  const VERDE  = [17, 62, 39];
+  const VERDE  = [71, 75, 41];
   const NEGRO  = [15, 15, 15];
   const BLANCO = [255, 255, 255];
   const GBORD  = [180, 180, 180];
@@ -68,7 +68,7 @@ doc.setFont("helvetica", "bold");
 doc.setFontSize(12);  // ← CAMBIA AQUÍ el tamaño de CENTRAL DE RADIO PATRULLAS
 doc.text("CENTRAL DE RADIO PATRULLAS", TX, 9 + OFFSET_Y);
 doc.setTextColor(...NEGRO);
-doc.setFont("helvetica", "bold");
+doc.setFont("helvetica", "normal");
 doc.setFontSize(8);  // ← CAMBIA AQUÍ el tamaño de REPORTE DE TABULACIÓN
 doc.text("REPORTE DE ALERTA DESESTIMADA", TX, 14.5 + OFFSET_Y);
 doc.setTextColor(...NEGRO);
@@ -111,7 +111,7 @@ doc.setFontSize(7.5);  // ← CAMBIA AQUÍ el tamaño de CÓDIGO · CATEGORÍ
     doc.setFillColor(...color);
     doc.rect(ML, Y, CW, CFG.cadenaBarH, "F");
     doc.setTextColor(...BLANCO);
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(CFG.secTitSize);
     doc.text(titulo.toUpperCase(), ML + 2, Y + CFG.cadenaBarH - 1);
     Y += CFG.cadenaBarH;
@@ -121,11 +121,11 @@ doc.setFontSize(7.5);  // ← CAMBIA AQUÍ el tamaño de CÓDIGO · CATEGORÍ
     doc.setDrawColor(...GBORD);
     doc.setLineWidth(0.2);
     doc.rect(x, y, w, h);
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(CFG.labelSize);
     doc.setTextColor(94, 94, 94);
     doc.text(label.toUpperCase(), x + 1, y + CFG.labelY);
-    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(CFG.valorSize);
     doc.setTextColor(...NEGRO);
     const lines = doc.splitTextToSize(fmt(valor), w - 2);
@@ -176,7 +176,7 @@ fila([
   fila([
     { w: CW, label: "Ubicación", valor: alerta.ubicacion },
   ], 11);
-  celdaTxt("Descripción del Hecho", alerta.descripcion, 20, [94, 94, 94]);
+  celdaTxt("Relato del Hecho", alerta.descripcion, 20, [94, 94, 94]);
 
   if (alerta.contravenciones || alerta.delitos) {
     fila([
@@ -206,7 +206,7 @@ doc.setLineWidth(0.2);
 doc.rect(ML, Y, CW, CFG.cadenaH);
 doc.setFillColor(...VERDE);
 doc.rect(ML, Y, CW, CFG.cadenaBarH, "F");
-doc.setFont("helvetica", "bold");
+doc.setFont("helvetica", "normal");
 doc.setFontSize(6.5);
 doc.setTextColor(...BLANCO);
 doc.text("OPERADOR QUE DESESTIMÓ", ML + 2, Y + CFG.cadenaBarH / 2 + 1, { align: "left" });
@@ -235,7 +235,7 @@ Y += CFG.cadenaH;
   doc.setDrawColor(...NEGRO);
   doc.setLineWidth(0.2);
   doc.line(PW - MR - 55, PIE_Y + 15, PW - MR, PIE_Y + 15);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...NEGRO);
   doc.text("SELLO INSTITUCIONAL", firmaDerX, PIE_Y + 18.5, { align: "center" });

@@ -15,8 +15,8 @@ export async function exportExcel({
     hour12: false,
   }).replace(",", "");
 
-  const VERDE       = "FF113E27";
-  const VERDE_CLARO = "FFE8F0EB";
+  const VERDE       = "FF474B29";
+  const VERDE_CLARO = "FFEEF0E4";
   const BLANCO      = "FFFFFFFF";
   const GRIS        = "FFF5F5F5";
   const NEGRO       = "FF0F0F0F";
@@ -77,7 +77,7 @@ export async function exportExcel({
 
   // ── Título del reporte ──
   aplicarFila([titulo], {
-    bgColor: VERDE_CLARO, fontColor: NEGRO, bold: true, size: 11, align: "left", height: 22,
+    bgColor: VERDE_CLARO, fontColor: NEGRO, bold: false, size: 11, align: "left", height: 22,
   });
 
   ws.addRow([]);
@@ -91,7 +91,7 @@ export async function exportExcel({
 
   // ── Headers de tabla ── (guardamos la fila para repetirla en cada página impresa)
   const headerRow = aplicarFila(headers, {
-    bgColor: VERDE, fontColor: BLANCO, bold: true, size: 10,
+    bgColor: VERDE, fontColor: BLANCO, bold: false, size: 10,
     align: "left", border: true, height: 22,
   });
 
@@ -104,7 +104,7 @@ export async function exportExcel({
       cell.font = {
         name: "Arial",
         color: { argb: NEGRO },
-        bold: colNumber === 1, // solo primera columna (escalafón) en negrita
+        bold: false,
         size: 9.5,
       };
       cell.alignment = { vertical: "middle", horizontal: "left", wrapText: false };

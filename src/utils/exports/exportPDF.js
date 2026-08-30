@@ -21,7 +21,7 @@ const PAGE_W = 215.9;
   const MARGIN_L = 18;
   const MARGIN_R = 18;
 
-  const VERDE      = [17, 62, 39];
+   const VERDE      = [71, 75, 41];
   const NEGRO      = [15, 15, 15];
 const GRIS_CLARO = [245, 245, 245];
   const GRIS_MED   = [182, 182, 182];
@@ -80,7 +80,7 @@ doc.setFontSize(12);
 doc.text("CENTRAL DE RADIO PATRULLAS", textX, 9 + OFFSET_Y);
 
 doc.setTextColor(...NEGRO);
-doc.setFont("helvetica", "bold");
+doc.setFont("helvetica", "normal");
 doc.setFontSize(8);
 doc.text(titulo, textX, 14.5 + OFFSET_Y);
 
@@ -133,7 +133,7 @@ doc.text(
     doc.setLineWidth(0.2);
 doc.line(MARGIN_L, PIE_Y + 15, MARGIN_L + 55, PIE_Y + 15);
 
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(...NEGRO);
     doc.text("ADMINISTRADOR DEL SISTEMA", firmaIzqX, PIE_Y + 18.5, { align: "center" });
@@ -149,7 +149,7 @@ doc.line(MARGIN_L, PIE_Y + 15, MARGIN_L + 55, PIE_Y + 15);
     doc.setLineWidth(0.2);
     doc.line(PAGE_W - MARGIN_R - 55, PIE_Y + 15, PAGE_W - MARGIN_R, PIE_Y + 15);
 
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(...NEGRO);
     doc.text("SELLO INSTITUCIONAL", firmaDerX, PIE_Y + 18.5, { align: "center" });
@@ -173,7 +173,7 @@ doc.line(MARGIN_L, PIE_Y + 15, MARGIN_L + 55, PIE_Y + 15);
     headStyles: {
       fillColor: VERDE,
       textColor: BLANCO,
-      fontStyle: "bold",
+      fontStyle: "normal",
       fontSize: 8,
       cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
       halign: "left",
@@ -185,7 +185,7 @@ doc.line(MARGIN_L, PIE_Y + 15, MARGIN_L + 55, PIE_Y + 15);
       cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
     },
 columnStyles: {
-      0: { fontStyle: boldFirstCol ? "bold" : "normal", textColor: boldFirstCol ? [...VERDE] : [30, 30, 30] },
+      0: { fontStyle: "normal", textColor: [...VERDE] },
     },
     didDrawPage: (data) => {
       if (data.pageNumber > 1) dibujarEncabezado(data.pageNumber);

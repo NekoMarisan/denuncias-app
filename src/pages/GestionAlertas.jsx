@@ -521,9 +521,9 @@ function GestionAlertas() {
   }
 
   return (
-    <div className="-mt-4 w-full px-1 py-5 space-y-5 bg-gray-50/30 h-[calc(100%+2.5rem)] overflow-hidden flex flex-col">
+<div className="w-full h-full flex flex-col animate-fadeIn bg-gray-50/30 overflow-hidden px-0 py-1">
       {/* SELECTOR DE TABS */}
-      <div className="px-3 sm:px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2 shrink-0 -mt-1">
+<div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4 flex-shrink-0 -mt-1.5">
         <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
           <button
             onClick={() => setTabActiva("emergencia")}
@@ -548,13 +548,13 @@ function GestionAlertas() {
             <span className="sm:hidden">CIUDADANAS</span>
           </button>
         </div>
-        <div className="bg-gray-50 text-slate-500 px-4 py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-widest border border-gray-200">
+        <div className="bg-gray-50 text-slate-500 px-4 py-3 rounded-lg text-[11px] font-bold uppercase tracking-widest border border-gray-200">
           {dataActual.length} Registros activos
         </div>
       </div>
 
       {/* TABLA */}
-      <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0 max-h-[79svh] overflow-hidden">
+<div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0 max-h-[79svh] overflow-hidden mt-6">
         <h2 className="text-[18px] font-bold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wider flex-shrink-0">
           {tabActiva === "emergencia"
             ? "Bandeja de Emergencias"

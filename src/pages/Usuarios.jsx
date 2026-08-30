@@ -30,7 +30,7 @@ import { useAuth } from "../context/AuthContext";
 function PerfilOficial({ oficial, onClose }) {
   if (!oficial) return null;
 
-const estaConectado = oficial.estado === true;
+  const estaConectado = oficial.estado === true;
   const deBaja = oficial.acceso === "DE BAJA";
   const fueraDeServicio = oficial.acceso === "FUERA DE SERVICIO";
   const pendiente = oficial.acceso === "PENDIENTE";
@@ -71,40 +71,38 @@ const estaConectado = oficial.estado === true;
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
 
       <div className="relative bg-white rounded-lg shadow-2xl w-full max-w-lg mx-auto overflow-hidden flex flex-col h-fit max-h-[92vh] animate-fadeIn">
-{/* Barra verde */}
-<div className="relative bg-[#474b29] py-4 shrink-0 flex items-center pl-24 pr-4">
-  <div>
-    <h2 className="text-white text-[17px] font-bold uppercase tracking-wider leading-none ml-1">
-      Perfil Oficial
-    </h2>
-    <p className="text-[11px] font-bold text-white/70 uppercase tracking-wider mt-2 ml-1">
-      ROF-{String(oficial.id_oficial).padStart(4, "0")} ·{" "}
-      {oficial.rol || "—"}
-    </p>
-  </div>
-  <button
-    type="button"
-    onClick={onClose}
-    className="absolute top-3 right-3 hover:bg-white/20 p-1.5 rounded-md transition-colors text-white"
-  >
-    <FaTimes size={15} />
-  </button>
-</div>
+        {/* Barra verde */}
+        <div className="relative bg-[#474b29] py-4 shrink-0 flex items-center pl-24 pr-4">
+          <div>
+            <h2 className="text-white text-[17px] font-bold uppercase tracking-wider leading-none ml-1">
+              Perfil Oficial
+            </h2>
+            <p className="text-[11px] font-bold text-white/70 uppercase tracking-wider mt-2 ml-1">
+              ROF-{String(oficial.id_oficial).padStart(4, "0")} ·{" "}
+              {oficial.rol || "—"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-3 right-3 hover:bg-white/20 p-1.5 rounded-md transition-colors text-white"
+          >
+            <FaTimes size={15} />
+          </button>
+        </div>
 
-{/* Ícono cuadrado, sobresaliendo de la barra */}
-<div className="relative pl-4 pt-2 pb-6 shrink-0">
-  <div className="relative w-16 h-16 -mt-12 ml-2">
-    <div className="w-16 h-16 rounded-2xl bg-[#474b29] border-[3px] border-white shadow-lg flex items-center justify-center">
-      <FaUserShield className="text-white" size={26} />
-    </div>
-    <span
-      className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white"
-      style={{ backgroundColor: estadoColor }}
-    />
-  </div>
-</div>
-
-        
+        {/* Ícono cuadrado, sobresaliendo de la barra */}
+        <div className="relative pl-4 pt-2 pb-6 shrink-0">
+          <div className="relative w-16 h-16 -mt-12 ml-2">
+            <div className="w-16 h-16 rounded-2xl bg-[#474b29] border-[3px] border-white shadow-lg flex items-center justify-center">
+              <FaUserShield className="text-white" size={26} />
+            </div>
+            <span
+              className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white"
+              style={{ backgroundColor: estadoColor }}
+            />
+          </div>
+        </div>
 
         {/* Datos en formato de tarjetas tipo "textbox" */}
         <div className="px-6 pb-4 overflow-y-auto">
@@ -117,7 +115,7 @@ const estaConectado = oficial.estado === true;
             <Fila label="N.º de escalafón" value={oficial.numero_escalafon} />
             <Fila label="Rango" value={oficial.cargo} />
             <Fila label="Rol en el sistema" value={oficial.rol} />
-          <Fila
+            <Fila
               label="Estado de servicio"
               value={
                 oficial.acceso === "EN SERVICIO"
@@ -321,7 +319,7 @@ function Usuarios() {
     return () => clearInterval(interval);
   }, [recargarTodo]);
 
-useEffect(() => {
+  useEffect(() => {
     const handleFocus = () => recargarTodo();
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
@@ -520,6 +518,18 @@ useEffect(() => {
     return "DESCONOCIDO";
   };
 
+  const getWhatsappLink = (celular) => {
+    if (!celular) return null;
+    let soloNumeros = celular.replace(/\D/g, "");
+    if (!soloNumeros) return null;
+    // Evita duplicar el código de país si ya viene incluido,
+    // y evita anteponerlo si el número ya tiene más de 8 dígitos con otro prefijo válido
+    if (!soloNumeros.startsWith("591")) {
+      soloNumeros = `591${soloNumeros}`;
+    }
+    return `https://wa.me/${soloNumeros}`;
+  };
+
   const datosFiltrados = (
     tabActiva === "oficiales" ? oficiales : ciudadanos
   ).filter((item) => {
@@ -534,7 +544,7 @@ useEffect(() => {
 
       if (termino === "") return cumpleFiltro;
 
-const palabras = termino.split(/\s+/);
+      const palabras = termino.split(/\s+/);
       const campos = [
         item.nombre_completo?.toLowerCase() || "",
         item.ci?.toLowerCase() || "",
@@ -574,10 +584,10 @@ const palabras = termino.split(/\s+/);
   }
 
   return (
-    <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 h-[100dvh] overflow-hidden flex flex-col">
+    <div className="w-full h-full flex flex-col animate-fadeIn bg-gray-50/30 overflow-hidden px-0 py-1">
       {/* SELECTOR DE TABS */}
-      <div className="px-3 sm:px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center gap-2.5 shrink-0 -mt-1">
-        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+      <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4 flex-shrink-0 -mt-1.5">
+        <div className="flex items-center gap-4 flex-1 min-w-[200px] shrink-0">
           {/* Tabs Oficiales / Ciudadanos */}
           <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
             <button
@@ -586,7 +596,7 @@ const palabras = termino.split(/\s+/);
                 setFiltroActivo("Todos");
                 setBusquedaCiudadanos("");
               }}
-              className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${
+              className={`flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-lg font-medium text-[12.5px] transition-all tracking-widest ${
                 tabActiva === "oficiales"
                   ? "bg-[#474b29] text-white shadow-md"
                   : "text-slate-400 hover:text-slate-600"
@@ -600,9 +610,9 @@ const palabras = termino.split(/\s+/);
                 setFiltroActivo("Todos");
                 setBusquedaOficiales("");
               }}
-              className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-lg font-bold text-xs transition-all tracking-wider ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-[12px] transition-all tracking-widest ${
                 tabActiva === "ciudadanos"
-                  ? "bg-[#474b29] text-white shadow-md"
+                  ? "bg-[#474b29] text-white shadow-sm"
                   : "text-slate-400 hover:text-slate-600"
               }`}
             >
@@ -612,15 +622,15 @@ const palabras = termino.split(/\s+/);
 
           {/* Buscador */}
           <div className="relative flex-1 min-w-[160px]">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-slate-400" />
+            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[13px] text-slate-400" />
             <input
               type="text"
-placeholder={
+              placeholder={
                 tabActiva === "oficiales"
                   ? "Buscar por nombre, CI, celular, escalafón, rol o rango..."
                   : "Buscar por nombre, CI o celular..."
               }
-              className="w-full pl-8 pr-3 py-3 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[12px] font-bold text-slate-700 transition-all border-b focus:bg-white focus:border-slate-400/60"
+              className="w-full h-11 pl-10 pr-3 md:pr-5 py-2 md:py-3 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[12px] font-medium text-slate-700 transition-all focus:bg-white focus:border-[#474b29] tracking-wider"
               value={busqueda}
               onChange={(e) =>
                 tabActiva === "oficiales"
@@ -630,29 +640,29 @@ placeholder={
             />
           </div>
 
-{/* Nuevo oficial -> ahora a la izquierda */}
-      {tabActiva === "oficiales" && (
+          {/* Nuevo oficial -> ahora a la izquierda */}
+          {tabActiva === "oficiales" && (
             <button
               onClick={() => {
                 setEditandoPolicia(null);
                 setMostrarModalPolicia(true);
               }}
-              className="relative flex items-center gap-2 px-5 py-3  rounded-lg font-bold text-xs uppercase shadow text-white bg-[#474b29] hover:bg-[#3a3e21] transition-all shrink-0"
+              className="relative flex items-center gap-2 px-5 py-2 h-11 rounded-lg tracking-wider font-medium text-[12px] uppercase shadow text-white bg-[#474b29] hover:bg-[#3a3e21] transition-all shrink-0"
             >
               <FaPlus size={11} /> Nuevo oficial
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-4">
           {/* Filtros Todos / Conectado / Desconectado -> ahora a la derecha */}
           {tabActiva === "oficiales" && (
-            <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0 whitespace-nowrap">
+            <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0 whitespace-nowrap text-[12px] tracking-wider font-medium">
               {["Todos", "conectado", "desconectado"].map((f) => (
                 <button
                   key={f}
                   onClick={() => setFiltroActivo(f)}
-                  className={`flex items-center gap-2 px-3 py-3 rounded-lg uppercase font-bold text-xs transition-all tracking-wider whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-lg uppercase font-bold text-xs transition-all tracking-wider whitespace-nowrap ${
                     filtroActivo === f
                       ? "bg-[#474b29] text-white shadow-md"
                       : "text-slate-400 hover:text-slate-600"
@@ -670,7 +680,7 @@ placeholder={
 
           {/* Exportar */}
           <div className="relative group shrink-0">
-            <button className="flex items-center gap-2 px-3 py-2.5 bg-white border-2 border-gray-200 text-slate-700 rounded-lg font-bold uppercase text-[11px] hover:border-slate-300 transition-all whitespace-nowrap">
+            <button className="flex items-center gap-2 px-1 md:px-5 py-2 md:py-3 bg-white border-2 border-gray-200 text-slate-700 rounded-lg font-medium uppercase text-[12px] hover:border-slate-300 transition-all disabled:opacity-70 disabled:cursor-wait tracking-wider">
               <FaFileDownload size={11} /> <span>Exportar</span>
             </button>
             <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
@@ -693,9 +703,9 @@ placeholder={
       </div>
 
       {/* Tabla */}
-      <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0 max-h-[77svh] overflow-hidden">
-      <div className="flex items-center justify-between mb-4 md:mb-6 flex-shrink-0 flex-wrap gap-2">
-          <h2 className="text-lg font-bold uppercase text-[#1e293b] tracking-wider">
+      <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0 max-h-[79svh] overflow-hidden mt-6">
+        <div className="flex items-center justify-between mb-4 md:mb-6 flex-shrink-0 flex-wrap gap-2">
+          <h2 className="text-[18px] font-bold uppercase text-[#1e293b] tracking-wider flex-shrink-0">
             {tabActiva === "oficiales"
               ? "Personal Policial"
               : "Registro de Ciudadanos"}
@@ -704,17 +714,18 @@ placeholder={
             oficiales.filter((o) => o.acceso === "PENDIENTE").length > 0 && (
               <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg border bg-gray-50  font-extrabold uppercase tracking-wider  border-gray-200">
                 <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">
-                 ● {oficiales.filter((o) => o.acceso === "PENDIENTE").length} pendiente(s) a activar
+                  ● {oficiales.filter((o) => o.acceso === "PENDIENTE").length}{" "}
+                  pendiente(s) a activar
                 </span>
               </div>
             )}
         </div>
 
         <div className="relative flex-1 min-h-0">
-          <div className="h-full overflow-auto -mx-4 md:mx-0 px-4 md:px-0 pb-3">
+          <div className="h-full overflow-auto -mx-4 md:mx-0 px-4 md:px-0 pb-3 scroll-hover">
             <table className="min-w-full border-separate border-spacing-0 table-fixed">
               <thead>
-                <tr className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">
+                <tr className="text-slate-400 text-[11px] font-medium uppercase tracking-widest">
                   <th className="sticky top-0 z-10 bg-white px-3 pb-3 pt-1 border-b border-slate-200 w-[10%] text-left md:pr-2">
                     ID
                   </th>
@@ -761,12 +772,13 @@ placeholder={
                     ? `ROF-${String(item.id_oficial).padStart(4, "0")}`
                     : `REGC-${String(item.id_usuario).padStart(4, "0")}`;
 
-               const UMBRAL_CONEXION_MS = 45000; // 3x el intervalo del heartbeat (15s)
+                  const UMBRAL_CONEXION_MS = 45000; // 3x el intervalo del heartbeat (15s)
                   const estaConectado =
                     esOficial &&
                     item.estado === true &&
                     item.ultima_actividad &&
-                    Date.now() - new Date(item.ultima_actividad).getTime() < UMBRAL_CONEXION_MS;
+                    Date.now() - new Date(item.ultima_actividad).getTime() <
+                      UMBRAL_CONEXION_MS;
 
                   const advertencias = !esOficial
                     ? (item.advertencias ?? 0)
@@ -782,13 +794,13 @@ placeholder={
                       key={i}
                       className="bg-white group transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
                     >
-                      <td className="px-3 py-5 md:py-6 border-b border-slate-200/60 text-[11px] font-bold text-slate-400 uppercase tracking-wider align-middle">
+                      <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-6 md:py-7 text-[11px] font-medium text-slate-500/90 uppercase tracking-wider align-middle border-b border-slate-200/60">
                         {idMostrar}
                       </td>
                       <td className="py-5 md:py-6 border-b border-slate-200/60 align-middle">
                         <div className="flex items-center gap-3 text-left">
                           <div
-                            className={`w-6 h-8 rounded-md flex items-center justify-center font-black text-sm shrink-0 shadow-inner ${
+                            className={`w-6 h-8 rounded-md flex items-center justify-center font-black text-xs shadow-inner shrink-0r ${
                               !esOficial
                                 ? "bg-blue-50 text-[#270cb2]"
                                 : "bg-[#474b29]/10 text-[#474b29]"
@@ -801,11 +813,11 @@ placeholder={
                             )}
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-[12px] font-bold text-[#1e293b] leading-tight truncate">
+                            <span className="text-[12.5px] font-medium text-[#1e293b] truncate max-w-[120px] md:max-w-none">
                               {item.nombre_completo}
                             </span>
                             {esOficial && item.ci && (
-                              <span className="text-[10px] text-slate-500/80 font-semibold uppercase tracking-wide mt-0.5">
+                              <span className="mt-0.5 text-[8.5px] font-medium uppercase tracking-wider text-slate-400">
                                 CI {item.ci}
                               </span>
                             )}
@@ -816,60 +828,73 @@ placeholder={
                         <>
                           <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
                             <div className="flex flex-col">
-                              <span className="text-[12px] font-extrabold text-slate-600">
+                              <span className="text-[11px] font-extrabold tracking-wider text-slate-500 mb-0.5">
                                 {item.numero_escalafon || "—"}
                               </span>
-                              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wide">
+                              <span className="text-[12px] font-medium text-slate-500 uppercase tracking-wider">
                                 {item.rol || "—"}
                               </span>
                             </div>
                           </td>
-                          <td className="border-b border-slate-200/60 py-5 md:py-6 text-[11px] uppercase font-semibold text-slate-600 align-middle">
+                          <td className="border-b border-slate-200/60 py-5 md:py-6 text-[11px] uppercase font-medium tracking-wider text-slate-600 align-middle">
                             {item.cargo || "—"}
                           </td>
-                          <td className="py-5 md:py-6 border-b border-slate-200/60 text-[12px] font-bold text-slate-500 align-middle">
-                            {item.celular || "—"}
+                          <td className="border-b border-slate-200/60 py-5 md:py-6 text-[11px] uppercase font-medium tracking-wider text-slate-600 align-middle">
+                            {item.celular ? (
+                              <a
+                                href={getWhatsappLink(item.celular)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="hover:text-[#474b29] hover:underline transition-colors"
+                                title="Abrir en WhatsApp"
+                              >
+                                {item.celular}
+                              </a>
+                            ) : (
+                              "—"
+                            )}
                           </td>
                           <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
                             <div className="flex flex-col items-start gap-1">
                               <div className="flex items-center gap-1.5">
                                 <span
-                                  className={`inline-flex py-1.5 w-16px md:w-24 rounded-md text-[10px] font-bold tracking-wider justify-center uppercase shadow-sm ${
+                                  className={`inline-flex items-center justify-center gap-1.5 py-1.5 uppercase rounded-md text-[11px] font-medium tracking-wider ${
                                     estaConectado
-                                      ? "bg-[#007942] text-white"
-                                      : "bg-slate-100 text-slate-600 border borde-slate-200"
+                                      ? "px-2 bg-[#007942] text-white"
+                                      : "px-2.5 bg-slate-100 text-slate-600 border borde-slate-200"
                                   }`}
                                 >
                                   {estaConectado ? "Conectado" : "Desconectado"}
                                 </span>
                                 {item.acceso === "FUERA DE SERVICIO" && (
-                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-slate-500/80 text-slate-500/80  shadow-sm">
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-slate-500/80 text-slate-500/80">
                                     <FaPowerOff size={10} />
                                   </div>
                                 )}
-                              {item.acceso === "DE BAJA" && (
-                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#C90A0A] text-[#C90A0A] shadow-sm">
+                                {item.acceso === "DE BAJA" && (
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#C90A0A] text-[#C90A0A]">
                                     <FaUserSlash size={10} />
                                   </div>
                                 )}
                                 {item.acceso === "PENDIENTE" && (
-                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-amber-500 text-amber-500 shadow-sm">
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-amber-500 text-amber-500">
                                     <FaClock size={10} />
                                   </div>
                                 )}
                               </div>
                               {item.acceso === "FUERA DE SERVICIO" && (
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500/80 leading-none mt-0.5">
+                                <span className="text-[9px] font-medium uppercase tracking-wider text-slate-500/80 leading-none mt-0.5">
                                   FUERA DE SERVICIO
                                 </span>
                               )}
                               {item.acceso === "DE BAJA" && (
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-[#C90A0A] leading-none mt-0.5">
+                                <span className="text-[9px] font-medium uppercase tracking-wider text-[#C90A0A] leading-none mt-0.5">
                                   DADO DE BAJA
                                 </span>
                               )}
                               {item.acceso === "PENDIENTE" && (
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-amber-500 leading-none mt-0.5">
+                                <span className="text-[9px] font-medium uppercase tracking-wider text-amber-500 leading-none mt-0.5">
                                   PENDIENTE DE ACTIVACIÓN
                                 </span>
                               )}
@@ -878,17 +903,17 @@ placeholder={
                         </>
                       ) : (
                         <>
-                         <td className="py-5 border-b border-slate-200/60 md:py-6 text-[11px] uppercase font-semibold text-slate-600 align-middle">
+                          <td className="py-5 border-b border-slate-200/60 md:py-6 text-[11px] uppercase font-medium tracking-wider text-slate-500 align-middle">
                             {item.ci || "—"}
                           </td>
-                         <td className="border-b border-slate-200/60 py-5 md:py-6 text-[12px] font-bold text-slate-500 align-middle">
+                          <td className="border-b border-slate-200/60 py-5 md:py-6 text-[12px] font-bold text-slate-500 align-middle">
                             {item.celular || "—"}
                           </td>
                           <td className="py-5 md:py-6 border-b border-slate-200/60 align-middle">
                             <div className="flex flex-col items-start justify-center gap-1">
                               <div className="flex items-center gap-1.5">
                                 <span
-                                  className={`inline-flex py-1.5 w-16px md:w-24 rounded-md text-[10px] font-bold tracking-wider justify-center uppercase shadow-sm text-white ${
+                                  className={`inline-flex items-center justify-center gap-1.5 py-1.5 uppercase rounded-md text-[11px] font-medium tracking-wider text-white ${
                                     estadoDisplay === "VERIFICADO"
                                       ? "bg-[#0172e3]"
                                       : estadoDisplay === "NO VERIFICADO"
@@ -928,7 +953,7 @@ placeholder={
                             <>
                               <button
                                 onClick={() => setOficialSeleccionado(item)}
-                                className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                className="p-2 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
                                 title="Ver perfil"
                               >
                                 <FiEye size={14} />
@@ -938,14 +963,14 @@ placeholder={
                                   setEditandoPolicia(item);
                                   setMostrarModalPolicia(true);
                                 }}
-                                className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                className="p-2 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
                                 title="Editar"
                               >
                                 <FiEdit2 size={14} />
                               </button>
                               <button
                                 onClick={() => eliminarOficial(item.id_oficial)}
-                                className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#C90A0A] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                className="p-2 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#C90A0A] hover:text-white transition-all duration-200 flex items-center justify-center"
                                 title="Eliminar"
                               >
                                 <FiTrash2 size={14} />

@@ -15,7 +15,7 @@ const ML = 18;
 const MR = 18;
 const CW = PW - ML - MR;
 
-  const VERDE  = [17, 62, 39];
+  const VERDE  = [71, 75, 41];
   const NEGRO  = [15, 15, 15];
   const BLANCO = [255, 255, 255];
   const GBORD  = [180, 180, 180]; // borde gris
@@ -67,7 +67,7 @@ doc.setFont("helvetica", "bold");
 doc.setFontSize(12);  // ← CAMBIA AQUÍ el tamaño de CENTRAL DE RADIO PATRULLAS
 doc.text("CENTRAL DE RADIO PATRULLAS", TX, 9 + OFFSET_Y);
 doc.setTextColor(...NEGRO);
-doc.setFont("helvetica", "bold");
+doc.setFont("helvetica", "normal");
 doc.setFontSize(8);  // ← CAMBIA AQUÍ el tamaño de REPORTE DE TABULACIÓN
 doc.text("REPORTE DE TABULACIÓN DE CASO", TX, 14.5 + OFFSET_Y);
 doc.setTextColor(...NEGRO);
@@ -133,7 +133,7 @@ cadenaNomSize: 8.5,   // tamaño nombre en cadena gestión
   doc.setFillColor(...VERDE);
   doc.rect(ML, Y, CW, CFG.cadenaBarH, "F");
   doc.setTextColor(...BLANCO);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(CFG.secTitSize);
   doc.text(titulo.toUpperCase(), ML + 2, Y + CFG.cadenaBarH - 1);
   Y += CFG.cadenaBarH;
@@ -144,11 +144,11 @@ const celda = (x, y, w, h, label, valor, bold = false, fixedH = null) => {
     doc.setDrawColor(...GBORD);
     doc.setLineWidth(0.2);
     doc.rect(x, y, w, h);
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(CFG.labelSize);
     doc.setTextColor(94, 94, 94); // ← CAMBIA AQUÍ el tono del label
     doc.text(label.toUpperCase(), x + 1, y + CFG.labelY);
-    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(CFG.valorSize);
     doc.setTextColor(...NEGRO);
     const lines = doc.splitTextToSize(fmt(valor), w - 2);
@@ -226,7 +226,7 @@ doc.rect(ML + leftW, Y, rightW, bloqueH);
 doc.setFont("helvetica", "bold");
 doc.setFontSize(CFG.labelSize);
 doc.setTextColor(...GTEXT);
-doc.text("DESCRIPCIÓN DEL HECHO", ML + leftW + 1, Y + CFG.labelY);
+doc.text("RELATO DEL HECHO", ML + leftW + 1, Y + CFG.labelY);
 doc.setFont("helvetica", "normal");
 doc.setFontSize(CFG.valorSize);
 doc.setTextColor(...NEGRO);
@@ -301,7 +301,7 @@ const rW = CW / 5; // ← antes /4
     doc.rect(rx, Y, rW, CFG.cadenaH);
     doc.setFillColor(...VERDE);
     doc.rect(rx, Y, rW, CFG.cadenaBarH, "F");
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(CFG.cadenaRolSize);
     doc.setTextColor(...BLANCO);
     doc.text(r.rol.toUpperCase(), rx + rW / 2, Y + CFG.cadenaBarH / 2 + 1, { align: "center" });
@@ -335,7 +335,7 @@ const firmaDerX = PW - MR - 27.5;
 doc.setDrawColor(...NEGRO);
 doc.setLineWidth(0.2);
 doc.line(PW - MR - 55, PIE_Y + 15, PW - MR, PIE_Y + 15);
-doc.setFont("helvetica", "bold");
+doc.setFont("helvetica", "normal");
 doc.setFontSize(7);
 doc.setTextColor(...NEGRO);
 doc.text("SELLO INSTITUCIONAL", firmaDerX, PIE_Y + 18.5, { align: "center" });

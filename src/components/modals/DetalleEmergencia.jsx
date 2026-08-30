@@ -502,7 +502,7 @@ const DetalleEmergencia = ({
                 {/* Descripción */}
                   <div className="flex-1 flex flex-col">
                     <label className="block text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">
-                      Descripción del hecho
+                      RELATO del hecho
                     </label>
                     <div className="relative border border-slate-200 rounded-xl px-3.5 py-3 focus-within:border-slate-300">
   <textarea
