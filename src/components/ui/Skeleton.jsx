@@ -1,27 +1,29 @@
-import React from "react";
+import React, { useEffect } from "react";
 
-// Inyecta el keyframe del shimmer una sola vez en el documento
 let shimmerStyleInjected = false;
-const ShimmerKeyframes = () => {
-  if (shimmerStyleInjected) return null;
-  shimmerStyleInjected = true;
-  return (
-    <style>{`
+const useShimmerKeyframes = () => {
+  useEffect(() => {
+    if (shimmerStyleInjected) return;
+    shimmerStyleInjected = true;
+    const styleEl = document.createElement("style");
+    styleEl.setAttribute("data-shimmer-keyframes", "true");
+    styleEl.textContent = `
       @keyframes skeletonShimmer {
         100% { transform: translateX(100%); }
       }
-    `}</style>
-  );
+    `;
+    document.head.appendChild(styleEl);
+  }, []);
 };
 
-// Base con efecto shimmer (barrido de brillo que recorre la pieza) en vez de
-// solo parpadeo — da sensación de carga "activa" en vez de algo estático
-const Shimmer = ({ className = "" }) => (
-  <div className={`relative overflow-hidden bg-slate-200 ${className}`}>
-    <ShimmerKeyframes />
-    <div className="absolute inset-0 -translate-x-full animate-[skeletonShimmer_1.4s_infinite] bg-gradient-to-r from-transparent via-white/70 to-transparent" />
-  </div>
-);
+const Shimmer = ({ className = "" }) => {
+  useShimmerKeyframes();
+  return (
+    <div className={`relative overflow-hidden bg-slate-200 ${className}`}>
+      <div className="absolute inset-0 -translate-x-full animate-[skeletonShimmer_1.4s_infinite] bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+    </div>
+  );
+};
 
 // Piezas básicas reutilizables
 export const SkeletonLine = ({ width = "w-full", height = "h-2.5" }) => (
@@ -95,61 +97,116 @@ export const PatrulleroCardSkeleton = () => (
   </div>
 );
 
+// Skeleton para el panel "Seguimiento de Intervención" en GestionPatrullas.jsx —
+// replica las 2 columnas (patrullas asignadas + reporte + derivación, y
+// evidencias) para que el tamaño coincida con el contenido real y no "salte".
+export const SeguimientoIntervencionSkeleton = () => (
+  <div className="flex-1 min-h-0 overflow-hidden pr-1">
+    <div className="flex flex-col lg:flex-row items-stretch gap-4 w-full min-w-0 h-full">
+      {/* COLUMNA IZQUIERDA */}
+      <div className="flex-1 min-w-0 flex flex-col gap-3">
+        <div>
+          <SkeletonLine width="w-36" height="h-[11px]" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-2">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <SkeletonLine width="w-12" height="h-2.5" />
+                  <div className="w-2 h-2 rounded-full bg-slate-200 animate-pulse" />
+                </div>
+                <SkeletonLine width="w-14" height="h-2" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-slate-200 my-4 mt-3"></div>
+
+        <div className="-mt-2">
+          <SkeletonLine width="w-40" height="h-[11px]" />
+          <div className="mt-2">
+            <SkeletonBlock height="h-[100px]" className="rounded-xl" />
+          </div>
+        </div>
+
+        <div className="space-y-2 mt-1">
+          <SkeletonLine width="w-24" height="h-[11px]" />
+          <SkeletonBlock height="h-11" className="rounded-xl" />
+          <SkeletonBlock height="h-11" className="mt-5 rounded-lg" />
+        </div>
+      </div>
+
+      <div className="hidden lg:block mx-4 border-l border-slate-100 shrink-0"></div>
+
+      {/* COLUMNA DERECHA (evidencias) */}
+      <div className="w-full lg:w-64 shrink-0 flex flex-col min-w-0">
+        <div className="mb-2">
+          <SkeletonLine width="w-20" height="h-[11px]" />
+        </div>
+        <div className="flex-1 min-h-[240px] grid grid-rows-3 gap-2">
+          {[0, 1, 2].map((i) => (
+            <SkeletonBlock key={i} height="h-full" className="rounded-lg" />
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 // Skeleton compuesto: imita una fila de la tabla en GestionAlertas.jsx
 export const FilaAlertaSkeleton = () => (
-  <tr className="bg-white border-b border-slate-100">
-    <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-5 md:py-6 align-middle">
+  <tr className="bg-white">
+    <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-8 md:py-9 align-middle border-b border-slate-200/60">
       <SkeletonLine width="w-14" height="h-2.5" />
     </td>
-    <td className="py-5 md:py-6 align-middle">
+    <td className="py-8 md:py-9 align-middle border-b border-slate-200/60">
       <div className="flex items-center gap-2 md:gap-3">
         <SkeletonCircle size="w-6 h-8 rounded-md" />
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <SkeletonLine width="w-28" height="h-2.5" />
           <SkeletonLine width="w-16" height="h-2" />
         </div>
       </div>
     </td>
-    <td className="py-5 md:py-6 align-middle hidden sm:table-cell">
+    <td className="py-8 md:py-9 align-middle hidden sm:table-cell border-b border-slate-200/60">
       <SkeletonLine width="w-10" height="h-2.5" />
     </td>
-    <td className="py-5 md:py-6 align-middle">
+    <td className="py-8 md:py-9 align-middle border-b border-slate-200/60">
       <SkeletonLine width="w-20" height="h-2.5" />
     </td>
-    <td className="py-5 md:py-6 align-middle">
-      <SkeletonBlock height="h-6" className="w-16 md:w-20 rounded-md" />
+    <td className="py-8 md:py-9 align-middle border-b border-slate-200/60">
+      <SkeletonBlock height="h-6" className="w-16 md:w-24 rounded-md" />
     </td>
-    <td className="px-3 md:px-4 py-5 md:py-6 align-middle">
+    <td className="px-3 md:px-4 py-8 md:py-9 align-middle text-left border-b border-slate-200/60">
       <SkeletonCircle size="w-8 h-8 rounded-lg" />
     </td>
   </tr>
 );
-
 // Skeleton compuesto: imita la tabla completa de GestionAlertas.jsx (encabezado de tabs + tabla con N filas)
-export const TablaAlertasSkeleton = ({ filas = 6 }) => (
-  <div className="-mt-4 w-full px-1 py-5 space-y-5 pb-8 bg-gray-50/30 h-[100dvh] overflow-hidden flex flex-col">
+export const TablaAlertasSkeleton = ({ filas = 5 }) => (
+  <div className="w-full h-full flex flex-col bg-gray-50/30 overflow-hidden p-1">
     {/* Tabs */}
-    <div className="px-3 sm:px-4 w-full bg-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2">
+    <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4 flex-shrink-0 -mt-1.5">
       <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0 gap-2">
-        <SkeletonBlock height="h-9" className="w-32 rounded-lg" />
-        <SkeletonBlock height="h-9" className="w-36 rounded-lg" />
+        <SkeletonBlock height="h-9" className="w-40 rounded-lg" />
+        <SkeletonBlock height="h-9" className="w-40 rounded-lg" />
       </div>
-      <SkeletonBlock height="h-9" className="w-40 rounded-lg" />
+      <SkeletonBlock height="h-[38px]" className="w-40 rounded-xl" />
     </div>
 
     {/* Tabla */}
-    <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0">
-      <SkeletonLine width="w-52" height="h-4" />
-      <div className="overflow-auto flex-1 min-h-0 mt-4 -mx-4 md:mx-0 px-4 md:px-0">
-        <table className="min-w-full border-collapse text-left">
+    <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0 max-h-[76svh] mt-6">
+      <SkeletonLine width="w-52" height="h-[18px]" />
+      <div className="mt-4 md:mt-6 overflow-auto flex-1 min-h-0 -mx-4 md:mx-0 px-4 md:px-0">
+        <table className="min-w-full border-collapse table-fixed">
           <thead>
-            <tr className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">
-              <th className="pl-3 md:pl-4 pr-1 md:pr-2 py-2 w-[12%] md:w-[15%]">ID</th>
-              <th className="py-2 w-[28%] md:w-[30%]">Ciudadano</th>
-              <th className="py-2 w-[15%] hidden sm:table-cell">Duración del audio</th>
-              <th className="py-2 w-[20%]">Tiempo</th>
-              <th className="py-2 w-[12%] md:w-[15%]">Estado</th>
-              <th className="px-3 md:px-4 py-2 w-[10%]">Acciones</th>
+            <tr className="text-slate-400 text-[11px] font-medium uppercase tracking-widest">
+              <th className="pl-3 md:pl-4 pr-1 md:pr-2 pb-2 pt-1 w-[14%]" />
+              <th className="pb-2 pt-1 w-[28%]" />
+              <th className="pb-2 pt-1 w-[13%] hidden sm:table-cell" />
+              <th className="pb-2 pt-1 w-[12%]" />
+              <th className="pb-2 pt-1 w-[12%]" />
+              <th className="px-3 pb-2 pt-1 w-[8%]" />
             </tr>
           </thead>
           <tbody>
@@ -329,163 +386,138 @@ export const ModalBarrasSkeleton = ({ texto = "Cargando..." }) => (
     </p>
   </div>
 );
+const formularioCardStyle =
+  "bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_10px_10px_-8px_rgba(15,23,42,0.25)] flex flex-col h-full";
 
-// Skeleton compuesto: imita las tarjetas de FormularioTabulacion.jsx — mismos colores, tamaños y tracking del original
-const TabulacionCardHeaderSkeleton = ({ bgColor = "bg-slate-100", titleWidth = "w-40" }) => (
-  <div className="flex items-center justify-between border-b border-slate-50 pb-2 mb-4 shrink-0">
-    <div className="flex items-center gap-2">
-      <div className={`w-7 h-7 ${bgColor} rounded-lg flex items-center justify-center`}>
-        <div className="w-3.5 h-3.5 bg-slate-300 rounded animate-pulse" />
-      </div>
-      <div className={`h-[11px] ${titleWidth} bg-slate-200 rounded animate-pulse tracking-[0.15em]`} />
-    </div>
+const FormularioHeaderSkeleton = ({ width }) => (
+  <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-2 shrink-0">
+    <SkeletonLine width={width} height="h-[15px]" />
   </div>
 );
 
-// Tarjeta 1 — DATOS DE LA ALERTA (azul, como en el original)
-export const TabulacionDatosAlertaSkeleton = () => (
-  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full">
-    <div className="flex items-center justify-between border-b border-slate-50 pb-2 mb-4 shrink-0">
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center">
-          <div className="w-3.5 h-3.5 bg-blue-200 rounded animate-pulse" />
-        </div>
-        <SkeletonLine width="w-36" height="h-[11px]" />
-      </div>
-      <SkeletonBlock height="h-6" className="w-16 rounded-md" />
+const HistoryCardSkeleton = () => (
+  <div className="flex-1 flex flex-col items-center min-w-[88px]">
+    <SkeletonCircle size="w-10 h-10 rounded-lg" />
+    <div className="mt-2">
+      <SkeletonLine width="w-16" height="h-[9px]" />
     </div>
-    <div className="grid grid-cols-2 gap-3 flex-1">
-      <div className="col-span-2 space-y-1">
-        <SkeletonLine width="w-40" height="h-[11px]" />
-        <SkeletonBlock height="h-9" className="rounded-xl" />
-      </div>
-      <div className="space-y-1">
-        <SkeletonLine width="w-16" height="h-[11px]" />
-        <SkeletonBlock height="h-9" className="rounded-xl" />
-      </div>
-      <div className="space-y-1">
-        <SkeletonLine width="w-16" height="h-[11px]" />
-        <SkeletonBlock height="h-9" className="rounded-xl" />
-      </div>
-      <div className="col-span-2 space-y-1">
-        <SkeletonLine width="w-44" height="h-[11px]" />
-        <SkeletonBlock height="h-9" className="rounded-xl" />
-      </div>
-      <div className="col-span-2 space-y-1">
-        <SkeletonLine width="w-32" height="h-[11px]" />
-        <SkeletonBlock height="h-20" className="rounded-xl" />
-      </div>
-    </div>
-  </div>
-);
-
-// Tarjeta 2 — DIRECCIÓN Y DESCRIPCIÓN (verde, como en el original)
-export const TabulacionDireccionSkeleton = () => (
-  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full">
-    <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-4 shrink-0">
-      <div className="w-7 h-7 bg-green-50 rounded-lg flex items-center justify-center">
-        <div className="w-3.5 h-3.5 bg-green-200 rounded animate-pulse" />
-      </div>
-      <SkeletonLine width="w-52" height="h-[11px]" />
-    </div>
-    <div className="grid grid-cols-2 gap-3 flex-1">
-      {["w-20", "w-20", "w-16", "w-16"].map((w, i) => (
-        <div key={i} className="space-y-1">
-          <SkeletonLine width={w} height="h-[11px]" />
-          <SkeletonBlock height="h-9" className="rounded-xl" />
-        </div>
-      ))}
-      <div className="col-span-2 space-y-1">
-        <SkeletonLine width="w-24" height="h-[11px]" />
-        <SkeletonBlock height="h-9" className="rounded-xl" />
-      </div>
-      <div className="space-y-1">
-        <SkeletonLine width="w-14" height="h-[11px]" />
-        <SkeletonBlock height="h-9" className="rounded-xl" />
-      </div>
-      <div className="space-y-1">
-        <SkeletonLine width="w-16" height="h-[11px]" />
-        <SkeletonBlock height="h-9" className="rounded-xl" />
-      </div>
-    </div>
-  </div>
-);
-
-// Tarjeta 3 — CLASIFICACIÓN DEL HECHO (rojo, como en el original)
-export const TabulacionClasificacionSkeleton = () => (
-  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full">
-    <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-4 shrink-0">
-      <div className="w-7 h-7 bg-red-50 rounded-lg flex items-center justify-center">
-        <div className="w-3.5 h-3.5 bg-red-200 rounded animate-pulse" />
-      </div>
-      <SkeletonLine width="w-48" height="h-[11px]" />
-    </div>
-    <div className="space-y-4 flex-1 justify-center flex flex-col">
-      <div className="space-y-1">
-        <SkeletonLine width="w-36" height="h-[11px]" />
-        <SkeletonBlock height="h-10" className="rounded-xl" />
-      </div>
-      <div className="space-y-1">
-        <SkeletonLine width="w-20" height="h-[11px]" />
-        <SkeletonBlock height="h-10" className="rounded-xl" />
-      </div>
-      <div className="mt-2 p-2 bg-slate-50 rounded-xl text-center space-y-2">
-        <SkeletonLine width="w-32" height="h-[11px]" className="mx-auto" />
-        <SkeletonLine width="w-24" height="h-[11px]" className="mx-auto" />
-      </div>
-    </div>
-  </div>
-);
-
-// Tarjeta 4 — INFORME POLICIAL (ámbar, como en el original)
-export const TabulacionInformePolicialSkeleton = () => (
-  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-md flex flex-col h-full">
-    <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-4 shrink-0">
-      <div className="w-7 h-7 bg-amber-50 rounded-lg flex items-center justify-center">
-        <div className="w-3.5 h-3.5 bg-amber-300 rounded animate-pulse" />
-      </div>
-      <SkeletonLine width="w-32" height="h-[11px]" />
-    </div>
-    <div className="grid grid-cols-2 gap-3 flex-1">
-      <div className="space-y-1">
-        <SkeletonLine width="w-16" height="h-[11px]" />
-        <SkeletonBlock height="h-9" className="rounded-xl" />
-      </div>
-      <div className="space-y-1">
-        <SkeletonLine width="w-12" height="h-[11px]" />
-        <SkeletonBlock height="h-9" className="rounded-xl" />
-      </div>
-      <div className="col-span-2 space-y-1">
-        <SkeletonLine width="w-16" height="h-[11px]" />
-        <SkeletonBlock height="h-9" className="rounded-xl" />
-      </div>
-      <div className="col-span-2 space-y-1">
-        <SkeletonLine width="w-36" height="h-[11px]" />
-        <SkeletonBlock height="h-20" className="rounded-lg" />
-      </div>
+    <div className="mt-1 flex flex-col items-center gap-1">
+      <SkeletonLine width="w-14" height="h-[10px]" />
+      <SkeletonLine width="w-12" height="h-[10px]" />
     </div>
   </div>
 );
 
 export const FormularioTabulacionSkeleton = () => (
-  <div>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 rounded-md">
-      <TabulacionDatosAlertaSkeleton />
-      <TabulacionDireccionSkeleton />
-      <TabulacionClasificacionSkeleton />
-      <TabulacionInformePolicialSkeleton />
+  <>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-3.5 rounded-md">
+      {/* DATOS DE LA ALERTA */}
+      <section className={formularioCardStyle}>
+        <FormularioHeaderSkeleton width="w-40" />
+        <div className="grid grid-cols-2 gap-5 content-start flex-1">
+          <div className="col-span-2 space-y-1">
+            <SkeletonLine width="w-40" height="h-[11px]" />
+            <SkeletonBlock height="h-9" className="rounded-xl" />
+          </div>
+          <div className="col-span-2 grid grid-cols-3 gap-5">
+            <div className="space-y-1">
+              <SkeletonLine width="w-14" height="h-[11px]" />
+              <SkeletonBlock height="h-9" className="rounded-xl" />
+            </div>
+            <div className="space-y-1">
+              <SkeletonLine width="w-14" height="h-[11px]" />
+              <SkeletonBlock height="h-9" className="rounded-xl" />
+            </div>
+            <div className="space-y-1">
+              <SkeletonLine width="w-16" height="h-[11px]" />
+              <SkeletonBlock height="h-9" className="rounded-xl" />
+            </div>
+          </div>
+          <div className="col-span-2 space-y-1">
+            <SkeletonLine width="w-44" height="h-[11px]" />
+            <SkeletonBlock height="h-9" className="rounded-xl" />
+          </div>
+          <div className="col-span-2 space-y-2">
+            <SkeletonLine width="w-28" height="h-[11px]" />
+            <SkeletonBlock height="h-[58px]" className="rounded-xl" />
+          </div>
+        </div>
+      </section>
+
+      {/* DIRECCIÓN Y DESCRIPCIÓN */}
+      <section className={formularioCardStyle}>
+        <FormularioHeaderSkeleton width="w-52" />
+        <div className="grid grid-cols-2 gap-5 content-start flex-1">
+          {["w-20", "w-20", "w-16", "w-16"].map((w, i) => (
+            <div key={i} className="space-y-1">
+              <SkeletonLine width={w} height="h-[11px]" />
+              <SkeletonBlock height="h-9" className="rounded-xl" />
+            </div>
+          ))}
+          <div className="col-span-2 space-y-1">
+            <SkeletonLine width="w-24" height="h-[11px]" />
+            <SkeletonBlock height="h-9" className="rounded-xl" />
+          </div>
+          <div className="space-y-1">
+            <SkeletonLine width="w-14" height="h-[11px]" />
+            <SkeletonBlock height="h-9" className="rounded-xl" />
+          </div>
+          <div className="space-y-1">
+            <SkeletonLine width="w-16" height="h-[11px]" />
+            <SkeletonBlock height="h-9" className="rounded-xl" />
+          </div>
+        </div>
+      </section>
+
+      {/* CLASIFICACIÓN DEL HECHO */}
+      <section className={formularioCardStyle}>
+        <FormularioHeaderSkeleton width="w-48" />
+        <div className="space-y-5 flex-1 justify-start flex flex-col">
+          <div className="space-y-1">
+            <SkeletonLine width="w-36" height="h-[11px]" />
+            <SkeletonBlock height="h-11" className="rounded-xl" />
+          </div>
+          <div className="space-y-1">
+            <SkeletonLine width="w-20" height="h-[11px]" />
+            <SkeletonBlock height="h-11" className="rounded-xl" />
+          </div>
+          <div className="h-16 p-2 rounded-xl bg-slate-50 flex flex-col items-center justify-center gap-2">
+            <SkeletonLine width="w-32" height="h-[11px]" />
+            <SkeletonLine width="w-24" height="h-[11px]" />
+          </div>
+        </div>
+      </section>
+
+      {/* INFORME POLICIAL */}
+      <section className={formularioCardStyle}>
+        <FormularioHeaderSkeleton width="w-32" />
+        <div className="grid grid-cols-2 gap-5 content-start flex-1">
+          <div className="space-y-1">
+            <SkeletonLine width="w-16" height="h-[11px]" />
+            <SkeletonBlock height="h-9" className="rounded-xl" />
+          </div>
+          <div className="space-y-1">
+            <SkeletonLine width="w-12" height="h-[11px]" />
+            <SkeletonBlock height="h-9" className="rounded-xl" />
+          </div>
+          <div className="space-y-1">
+            <SkeletonLine width="w-10" height="h-[11px]" />
+            <SkeletonBlock height="h-9" className="rounded-xl" />
+          </div>
+          <div className="col-span-2 space-y-2">
+            <SkeletonLine width="w-36" height="h-[11px]" />
+            <SkeletonBlock height="h-[66px]" className="rounded-xl" />
+          </div>
+        </div>
+      </section>
     </div>
 
-    {/* SECRETARÍA — morado, como en el original */}
-    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mt-8">
-      <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-4 shrink-0">
-        <div className="w-7 h-7 bg-purple-50 rounded-lg flex items-center justify-center">
-          <div className="w-3.5 h-3.5 bg-purple-300 rounded animate-pulse" />
-        </div>
-        <SkeletonLine width="w-56" height="h-[11px]" />
-      </div>
+    {/* TABULACIÓN PARA SECRETARÍA */}
+    {/* TABULACIÓN PARA SECRETARÍA */}
+    <section className={`${formularioCardStyle} mt-3.5`}>
+      <FormularioHeaderSkeleton width="w-56" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-3">
+        <div className="space-y-5">
           <div className="space-y-1">
             <SkeletonLine width="w-24" height="h-[11px]" />
             <SkeletonBlock height="h-9" className="rounded-xl" />
@@ -495,52 +527,37 @@ export const FormularioTabulacionSkeleton = () => (
             <SkeletonBlock height="h-9" className="rounded-xl" />
           </div>
         </div>
-        <div className="space-y-1">
+        <div className="flex flex-col space-y-1">
           <SkeletonLine width="w-40" height="h-[11px]" />
-          <SkeletonBlock height="h-[114px]" className="rounded-xl" />
+          <SkeletonBlock height="h-[112px]" className="rounded-lg" />
         </div>
       </div>
-    </div>
+    </section>
 
     {/* HISTORIAL DE PROCESO */}
-    <div className="pt-6 px-2 mt-4">
-      <SkeletonLine width="w-44" height="h-[11px]" />
-      <div className="flex flex-wrap md:flex-nowrap justify-center gap-5 mt-5">
+    <section className={`${formularioCardStyle} mt-3.5`}>
+      <FormularioHeaderSkeleton width="w-44" />
+      <div className="flex items-start justify-center pt-2">
         {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="flex-1 flex flex-col items-center min-w-[96px] rounded-xl p-2 bg-white border border-slate-300 shadow-md">
-            <SkeletonCircle size="w-8 h-8 rounded-full" />
-            <div className="mt-1 space-y-1 w-full items-center flex flex-col">
-              <SkeletonLine width="w-12" height="h-[9px]" />
-              <SkeletonLine width="w-16" height="h-[9px]" />
-              <SkeletonLine width="w-14" height="h-[9px]" />
-            </div>
-          </div>
+          <React.Fragment key={i}>
+            <HistoryCardSkeleton />
+            {i < 4 && (
+              <div className="flex-1 h-0.5 bg-slate-200 mt-6 max-w-[64px]" />
+            )}
+          </React.Fragment>
         ))}
       </div>
-    </div>
-  </div>
+    </section>
+  </>
 );
-
-// ✅ Skeleton específico para FormularioDesestimados.jsx — replica sección por
-// sección (DATOS DE LA ALERTA con badge de prioridad, INFORMACIÓN DE
-// DESESTIMACIÓN, HISTORIAL DE PROCESO con 1 tarjeta) para que el tamaño
-// coincida con el contenido real y no "salte" al terminar de cargar.
 export const FormularioDesestimadosSkeleton = () => (
-  <div className="px-0">
+  <>
     {/* DATOS DE LA ALERTA */}
-    <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full mb-6">
-      <div className="flex items-center justify-between border-b border-slate-50 pb-2 mb-4 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center">
-            <div className="w-3.5 h-3.5 bg-blue-200 rounded animate-pulse" />
-          </div>
-          <SkeletonLine width="w-36" height="h-[11px]" />
-        </div>
-        <SkeletonBlock height="h-6" className="w-16 rounded-md" />
-      </div>
+    <section className={formularioCardStyle}>
+      <FormularioHeaderSkeleton width="w-44" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-1">
-          <SkeletonLine width="w-40" height="h-[11px]" />
+          <SkeletonLine width="w-44" height="h-[11px]" />
           <SkeletonBlock height="h-9" className="rounded-xl" />
         </div>
         <div className="space-y-1">
@@ -557,23 +574,14 @@ export const FormularioDesestimadosSkeleton = () => (
         </div>
         <div className="md:col-span-2 space-y-1">
           <SkeletonLine width="w-32" height="h-[11px]" />
-          <SkeletonBlock height="h-20" className="rounded-xl" />
-        </div>
-        <div className="md:col-span-2 space-y-1">
-          <SkeletonLine width="w-44" height="h-[11px]" />
-          <SkeletonBlock height="h-9" className="rounded-xl" />
+          <SkeletonBlock height="h-[66px]" className="rounded-xl" />
         </div>
       </div>
     </section>
 
     {/* INFORMACIÓN DE DESESTIMACIÓN */}
-    <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full mb-6">
-      <div className="flex items-center gap-2 border-b border-slate-50 pb-2 mb-4 shrink-0">
-        <div className="w-7 h-7 bg-red-50 rounded-lg flex items-center justify-center">
-          <div className="w-3.5 h-3.5 bg-red-200 rounded animate-pulse" />
-        </div>
-        <SkeletonLine width="w-56" height="h-[11px]" />
-      </div>
+    <section className={`${formularioCardStyle} mt-3.5`}>
+      <FormularioHeaderSkeleton width="w-56" />
       <div className="grid grid-cols-1 gap-4">
         <div className="space-y-1">
           <SkeletonLine width="w-16" height="h-[11px]" />
@@ -585,34 +593,28 @@ export const FormularioDesestimadosSkeleton = () => (
         </div>
         <div className="space-y-1">
           <SkeletonLine width="w-40" height="h-[11px]" />
-          <SkeletonBlock height="h-16" className="rounded-xl" />
+          <SkeletonBlock height="h-[66px]" className="rounded-xl" />
         </div>
       </div>
     </section>
 
     {/* HISTORIAL DE PROCESO */}
-    <div className="pt-6 px-2 mt-4">
-      <SkeletonLine width="w-44" height="h-[11px]" />
-      <div className="flex flex-wrap md:flex-nowrap justify-center gap-5 mt-5">
-        <div className="flex-1 flex flex-col items-center min-w-[96px] rounded-xl p-2 bg-white border border-slate-300 shadow-md">
-          <SkeletonCircle size="w-8 h-8 rounded-full" />
-          <div className="mt-1 space-y-1 w-full items-center flex flex-col">
-            <SkeletonLine width="w-16" height="h-[9px]" />
-            <SkeletonLine width="w-14" height="h-[9px]" />
-          </div>
-        </div>
+    <section className={`${formularioCardStyle} mt-3.5`}>
+      <FormularioHeaderSkeleton width="w-44" />
+      <div className="flex items-start justify-center pt-2">
+        <HistoryCardSkeleton />
       </div>
-    </div>
-  </div>
+    </section>
+  </>
 );
 
 // SKELETON PARA ArchivoHistorico.jsx
 export const ArchivoHistoricoCardSkeleton = () => (
-  <div className="p-2 h-48 bg-white rounded-lg border border-slate-200 relative overflow-hidden flex flex-col">
-    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-slate-200" />
-    <div className="p-3 flex-1 flex flex-col justify-center -mt-1">
+  <div className="p-2 h-[15.5svh] bg-white rounded-xl border border-slate-200 relative overflow-hidden flex flex-col">
+    <div className="absolute left-0 top-0 bottom-0 w-2 bg-slate-200 rounded-l-2xl" />
+    <div className="pl-5 pr-3 py-3 flex-1 flex flex-col justify-center -mt-1">
       <div className="flex justify-between items-center -mt-0.5">
-        <SkeletonLine width="w-16" height="h-2.5" />
+        <SkeletonLine width="w-20" height="h-2.5" />
         <SkeletonBlock height="h-4" className="w-16 rounded-md" />
       </div>
       <div className="flex items-center gap-2 mb-3 mt-2">
@@ -622,115 +624,382 @@ export const ArchivoHistoricoCardSkeleton = () => (
           <SkeletonLine width="w-14" height="h-2" />
         </div>
       </div>
-      <div className="mb-3 p-1.5 bg-slate-50 rounded-md border border-slate-100 space-y-1.5">
+      <div className="mb-3 p-1.5 bg-slate-50 rounded-lg border border-slate-100 space-y-1.5">
         <SkeletonLine width="w-14" height="h-2" />
         <SkeletonLine width="w-28" height="h-2.5" />
       </div>
-      <div className="flex justify-end gap-3 mt-0.5">
-        <SkeletonBlock height="h-8" className="w-20 rounded-lg" />
-        <SkeletonBlock height="h-8" className="w-16 rounded-lg" />
-      </div>
     </div>
   </div>
 );
 
-export const ArchivoHistoricoSkeleton = ({ cards = 8 }) => (
-  <div className="-mt-4 w-full px-1 py-4 space-y-4 pb-6 bg-gray-50/30">
-    <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4">
-      <div className="flex items-center gap-4 flex-1 min-w-[200px]">
-        <SkeletonBlock height="h-11" className="w-56 rounded-lg" />
-        <SkeletonBlock height="h-10" className="flex-1 rounded-xl" />
+export const ArchivoHistoricoSkeleton = () => (
+  <div className="w-full h-full flex flex-col bg-gray-50/30 overflow-hidden px-0 py-1">
+    <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4 flex-shrink-0 -mt-1.5">
+      <div className="flex items-center gap-4 flex-1 min-w-[200px] shrink-0">
+        <SkeletonBlock height="h-[46px]" className="w-56 rounded-xl" />
+        <SkeletonBlock height="h-11" className="flex-1 rounded-xl" />
       </div>
       <div className="flex items-center gap-4">
-        <SkeletonBlock height="h-11" className="w-64 rounded-lg" />
-        <SkeletonBlock height="h-10" className="w-28 rounded-lg" />
+        <div className="flex items-center gap-1.5 shrink-0">
+          <SkeletonBlock height="h-[42px]" className="w-32 rounded-xl" />
+          <span className="text-slate-300 text-xs font-bold">–</span>
+          <SkeletonBlock height="h-[42px]" className="w-32 rounded-xl" />
+        </div>
+        <SkeletonBlock height="h-[42px]" className="w-24 rounded-xl" />
+        <SkeletonBlock height="h-[42px]" className="w-28 rounded-xl" />
       </div>
     </div>
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-6">
-      {Array.from({ length: cards }).map((_, i) => (
-        <ArchivoHistoricoCardSkeleton key={i} />
-      ))}
-    </div>
-  </div>
-);
-
-// SKELETON PARA Tabulacion.jsx (vista principal, no el modal)
-export const TabulacionPageSkeleton = () => (
-  <div className="-mt-4 px-1 min-h-screen bg-slate-50/50 w-full py-4 space-y-5 pb-6">
-    <div className="flex flex-col lg:flex-row gap-6 mb-4">
-      <div className="lg:w-3/4 flex flex-col gap-6">
-        {/* Tarjetas "Tabuladas Hoy" / "Pendientes" */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {[0, 1].map((i) => (
-            <div key={i} className="bg-white p-4 rounded-2xl shadow-md border border-gray-100 flex items-center justify-between px-5">
-              <div className="flex items-center gap-4">
-                <SkeletonCircle size="w-9 h-9 rounded-full" />
-                <div className="space-y-2">
-                  <SkeletonLine width="w-28" height="h-2.5" />
-                  <SkeletonLine width="w-10" height="h-5" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Tabla de tabulación */}
-        <div className="w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md">
-          <SkeletonLine width="w-48" height="h-4" />
-          <div className="mt-5 space-y-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4">
-                <SkeletonLine width="w-14" height="h-2.5" />
-                <SkeletonCircle size="w-6 h-8 rounded-md" />
-                <SkeletonLine width="w-32" height="h-2.5" />
-                <SkeletonLine width="w-20" height="h-2.5" />
-                <SkeletonBlock height="h-6" className="w-20 rounded-md ml-auto" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Panel lateral "Alertas Comunes" */}
-      <div className="lg:w-1/4 bg-white p-5 rounded-2xl shadow-md border border-gray-100">
-        <SkeletonLine width="w-32" height="h-3.5" />
-        <SkeletonLine width="w-24" height="h-2" />
-        <div className="space-y-3 mt-5">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <SkeletonBlock key={i} height="h-12" className="rounded-lg" />
-          ))}
-        </div>
-      </div>
-    </div>
-
-    {/* Alertas Tabuladas (grid de 4) */}
-    <div className="w-full bg-white p-5 rounded-2xl shadow-md border border-gray-50">
-      <SkeletonLine width="w-44" height="h-4" />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-5">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-56 bg-white rounded-lg p-4 border border-slate-200 relative overflow-hidden">
-            <div className="absolute left-0 top-0 bottom-0 w-2 bg-slate-200" />
-            <div className="pl-3 space-y-4">
-              <div className="flex justify-between">
-                <SkeletonLine width="w-16" height="h-2.5" />
-                <SkeletonBlock height="h-4" className="w-16 rounded-md" />
-              </div>
-              <div className="flex items-center gap-3">
-                <SkeletonCircle size="w-6 h-8 rounded-md" />
-                <div className="space-y-1.5">
-                  <SkeletonLine width="w-24" height="h-2.5" />
-                  <SkeletonLine width="w-14" height="h-2" />
-                </div>
-              </div>
-              <SkeletonBlock height="h-10" className="rounded-md" />
-              <div className="flex gap-3">
-                <SkeletonBlock height="h-8" className="flex-1 rounded-lg" />
-                <SkeletonBlock height="h-8" className="flex-1 rounded-lg" />
-              </div>
-            </div>
-          </div>
+    <div className="flex-1 min-h-0 overflow-hidden mt-6 pb-6 pr-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-3.5 gap-x-6">
+        {Array.from({ length: 20 }).map((_, i) => (
+          <ArchivoHistoricoCardSkeleton key={i} />
         ))}
       </div>
     </div>
   </div>
+);
+
+// Fila de tabla — MISMAS clases td que las filas reales de Tabulacion.jsx
+const FilaTabulacionSkeleton = () => (
+  <tr className="bg-white border-b border-gray-100">
+    <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-6 md:py-7 align-middle border-b border-slate-200/60">
+      <SkeletonLine width="w-14" height="h-2.5" />
+    </td>
+    <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+      <div className="flex items-center gap-2 md:gap-3">
+        <SkeletonCircle size="w-6 h-8 rounded-md" />
+        <div className="flex flex-col min-w-0 gap-1">
+          <SkeletonLine width="w-28" height="h-2.5" />
+          <SkeletonLine width="w-16" height="h-2" />
+        </div>
+      </div>
+    </td>
+    <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+      <SkeletonLine width="w-24" height="h-2.5" />
+    </td>
+    <td className="py-5 md:py-6 align-middle text-left border-b border-slate-200/60">
+      <SkeletonLine width="w-14" height="h-2.5" />
+    </td>
+    <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+      <SkeletonBlock height="h-[26px]" className="w-16 md:w-24 rounded-md" />
+    </td>
+    <td className="px-3 md:px-4 py-5 md:py-6 align-middle border-b border-slate-200/60">
+      <SkeletonCircle size="w-8 h-8 rounded-lg" />
+    </td>
+  </tr>
+);
+
+// SKELETON PARA Tabulacion.jsx (vista principal, no el modal)
+export const TabulacionPageSkeleton = () => (
+  <>
+    <div className="flex flex-col lg:flex-row gap-6">
+      {/* Tabla de tabulación — MISMO contenedor/alto/tabla que el real */}
+      <div className="lg:w-4/5 flex flex-col gap-6">
+        <div className="relative w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col h-[729px]">
+          <SkeletonLine width="w-48" height="h-[18px]" />
+          <div className="mt-4 md:mt-6 overflow-auto flex-1 min-h-0 -mx-4 md:mx-0 px-4 md:px-0 pr-1.5">
+            <table className="min-w-full border-collapse text-left">
+              <thead>
+                <tr className="text-slate-400 text-[11px] font-medium uppercase tracking-widest">
+                  <th className="sticky top-0 z-10 bg-white pl-3 border-b border-slate-200 md:pl-4 pr-1 md:pr-2 py-2 w-[10%]" />
+                  <th className="sticky top-0 z-10 bg-white py-2 border-b border-slate-200 w-[17%]" />
+                  <th className="sticky top-0 z-10 bg-white pl-0 pr-1 border-b border-slate-200 w-[16%] py-2" />
+                  <th className="sticky top-0 z-10 bg-white py-2 border-b border-slate-200 w-[9%]" />
+                  <th className="sticky top-0 z-10 bg-white py-2 border-b border-slate-200 w-[10%]" />
+                  <th className="sticky top-0 z-10 bg-white px-3 border-b border-slate-200 py-2 w-[4%]" />
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <FilaTabulacionSkeleton key={i} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Panel lateral "Alertas Comunes" — MISMO alto/paddings que el real */}
+      <div
+        className="lg:w-1/5 bg-white p-5 rounded-2xl shadow-md border border-gray-100 flex flex-col h-[729px]
+                    relative w-full px-4 md:px-7 py-4 md:py-6"
+      >
+        <div className="mb-3">
+          <SkeletonLine width="w-32" height="h-[18px]" />
+        </div>
+        <div className="space-y-4 -mt-2">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between p-2.5 h-12 bg-slate-50/50 rounded-lg border border-transparent"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-1 h-1 rounded-full bg-slate-200 shrink-0" />
+                <SkeletonLine width="w-28" height="h-2.5" />
+              </div>
+              <SkeletonLine width="w-4" height="h-2.5" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* Alertas Tabuladas — MISMO contenedor que el real */}
+    <div className="w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md border border-gray-50 relative flex flex-col">
+      <SkeletonLine width="w-44" height="h-[18px]" />
+      <div className="mt-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pb-0">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-[14.5svh] mb-1 bg-white rounded-xl p-3 border border-slate-200 relative overflow-hidden"
+            >
+              <div className="absolute left-0 top-0 bottom-0 w-2 bg-slate-200 rounded-l-2xl" />
+              <div className="flex justify-between items-center mb-3 pl-3">
+                <SkeletonLine width="w-16" height="h-2" />
+                <SkeletonBlock height="h-4" className="w-16 rounded-md" />
+              </div>
+              <div className="flex items-center gap-3 mb-3 pl-3">
+                <SkeletonCircle size="w-6 h-8 rounded-md" />
+                <div className="flex flex-col min-w-0 gap-1">
+                  <SkeletonLine width="w-24" height="h-2.5" />
+                  <SkeletonLine width="w-14" height="h-2" />
+                </div>
+              </div>
+              <div className="mb-5 p-1.5 rounded-lg border border-slate-100 ml-3 mt-4 bg-slate-50">
+                <SkeletonLine width="w-16" height="h-2" />
+                <div className="mt-1">
+                  <SkeletonLine width="w-28" height="h-2" />
+                </div>
+              </div>
+        </div>
+      ))}
+        </div>
+      </div>
+    </div>
+  </>
+);
+
+// SKELETON PARA NuevoPolicia.jsx (mientras carga datos del oficial a editar)
+export const NuevoPoliciaSkeleton = () => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <div className="md:col-span-2 space-y-2">
+      <SkeletonLine width="w-32" height="h-[11px]" />
+      <SkeletonBlock height="h-11" className="rounded-xl" />
+    </div>
+    <div className="space-y-2">
+      <SkeletonLine width="w-32" height="h-[11px]" />
+      <SkeletonBlock height="h-11" className="rounded-xl" />
+    </div>
+    <div className="space-y-2">
+      <SkeletonLine width="w-16" height="h-[11px]" />
+      <SkeletonBlock height="h-11" className="rounded-xl" />
+    </div>
+    <div className="space-y-2">
+      <SkeletonLine width="w-14" height="h-[11px]" />
+      <SkeletonBlock height="h-11" className="rounded-xl" />
+    </div>
+    <div className="space-y-2">
+      <SkeletonLine width="w-28" height="h-[11px]" />
+      <SkeletonBlock height="h-11" className="rounded-xl" />
+    </div>
+    <div className="md:col-span-2 mt-2 pt-2 border-t border-slate-200">
+      <SkeletonLine width="w-48" height="h-[14px]" />
+    </div>
+    <div className="space-y-2">
+      <SkeletonLine width="w-40" height="h-[11px]" />
+      <SkeletonBlock height="h-11" className="rounded-xl" />
+    </div>
+    <div className="space-y-2">
+      <SkeletonLine width="w-24" height="h-[11px]" />
+      <SkeletonBlock height="h-11" className="rounded-xl" />
+    </div>
+    <div className="md:col-span-2 mt-2 pt-2 border-t border-slate-200">
+      <SkeletonLine width="w-40" height="h-[14px]" />
+    </div>
+    <div className="md:col-span-2 space-y-2">
+      <SkeletonLine width="w-32" height="h-[11px]" />
+      <SkeletonBlock height="h-11" className="rounded-xl" />
+      <SkeletonLine width="w-64" height="h-2" />
+    </div>
+  </div>
+);
+
+// Fila de tabla — MISMAS clases td que las filas reales de Usuarios.jsx
+const FilaUsuarioSkeleton = () => (
+  <tr className="bg-white">
+    <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-8 md:py-9 align-middle border-b border-slate-200/60">
+      <SkeletonLine width="w-14" height="h-2.5" />
+    </td>
+    <td className="py-8 md:py-9 align-middle border-b border-slate-200/60">
+      <div className="flex items-center gap-3">
+        <SkeletonCircle size="w-6 h-8 rounded-md" />
+        <div className="flex flex-col min-w-0 gap-1.5">
+          <SkeletonLine width="w-28" height="h-2.5" />
+          <SkeletonLine width="w-16" height="h-2" />
+        </div>
+      </div>
+    </td>
+    <td className="py-8 md:py-9 align-middle border-b border-slate-200/60">
+      <div className="flex flex-col gap-2">
+        <SkeletonLine width="w-14" height="h-2.5" />
+        <SkeletonLine width="w-16" height="h-2" />
+      </div>
+    </td>
+    <td className="py-8 md:py-9 align-middle border-b border-slate-200/60">
+      <SkeletonLine width="w-16" height="h-2.5" />
+    </td>
+    <td className="py-8 md:py-9 align-middle border-b border-slate-200/60">
+      <SkeletonLine width="w-16" height="h-2.5" />
+    </td>
+    <td className="py-8 md:py-9 align-middle border-b border-slate-200/60">
+      <SkeletonBlock height="h-6" className="w-20 rounded-md" />
+    </td>
+    <td className="px-4 py-8 md:py-9 align-middle border-b border-slate-200/60">
+      <div className="flex items-center gap-3">
+        <SkeletonCircle size="w-8 h-8 rounded-lg" />
+        <SkeletonCircle size="w-8 h-8 rounded-lg" />
+        <SkeletonCircle size="w-8 h-8 rounded-lg" />
+      </div>
+    </td>
+  </tr>
+);
+
+export const UsuariosSkeleton = () => (
+  <div className="w-full h-full flex flex-col bg-gray-50/30 overflow-y-auto p-1 pb-3">
+    {/* SELECTOR DE TABS */}
+    <div className="w-full bg-white p-3 rounded-2xl shadow-md border border-gray-100 flex flex-wrap items-center justify-between gap-4 flex-shrink-0 -mt-1.5">
+      <div className="flex items-center gap-4 flex-1 min-w-[200px] shrink-0">
+        <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0 gap-2">
+          <SkeletonBlock height="h-[42px]" className="w-28 rounded-lg" />
+          <SkeletonBlock height="h-[42px]" className="w-32 rounded-lg" />
+        </div>
+        <SkeletonBlock height="h-11" className="flex-1 min-w-[160px] rounded-xl" />
+        <SkeletonBlock height="h-11" className="w-40 rounded-xl shrink-0" />
+      </div>
+      <div className="flex items-center gap-4">
+        <SkeletonBlock height="h-[46px]" className="w-64 rounded-xl" />
+        <SkeletonBlock height="h-[42px]" className="w-28 rounded-xl" />
+      </div>
+    </div>
+
+    {/* Tabla */}
+    <div className="relative top-1 w-full bg-white rounded-2xl shadow-lg flex flex-col flex-1 min-h-0 max-h-[79svh] mt-6">
+      <div className="px-4 md:px-7 py-4 md:py-6 flex flex-col flex-1 min-h-0 overflow-hidden">
+        <SkeletonLine width="w-52" height="h-[18px]" />
+        <div className="mt-4 md:mt-6 overflow-auto flex-1 min-h-0 -mx-4 md:mx-0 px-4 md:px-0">
+          <table className="min-w-full border-collapse table-fixed">
+            <thead>
+              <tr className="text-slate-400 text-[11px] font-medium uppercase tracking-widest">
+                <th className="px-3 pb-3 pt-1 w-[10%]" />
+                <th className="pb-3 pt-1 w-[30%]" />
+                <th className="pb-3 pt-1 w-[12%]" />
+                <th className="pb-3 pt-1 w-[10%]" />
+                <th className="pb-3 pt-1 w-[10%]" />
+                <th className="px-0 pb-3 pt-1 w-[10%]" />
+                <th className="px-4 pb-3 pt-1 w-[10%]" />
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <FilaUsuarioSkeleton key={i} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// Fila de tabla — MISMAS clases td que las filas reales de ActividadLog.jsx
+const FilaActividadLogSkeleton = () => (
+  <tr className="bg-white border-b border-slate-100">
+    <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-4 align-middle">
+      <div className="flex items-center gap-3">
+        <SkeletonCircle size="w-6 h-8 rounded-md" />
+        <SkeletonLine width="w-28" height="h-2.5" />
+      </div>
+    </td>
+    <td className="py-4 align-middle">
+      <SkeletonBlock height="h-5" className="w-16 rounded-md" />
+    </td>
+    <td className="py-4 align-middle max-w-[250px]">
+      <div className="flex flex-col gap-1.5">
+        <SkeletonLine width="w-full" height="h-2.5" />
+        <SkeletonLine width="w-2/3" height="h-2.5" />
+      </div>
+    </td>
+    <td className="py-4 pl-0 align-middle">
+      <SkeletonLine width="w-12" height="h-2.5" />
+    </td>
+    <td className="py-4 pl-2 align-middle">
+      <SkeletonLine width="w-24" height="h-2.5" />
+    </td>
+  </tr>
+);
+
+// SKELETON PARA la barra de herramientas de ActividadLog.jsx (solo carga inicial,
+// mientras se cargan roles únicos por primera vez)
+export const ToolbarActividadLogSkeleton = () => (
+  <div className="w-full bg-white p-3 rounded-2xl shadow-md border py-[18.5px] border-gray-100 flex flex-wrap items-center justify-between gap-4 flex-shrink-0 -mt-1.5">
+    <div className="flex items-center gap-4 flex-1 min-w-[200px] shrink-0">
+      <SkeletonBlock height="h-11" className="flex-1 min-w-[160px] rounded-xl" />
+    </div>
+    <div className="flex items-center gap-4">
+      <SkeletonBlock height="h-11" className="w-40 rounded-xl" />
+      <div className="flex items-center gap-1.5 shrink-0">
+        <SkeletonBlock height="h-11" className="w-36 rounded-xl" />
+        <span className="text-slate-300 text-xs font-bold">–</span>
+        <SkeletonBlock height="h-11" className="w-36 rounded-xl" />
+      </div>
+      <SkeletonBlock height="h-11" className="w-24 rounded-xl" />
+      <SkeletonBlock height="h-[42px]" className="w-28 rounded-xl" />
+    </div>
+  </div>
+);
+
+// SKELETON PARA ActividadLog.jsx (filas de la tabla mientras cargarLogs hace fetch real)
+export const TablaActividadLogSkeleton = ({ filas = 8 }) => (
+  <>
+    {Array.from({ length: filas }).map((_, i) => (
+      <FilaActividadLogSkeleton key={i} />
+    ))}
+  </>
+);
+
+// SKELETON PARA PerfilCiudadano.jsx (mientras carga advertencias reales)
+export const PerfilCiudadanoSkeleton = () => (
+  <>
+    <div className="mt-1 grid grid-cols-2 gap-x-7 gap-y-5">
+      <div className="col-span-2 space-y-2">
+        <SkeletonLine width="w-32" height="h-[11px]" />
+        <SkeletonBlock height="h-11" className="rounded-xl" />
+      </div>
+      <div className="space-y-2">
+        <SkeletonLine width="w-32" height="h-[11px]" />
+        <SkeletonBlock height="h-11" className="rounded-xl" />
+      </div>
+      <div className="space-y-2">
+        <SkeletonLine width="w-16" height="h-[11px]" />
+        <SkeletonBlock height="h-11" className="rounded-xl" />
+      </div>
+      <div className="space-y-2">
+        <SkeletonLine width="w-28" height="h-[11px]" />
+        <SkeletonBlock height="h-11" className="rounded-xl" />
+      </div>
+      <div className="space-y-2">
+        <SkeletonLine width="w-32" height="h-[11px]" />
+        <SkeletonBlock height="h-11" className="rounded-xl" />
+      </div>
+    </div>
+
+    <div className="md:col-span-2 mt-7 pt-2 border-t border-slate-200">
+      <SkeletonLine width="w-52" height="h-[14px]" />
+      <div className="grid grid-cols-2 gap-5 mt-4">
+        <SkeletonBlock height="h-36" className="rounded-lg" />
+        <SkeletonBlock height="h-36" className="rounded-lg" />
+      </div>
+    </div>
+  </>
 );

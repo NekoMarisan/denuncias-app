@@ -23,7 +23,7 @@ export const AlertaCard = ({
 
 return (
     <div
-      onClick={onClick}
+      onClick={bloqueadaPorOtro ? undefined : onClick}
       className={`${baseClasses} ${shadowClasses} ${stateClasses} ${
         bloqueadaPorOtro ? "opacity-50 cursor-not-allowed" : ""
       }`}
@@ -55,6 +55,15 @@ return (
         <FaCircle className="text-[6px]" />
         <span>{alerta.clasificacionHecho || "—"}</span>
       </div>
+
+      {bloqueadaPorOtro && (
+        <div className="flex items-center gap-1.5 text-[9.5px] font-medium text-slate-400 mt-1.5 px-0.5">
+          <FaLock className="text-[9px]" />
+          <span className="truncate">
+            {bloqueadoNombre ? `Gestionada por ${bloqueadoNombre}` : "Gestionada por otro despachador"}
+          </span>
+        </div>
+      )}
     </div>
   );
 };

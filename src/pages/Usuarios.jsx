@@ -15,6 +15,9 @@ import {
   FaTimes,
   FaUserShield,
   FaClock,
+  FaExclamationTriangle,
+  FaBan,
+  FaBars,
 } from "react-icons/fa";
 import { FiEye, FiEdit2, FiTrash2 } from "react-icons/fi";
 import { exportPDF } from "../utils/exports/exportPDF";
@@ -24,6 +27,7 @@ import PerfilCiudadano from "../components/modals/PerfilCiudadano";
 import NuevoPolicia from "../components/modals/NuevoPolicia";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
+import { UsuariosSkeleton } from "../components/ui/Skeleton";
 
 // ─── Modal de perfil de oficial — ALTERNATIVA 2 "ficha de reporte" ──────────
 // Mismo contrato de props que el original: { oficial, onClose }
@@ -57,10 +61,10 @@ function PerfilOficial({ oficial, onClose }) {
 
   const Fila = ({ label, value }) => (
     <div className="space-y-1">
-      <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+      <label className="block text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2 min-h-[14px] leading-tight">
         {label}
       </label>
-      <div className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[12px] font-medium text-slate-600">
+      <div className="w-full border border-slate-200 rounded-xl px-3.5 py-3 text-[12px] font-medium text-slate-500 tracking-wider">
         {value || "—"}
       </div>
     </div>
@@ -68,9 +72,21 @@ function PerfilOficial({ oficial, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+      <style>
+        {`
+          @keyframes overlayFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes modalPopIn {
+            from { opacity: 0; transform: scale(0.94) translateY(16px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+          }
+        `}
+      </style>
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm animate-[overlayFadeIn_0.25s_ease-out]" />
 
-      <div className="relative bg-white rounded-lg shadow-2xl w-full max-w-lg mx-auto overflow-hidden flex flex-col h-fit max-h-[92vh] animate-fadeIn">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden flex flex-col h-fit max-h-[92vh] animate-[modalPopIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
         {/* Barra verde */}
         <div className="relative bg-[#474b29] py-4 shrink-0 flex items-center pl-24 pr-4">
           <div>
@@ -94,7 +110,7 @@ function PerfilOficial({ oficial, onClose }) {
         {/* Ícono cuadrado, sobresaliendo de la barra */}
         <div className="relative pl-4 pt-2 pb-6 shrink-0">
           <div className="relative w-16 h-16 -mt-12 ml-2">
-            <div className="w-16 h-16 rounded-2xl bg-[#474b29] border-[3px] border-white shadow-lg flex items-center justify-center">
+            <div className="w-16 h-16 rounded-xl bg-[#474b29] border-[3px] border-white shadow-lg flex items-center justify-center">
               <FaUserShield className="text-white" size={26} />
             </div>
             <span
@@ -106,14 +122,18 @@ function PerfilOficial({ oficial, onClose }) {
 
         {/* Datos en formato de tarjetas tipo "textbox" */}
         <div className="px-6 pb-4 overflow-y-auto">
-          <div className="mt-1 grid grid-cols-2 gap-x-7 gap-y-4">
+          <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-7 gap-y-5">
             <div className="col-span-2">
               <Fila label="Nombre completo" value={oficial.nombre_completo} />
             </div>
+            <Fila
+              label="Número de escalafón"
+              value={oficial.numero_escalafon}
+            />
+            <Fila label="Rango" value={oficial.cargo} />
             <Fila label="Cédula de identidad" value={oficial.ci} />
             <Fila label="Celular" value={oficial.celular} />
-            <Fila label="N.º de escalafón" value={oficial.numero_escalafon} />
-            <Fila label="Rango" value={oficial.cargo} />
+
             <Fila label="Rol en el sistema" value={oficial.rol} />
             <Fila
               label="Estado de servicio"
@@ -155,6 +175,7 @@ function Usuarios() {
   const [busquedaCiudadanos, setBusquedaCiudadanos] = useState("");
   const busqueda =
     tabActiva === "oficiales" ? busquedaOficiales : busquedaCiudadanos;
+  const UMBRAL_CONEXION_MS = 45000; 
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [ciudadanoSeleccionado, setCiudadanoSeleccionado] = useState(null);
@@ -166,9 +187,11 @@ function Usuarios() {
     cargo: "Administrador del Sistema",
   });
   const [confirmarEliminar, setConfirmarEliminar] = useState(null);
-
+  const [hoverTabla, setHoverTabla] = useState(false);
   const [oficiales, setOficiales] = useState([]);
   const [ciudadanos, setCiudadanos] = useState([]);
+  const [busquedaMovilAbierta, setBusquedaMovilAbierta] = useState(false);
+  const [menuAccionesAbierto, setMenuAccionesAbierto] = useState(false);
 
   const cargarOficiales = useCallback(async () => {
     const { data, error } = await supabase
@@ -337,6 +360,60 @@ function Usuarios() {
 
   const eliminarOficial = async (id) => {
     const oficial = oficiales.find((o) => o.id_oficial === id);
+
+    // Verificación de trabajo activo antes de permitir eliminar
+    const advertencias = [];
+
+    // 1. ¿Tiene una alerta bloqueada (la está atendiendo ahora)?
+    const { data: alertaBloqueada } = await supabase
+      .from("alerta")
+      .select("id_alerta, codigo_alerta")
+      .eq("bloqueado_por", id)
+      .maybeSingle();
+    if (alertaBloqueada) {
+      advertencias.push(
+        `Está atendiendo la alerta ${alertaBloqueada.codigo_alerta || alertaBloqueada.id_alerta} en este momento`,
+      );
+    }
+
+    // 2. ¿Tiene un caso sin cerrar como operador/despachador/tabulador?
+    const { data: casosAbiertos } = await supabase
+      .from("tabulacion_caso")
+      .select("id_caso")
+      .or(
+        `id_operador_receptor.eq.${id},id_despachador.eq.${id},id_tabulador.eq.${id}`,
+      );
+    if (casosAbiertos && casosAbiertos.length > 0) {
+      advertencias.push(
+        `Tiene ${casosAbiertos.length} caso(s) asignado(s) en tabulación`,
+      );
+    }
+
+    // 3. ¿Está conectado ahora mismo?
+    if (oficial.estado === true) {
+      advertencias.push("Está conectado al sistema en este momento");
+    }
+
+    // 4. ¿Es patrullero con asignación de patrulla activa?
+    if (oficial.rol === "Patrullero") {
+      const { data: asignacionActiva } = await supabase
+        .from("asignacion_patrulla")
+        .select("id_asignacion")
+        .eq("id_oficial_asignador", id)
+        .is("derivacion_por", null); // ajusta el filtro según cómo marques "activa" en tu esquema
+      if (asignacionActiva && asignacionActiva.length > 0) {
+        advertencias.push("Tiene una patrulla asignada activa");
+      }
+    }
+
+    if (advertencias.length > 0) {
+      showToast(
+        `No se puede eliminar: ${advertencias.join(" · ")}. Use "DE BAJA" o resuelva estos pendientes primero.`,
+        "error",
+      );
+      return;
+    }
+
     setConfirmarEliminar(oficial);
   };
 
@@ -355,7 +432,7 @@ function Usuarios() {
     } else {
       showToast(
         `**Oficial** ${oficial?.nombre_completo} eliminado del sistema`,
-        "error",
+        "success",
       );
       await supabase.from("log_actividad").insert([
         {
@@ -415,9 +492,9 @@ function Usuarios() {
           ],
     );
 
-    const nombreArchivo = `reportes/${tabActiva}_reporte.pdf`;
+    const nombreArchivo = `${tabActiva}_reporte.pdf`;
 
-    // 1. Obtener la URL pública del archivo en Supabase Storage (mismo patrón que ActividadLog.jsx)
+    // 1. Obtener la URL pública del archivo en Supabase Storage
     const { data: urlData } = supabase.storage
       .from("reportes")
       .getPublicUrl(nombreArchivo);
@@ -442,16 +519,24 @@ function Usuarios() {
       qrData: urlPublica,
     });
 
-    // 3. Subir ese mismo PDF
-    const { error: uploadError } = await supabase.storage
-      .from("reportes")
-      .upload(nombreArchivo, pdfBlob, {
-        contentType: "application/pdf",
-        upsert: true,
-      });
+    // 3. Subir ese mismo PDF (no bloquea la descarga si falla)
+    try {
+      await supabase.storage.from("reportes").remove([nombreArchivo]);
 
-    if (uploadError) {
-      showToast("Error al subir el reporte", "error");
+      const { error: uploadError } = await supabase.storage
+        .from("reportes")
+        .upload(nombreArchivo, pdfBlob, {
+          contentType: "application/pdf",
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error("SUPABASE UPLOAD ERROR:", uploadError);
+        console.error("Mensaje:", uploadError.message);
+        console.error("Status:", uploadError.statusCode || uploadError.status);
+      }
+    } catch (e) {
+      console.error("EXCEPCIÓN AL SUBIR:", e);
     }
 
     // 4. Descargar
@@ -536,7 +621,10 @@ function Usuarios() {
     const termino = busqueda.toLowerCase().trim();
 
     if (tabActiva === "oficiales") {
-      const estaConectado = item.estado === true;
+      const estaConectado =
+        item.estado === true &&
+        item.ultima_actividad &&
+        Date.now() - new Date(item.ultima_actividad).getTime() < UMBRAL_CONEXION_MS;
       const cumpleFiltro =
         filtroActivo === "Todos" ||
         (filtroActivo === "conectado" && estaConectado) ||
@@ -574,448 +662,632 @@ function Usuarios() {
   });
 
   if (cargando) {
-    return (
-      <div className="-mt-4 w-full px-1 py-5 bg-gray-50/30 min-h-screen flex items-center justify-center">
-        <div className="text-green-800 font-bold text-lg">
-          Cargando usuarios...
-        </div>
-      </div>
-    );
+    return <UsuariosSkeleton />;
   }
 
   return (
-    <div className="w-full h-full flex flex-col animate-fadeIn bg-gray-50/30 overflow-hidden px-0 py-1">
+<div className="w-full h-full flex flex-col animate-fadeIn bg-gray-50/30 overflow-y-auto p-1 pb-3">
       {/* SELECTOR DE TABS */}
-      <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4 flex-shrink-0 -mt-1.5">
-        <div className="flex items-center gap-4 flex-1 min-w-[200px] shrink-0">
-          {/* Tabs Oficiales / Ciudadanos */}
-          <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
-            <button
-              onClick={() => {
-                setTabActiva("oficiales");
-                setFiltroActivo("Todos");
-                setBusquedaCiudadanos("");
-              }}
-              className={`flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-lg font-medium text-[12.5px] transition-all tracking-widest ${
-                tabActiva === "oficiales"
-                  ? "bg-[#474b29] text-white shadow-md"
-                  : "text-slate-400 hover:text-slate-600"
-              }`}
-            >
-              <span className="hidden sm:inline">OFICIALES</span>
-            </button>
-            <button
-              onClick={() => {
-                setTabActiva("ciudadanos");
-                setFiltroActivo("Todos");
-                setBusquedaOficiales("");
-              }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-[12px] transition-all tracking-widest ${
-                tabActiva === "ciudadanos"
-                  ? "bg-[#474b29] text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-600"
-              }`}
-            >
-              <span className="hidden sm:inline">CIUDADANOS</span>
-            </button>
-          </div>
+<div className="w-full bg-white p-2 sm:p-3 rounded-2xl shadow-md border border-gray-100 flex items-center gap-3 sm:gap-4 xl:gap-3 flex-shrink-0 -mt-1.5">
+        {/* Tabs Oficiales / Ciudadanos */}
+        <div className="flex bg-gray-50 p-1 sm:p-1.5 rounded-xl border border-gray-200 shrink-0">
+          <button
+            onClick={() => {
+              setTabActiva("oficiales");
+              setFiltroActivo("Todos");
+              setBusquedaCiudadanos("");
+            }}
+            className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-3 md:px-5 py-1 sm:py-2 md:py-3 rounded-lg font-medium text-[10px] sm:text-[12.5px] transition-all tracking-widest ${
+              tabActiva === "oficiales"
+                ? "bg-[#474b29] text-white shadow-md"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            <span className="inline">OFICIALES</span>
+          </button>
+          <button
+            onClick={() => {
+              setTabActiva("ciudadanos");
+              setFiltroActivo("Todos");
+              setBusquedaOficiales("");
+            }}
+            className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2.5 rounded-lg font-medium text-[10px] sm:text-[12px] transition-all tracking-widest ${
+              tabActiva === "ciudadanos"
+                ? "bg-[#474b29] text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            <span className="inline">CIUDADANOS</span>
+          </button>
+        </div>
 
-          {/* Buscador */}
-          <div className="relative flex-1 min-w-[160px]">
-            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[13px] text-slate-400" />
-            <input
-              type="text"
-              placeholder={
-                tabActiva === "oficiales"
-                  ? "Buscar por nombre, CI, celular, escalafón, rol o rango..."
-                  : "Buscar por nombre, CI o celular..."
-              }
-              className="w-full h-11 pl-10 pr-3 md:pr-5 py-2 md:py-3 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[12px] font-medium text-slate-700 transition-all focus:bg-white focus:border-[#474b29] tracking-wider"
-              value={busqueda}
-              onChange={(e) =>
-                tabActiva === "oficiales"
-                  ? setBusquedaOficiales(e.target.value)
-                  : setBusquedaCiudadanos(e.target.value)
-              }
-            />
+        {/* Filtros Todos / Conectado / Desconectado — solo visibles en md y lg
+            (en xl+ se muestra la versión original más abajo, con texto completo) */}
+        {tabActiva === "oficiales" && (
+          <div className="hidden md:flex xl:hidden bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0 whitespace-nowrap text-[11px] tracking-widest font-medium">
+            {["Todos", "conectado", "desconectado"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFiltroActivo(f)}
+                title={
+                  f === "conectado"
+                    ? "Conectado"
+                    : f === "desconectado"
+                      ? "Desconectado"
+                      : "Todos"
+                }
+                className={`flex items-center justify-center gap-1.5 px-3 lg:px-5 py-2 lg:py-3 rounded-lg uppercase font-medium transition-all tracking-wider whitespace-nowrap ${
+                  filtroActivo === f
+                    ? "bg-[#474b29] text-white shadow-md"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                {f === "conectado"
+                  ? "Conectado"
+                  : f === "desconectado"
+                    ? "Desconectado"
+                    : "Todos"}
+              </button>
+            ))}
           </div>
+        )}
 
-          {/* Nuevo oficial -> ahora a la izquierda */}
-          {tabActiva === "oficiales" && (
+        {/* Buscador compacto — visible de base a lg, colapsado a lupa */}
+        <div
+          className={`relative flex items-center xl:hidden ${
+            busquedaMovilAbierta ? "flex-1" : ""
+          }`}
+        >
+          {busquedaMovilAbierta ? (
+            <div className="relative w-full">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400"/>
+              <input
+                autoFocus
+                type="text"
+                placeholder={
+                  tabActiva === "oficiales"
+                    ? "Buscar por nombre, CI, celular, escalafón, rol o rango..."
+                    : "Buscar por nombre, CI o celular..."
+                }
+                className="w-full h-9 sm:h-11 pl-9 pr-8 py-1.5 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[11px] sm:text-[12px] font-medium text-slate-700 transition-all focus:bg-white focus:border-[#474b29] tracking-wider"
+                value={busqueda}
+                onChange={(e) =>
+                  tabActiva === "oficiales"
+                    ? setBusquedaOficiales(e.target.value)
+                    : setBusquedaCiudadanos(e.target.value)
+                }
+                onBlur={() => {
+                  if (!busqueda) setBusquedaMovilAbierta(false);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (tabActiva === "oficiales") setBusquedaOficiales("");
+                  else setBusquedaCiudadanos("");
+                  setBusquedaMovilAbierta(false);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <FaTimes size={12} />
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={() => {
-                setEditandoPolicia(null);
-                setMostrarModalPolicia(true);
-              }}
-              className="relative flex items-center gap-2 px-5 py-2 h-11 rounded-lg tracking-wider font-medium text-[12px] uppercase shadow text-white bg-[#474b29] hover:bg-[#3a3e21] transition-all shrink-0"
+              type="button"
+              onClick={() => setBusquedaMovilAbierta(true)}
+              className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-xl border border-gray-200 bg-gray-50/50 text-slate-400 hover:text-slate-600 hover:border-slate-300 transition-all shrink-0"
+              title="Buscar"
             >
-              <FaPlus size={11} /> Nuevo oficial
+              <FaSearch size={14} />
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Filtros Todos / Conectado / Desconectado -> ahora a la derecha */}
-          {tabActiva === "oficiales" && (
-            <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0 whitespace-nowrap text-[12px] tracking-wider font-medium">
-              {["Todos", "conectado", "desconectado"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFiltroActivo(f)}
-                  className={`flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-lg uppercase font-bold text-xs transition-all tracking-wider whitespace-nowrap ${
-                    filtroActivo === f
-                      ? "bg-[#474b29] text-white shadow-md"
-                      : "text-slate-400 hover:text-slate-600"
-                  }`}
-                >
-                  {f === "conectado"
-                    ? "Conectado"
-                    : f === "desconectado"
-                      ? "Desconectado"
-                      : "Todos"}
-                </button>
-              ))}
-            </div>
-          )}
+        {/* Buscador original — solo desde xl */}
+        <div className="hidden xl:block relative flex-1 min-w-[160px]">
+          <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[13px] text-slate-400" />
+          <input
+            type="text"
+            placeholder={
+              tabActiva === "oficiales"
+                ? "Buscar por nombre, CI, celular, escalafón, rol o rango..."
+                : "Buscar por nombre, CI o celular..."
+            }
+            className="w-full pl-10 pr-5 py-[1.1svh] bg-gray-50/50 border border-gray-200 rounded-lg outline-none text-[12px] font-medium text-slate-700 transition-all focus:bg-white focus:border-[#474b29] tracking-wider"
+            value={busqueda}
+            onChange={(e) =>
+              tabActiva === "oficiales"
+                ? setBusquedaOficiales(e.target.value)
+                : setBusquedaCiudadanos(e.target.value)
+            }
+          />
+        </div>
 
-          {/* Exportar */}
-          <div className="relative group shrink-0">
-            <button className="flex items-center gap-2 px-1 md:px-5 py-2 md:py-3 bg-white border-2 border-gray-200 text-slate-700 rounded-lg font-medium uppercase text-[12px] hover:border-slate-300 transition-all disabled:opacity-70 disabled:cursor-wait tracking-wider">
-              <FaFileDownload size={11} /> <span>Exportar</span>
-            </button>
-            <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+        {/* Nuevo oficial — solo ícono, de base a lg */}
+        {tabActiva === "oficiales" && !busquedaMovilAbierta && (
+          <button
+            onClick={() => {
+              setEditandoPolicia(null);
+              setMostrarModalPolicia(true);
+            }}
+            className="xl:hidden flex items-center justify-center w-9 h-[4svh] sm:w-11 sm:h-11 rounded-lg font-medium uppercase shadow text-white bg-[#474b29] hover:bg-[#3a3e21] transition-all shrink-0"
+            title="Nuevo oficial"
+          >
+            <FaPlus size={14} />
+          </button>
+        )}
+
+        {/* Nuevo oficial original con texto — solo desde xl */}
+        {tabActiva === "oficiales" && (
+          <button
+            onClick={() => {
+              setEditandoPolicia(null);
+              setMostrarModalPolicia(true);
+            }}
+            className="hidden xl:flex items-center justify-center gap-1.5 px-4 h-10 rounded-lg tracking-widest font-medium text-[12px] uppercase shadow text-white bg-[#474b29] hover:bg-[#3a3e21] transition-all shrink-0"
+          >
+            <FaPlus size={11} /> <span>Nuevo oficial</span>
+          </button>
+        )}
+
+        {/* Separador vertical + menú de acciones (Exportar) — de base a lg */}
+        {!busquedaMovilAbierta && (
+          <div className="xl:hidden flex items-center gap-3 sm:gap-4 pl-3 sm:pl-4 ml-auto border-l border-gray-200 shrink-0">
+            <div className="relative">
               <button
-                onClick={exportarExcel}
-                className="w-full px-3 py-2 text-left hover:bg-green-50 text-black font-bold text-[10px] flex items-center gap-2"
+                type="button"
+                onClick={() => setMenuAccionesAbierto((v) => !v)}
+                className="flex items-center justify-center w-9 h-[4svh] sm:w-11 sm:h-11 rounded-lg border-2 border-gray-200 bg-white text-slate-700 hover:border-slate-300 transition-all shrink-0"
+                title="Más acciones"
               >
-                <FaFileExcel className="text-green-800" size={11} /> Excel
-                (.xls)
+                <FaFileDownload size={14} />
               </button>
-              <button
-                onClick={exportarPDF}
-                className="w-full px-3 py-2 text-left hover:bg-red-50 text-black font-bold text-[10px] flex items-center gap-2"
-              >
-                <FaFilePdf className="text-red-700" size={11} /> PDF
-              </button>
+
+              {menuAccionesAbierto && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setMenuAccionesAbierto(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50">
+                    <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Exportar
+                    </p>
+                    <button
+                      onClick={() => {
+                        exportarExcel();
+                        setMenuAccionesAbierto(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-green-50 font-medium text-[12px] flex items-center gap-2 text-slate-600"
+                    >
+                      <FaFileExcel className="text-green-800" size={12} /> Excel (.xls)
+                    </button>
+                    <button
+                      onClick={() => {
+                        exportarPDF();
+                        setMenuAccionesAbierto(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-red-50 font-medium text-[12px] flex items-center gap-2 text-slate-600"
+                    >
+                      <FaFilePdf className="text-red-700" size={12} /> PDF
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
+          </div>
+        )}
+
+        {/* Filtros originales con texto completo — solo desde xl */}
+        {tabActiva === "oficiales" && (
+          <div className="hidden xl:flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0 whitespace-nowrap text-[12px] tracking-widest font-medium">
+            {["Todos", "conectado", "desconectado"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFiltroActivo(f)}
+                className={`flex items-center justify-center gap-1.5 px-5 py-3 rounded-lg uppercase font-medium text-xs transition-all tracking-wider whitespace-nowrap ${
+                  filtroActivo === f
+                    ? "bg-[#474b29] text-white shadow-md"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                {f === "conectado"
+                  ? "Conectado"
+                  : f === "desconectado"
+                    ? "Desconectado"
+                    : "Todos"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Exportar — solo ícono en xl */}
+        <div className="hidden xl:flex 2xl:hidden relative group shrink-0">
+          <button
+            className="flex items-center justify-center w-11 h-11 bg-white border-2 border-gray-200 text-slate-700 rounded-xl hover:border-slate-300 transition-all disabled:opacity-70 disabled:cursor-wait"
+            title="Exportar"
+          >
+            <FaFileDownload size={14} />
+          </button>
+          <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+            <button
+              onClick={exportarExcel}
+              className="w-full px-3 py-2 text-left hover:bg-green-50 text-extrabold font-medium text-[12px] flex items-center gap-2"
+            >
+              <FaFileExcel className="text-green-800" size={11} /> Excel
+              (.xls)
+            </button>
+            <button
+              onClick={exportarPDF}
+              className="w-full px-3 py-2 text-left hover:bg-red-50 text-extrabold font-medium text-[12px] flex items-center gap-2"
+            >
+              <FaFilePdf className="text-red-700" size={11} /> PDF
+            </button>
+          </div>
+        </div>
+
+        {/* Exportar — con texto desde 2xl */}
+        <div className="hidden 2xl:block relative group shrink-0">
+          <button className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white border-2 border-gray-200 text-slate-700 rounded-lg font-medium uppercase text-[12px] hover:border-slate-300 transition-all disabled:opacity-70 disabled:cursor-wait tracking-widest">
+            <FaFileDownload size={11} /> <span>Exportar</span>
+          </button>
+          <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+            <button
+              onClick={exportarExcel}
+              className="w-full px-3 py-2 text-left hover:bg-green-50 text-extrabold font-medium text-[12px] flex items-center gap-2"
+            >
+              <FaFileExcel className="text-green-800" size={11} /> Excel
+              (.xls)
+            </button>
+            <button
+              onClick={exportarPDF}
+              className="w-full px-3 py-2 text-left hover:bg-red-50 text-extrabold font-medium text-[12px] flex items-center gap-2"
+            >
+              <FaFilePdf className="text-red-700" size={11} /> PDF
+            </button>
           </div>
         </div>
       </div>
 
       {/* Tabla */}
-      <div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0 max-h-[79svh] overflow-hidden mt-6">
-        <div className="flex items-center justify-between mb-4 md:mb-6 flex-shrink-0 flex-wrap gap-2">
-          <h2 className="text-[18px] font-bold uppercase text-[#1e293b] tracking-wider flex-shrink-0">
-            {tabActiva === "oficiales"
-              ? "Personal Policial"
-              : "Registro de Ciudadanos"}
-          </h2>
-          {tabActiva === "oficiales" &&
-            oficiales.filter((o) => o.acceso === "PENDIENTE").length > 0 && (
-              <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg border bg-gray-50  font-extrabold uppercase tracking-wider  border-gray-200">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">
-                  ● {oficiales.filter((o) => o.acceso === "PENDIENTE").length}{" "}
-                  pendiente(s) a activar
-                </span>
-              </div>
-            )}
-        </div>
+<div className="relative top-1 w-full bg-white rounded-2xl shadow-lg flex flex-col flex-1 min-h-0 max-h-[79svh] mt-3 sm:mt-6">
 
-        <div className="relative flex-1 min-h-0">
-          <div className="h-full overflow-auto -mx-4 md:mx-0 px-4 md:px-0 pb-3 scroll-hover">
-            <table className="min-w-full border-separate border-spacing-0 table-fixed">
-              <thead>
-                <tr className="text-slate-400 text-[11px] font-medium uppercase tracking-widest">
-                  <th className="sticky top-0 z-10 bg-white px-3 pb-3 pt-1 border-b border-slate-200 w-[10%] text-left md:pr-2">
-                    ID
-                  </th>
-                  <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[30%] text-left">
-                    {tabActiva === "oficiales" ? "Oficial" : "Ciudadano"}
-                  </th>
-                  {tabActiva === "oficiales" ? (
-                    <>
-                      <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[12%] text-left">
-                        Escalafón / Rol
-                      </th>
-                      <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
-                        Rango
-                      </th>
-                      <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
-                        Celular
-                      </th>
-                      <th className="sticky top-0 z-10 bg-white px-0 pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
-                        Estado
-                      </th>
-                    </>
-                  ) : (
-                    <>
-                      <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
-                        Cédula
-                      </th>
-                      <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
-                        Celular
-                      </th>
-                      <th className="sticky top-0 z-10 bg-white px-0 pb-3 pt-1 border-b border-slate-200 w-[12%] text-left">
-                        Estado
-                      </th>
-                    </>
-                  )}
-                  <th className="sticky top-0 z-10 bg-white px-4 pb-3 pt-1 border-b border-slate-200 w-[10%] text-left">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {datosFiltrados.map((item, i) => {
-                  const esOficial = tabActiva === "oficiales";
-                  const idMostrar = esOficial
-                    ? `ROF-${String(item.id_oficial).padStart(4, "0")}`
-                    : `REGC-${String(item.id_usuario).padStart(4, "0")}`;
+        <div className="px-4 md:px-7 py-4 md:py-6 flex flex-col flex-1 min-h-0 overflow-hidden">
+           <div className="flex items-center justify-between mb-2 md:mb-6 flex-shrink-0 flex-wrap gap-2">
+            <h2 className="text-[14px] sm:text-[18px] font-bold uppercase text-[#1e293b] mb-2 md:mb-6 tracking-wider flex-shrink-0">
+              {tabActiva === "oficiales"
+                ? "Personal Policial"
+                : "Registro de Ciudadanos"}
+            </h2>
+          </div>
 
-                  const UMBRAL_CONEXION_MS = 45000; // 3x el intervalo del heartbeat (15s)
-                  const estaConectado =
-                    esOficial &&
-                    item.estado === true &&
-                    item.ultima_actividad &&
-                    Date.now() - new Date(item.ultima_actividad).getTime() <
-                      UMBRAL_CONEXION_MS;
+          <div className="relative flex-1 min-h-0 overflow-hidden rounded-xl">
+            <div
+              onMouseEnter={() => setHoverTabla(true)}
+              onMouseLeave={() => setHoverTabla(false)}
+              className={`h-full overflow-y-auto overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-3 pr-1.5 ${
+                hoverTabla ? "scroll-visible" : "scroll-hover"
+              }`}
+            >
+              <table className="min-w-full border-collapse">
+                <thead>
+                  <tr className="text-slate-400 text-[11px] font-medium uppercase tracking-widest">
+                    <th className="sticky top-0 z-10 bg-white px-3 pb-3 pt-1 border-b border-slate-200 min-w-[90px] text-left md:pr-2">
+                      ID
+                    </th>
+                    <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 min-w-[180px] text-left">
+                      {tabActiva === "oficiales" ? "Oficial" : "Ciudadano"}
+                    </th>
+                    {tabActiva === "oficiales" ? (
+                      <>
+                        <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 min-w-[130px] text-left">
+                          Escalafón / Rol
+                        </th>
+                        <th className="hidden md:table-cell sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 min-w-[110px] text-left">
+                          Rango
+                        </th>
+                        <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 min-w-[120px] text-left">
+                          Celular
+                        </th>
+                        <th className="sticky top-0 z-10 bg-white px-0 pb-3 pt-1 border-b border-slate-200 min-w-[140px] text-left">
+                          Estado
+                        </th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 min-w-[110px] text-left">
+                          Cédula
+                        </th>
+                        <th className="sticky top-0 z-10 bg-white pb-3 pt-1 border-b border-slate-200 min-w-[120px] text-left">
+                          Celular
+                        </th>
+                        <th className="sticky top-0 z-10 bg-white px-0 pb-3 pt-1 border-b border-slate-200 min-w-[150px] text-left">
+                          Estado
+                        </th>
+                      </>
+                    )}
+                    <th className="sticky top-0 z-10 bg-white px-4 pb-3 pt-1 border-b border-slate-200 min-w-[130px] text-left">
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {datosFiltrados.map((item, i) => {
+                    const esOficial = tabActiva === "oficiales";
+                    const idMostrar = esOficial
+                      ? `ROF-${String(item.id_oficial).padStart(4, "0")}`
+                      : `REGC-${String(item.id_usuario).padStart(4, "0")}`;
 
-                  const advertencias = !esOficial
-                    ? (item.advertencias ?? 0)
-                    : 0;
-                  const estadoDisplay = !esOficial
-                    ? getEstadoDisplay(item)
-                    : null;
-                  const mostrarContador =
-                    !esOficial && estadoDisplay === "ADVERTIDO";
+                    const estaConectado =
+                      esOficial &&
+                      item.estado === true &&
+                      item.ultima_actividad &&
+                      Date.now() - new Date(item.ultima_actividad).getTime() <  UMBRAL_CONEXION_MS;
 
-                  return (
-                    <tr
-                      key={i}
-                      className="bg-white group transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
-                    >
-                      <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-6 md:py-7 text-[11px] font-medium text-slate-500/90 uppercase tracking-wider align-middle border-b border-slate-200/60">
-                        {idMostrar}
-                      </td>
-                      <td className="py-5 md:py-6 border-b border-slate-200/60 align-middle">
-                        <div className="flex items-center gap-3 text-left">
-                          <div
-                            className={`w-6 h-8 rounded-md flex items-center justify-center font-black text-xs shadow-inner shrink-0r ${
-                              !esOficial
-                                ? "bg-blue-50 text-[#270cb2]"
-                                : "bg-[#474b29]/10 text-[#474b29]"
-                            }`}
-                          >
-                            {!esOficial ? (
-                              item.nombre_completo?.charAt(0)
-                            ) : (
-                              <FaShieldAlt size={14} />
-                            )}
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-[12.5px] font-medium text-[#1e293b] truncate max-w-[120px] md:max-w-none">
-                              {item.nombre_completo}
-                            </span>
-                            {esOficial && item.ci && (
-                              <span className="mt-0.5 text-[8.5px] font-medium uppercase tracking-wider text-slate-400">
-                                CI {item.ci}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      {esOficial ? (
-                        <>
-                          <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
-                            <div className="flex flex-col">
-                              <span className="text-[11px] font-extrabold tracking-wider text-slate-500 mb-0.5">
-                                {item.numero_escalafon || "—"}
-                              </span>
-                              <span className="text-[12px] font-medium text-slate-500 uppercase tracking-wider">
-                                {item.rol || "—"}
-                              </span>
+                    const advertencias = !esOficial
+                      ? (item.advertencias ?? 0)
+                      : 0;
+                    const estadoDisplay = !esOficial
+                      ? getEstadoDisplay(item)
+                      : null;
+                    const mostrarContador =
+                      !esOficial && estadoDisplay === "ADVERTIDO";
+
+                    return (
+                      <tr
+                        key={i}
+                        className="bg-white group transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
+                      >
+                        <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-6 md:py-7 text-[11px] font-medium text-slate-500/90 uppercase tracking-wider align-middle border-b border-slate-200/60">
+                          {idMostrar}
+                        </td>
+                        <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+                          <div className="flex items-center gap-3 text-left">
+                            <div
+                              className={`w-6 h-8 rounded-md flex items-center justify-center font-black text-xs shadow-inner shrink-0r ${
+                                !esOficial
+                                  ? "bg-blue-50 text-[#270cb2]"
+                                  : "bg-[#474b29]/10 text-[#474b29]"
+                              }`}
+                            >
+                              {!esOficial ? (
+                                item.nombre_completo?.charAt(0)
+                              ) : (
+                                <FaShieldAlt size={14} />
+                              )}
                             </div>
-                          </td>
-                          <td className="border-b border-slate-200/60 py-5 md:py-6 text-[11px] uppercase font-medium tracking-wider text-slate-600 align-middle">
-                            {item.cargo || "—"}
-                          </td>
-                          <td className="border-b border-slate-200/60 py-5 md:py-6 text-[11px] uppercase font-medium tracking-wider text-slate-600 align-middle">
-                            {item.celular ? (
-                              <a
-                                href={getWhatsappLink(item.celular)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="hover:text-[#474b29] hover:underline transition-colors"
-                                title="Abrir en WhatsApp"
-                              >
-                                {item.celular}
-                              </a>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
-                            <div className="flex flex-col items-start gap-1">
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className={`inline-flex items-center justify-center gap-1.5 py-1.5 uppercase rounded-md text-[11px] font-medium tracking-wider ${
-                                    estaConectado
-                                      ? "px-2 bg-[#007942] text-white"
-                                      : "px-2.5 bg-slate-100 text-slate-600 border borde-slate-200"
-                                  }`}
-                                >
-                                  {estaConectado ? "Conectado" : "Desconectado"}
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[12.5px] font-medium text-[#1e293b] truncate max-w-[110px] sm:max-w-[150px] md:max-w-[200px] lg:max-w-[240px] tracking-wider">
+                                {item.nombre_completo}
+                              </span>
+                              {esOficial && item.ci && (
+                                <span className="mt-0.5 text-[8.5px] font-medium uppercase tracking-wider text-slate-400">
+                                  CI {item.ci}
                                 </span>
+                              )}
+                              {!esOficial && (
+                                <span className="mt-0.5 text-[8.5px] font-medium uppercase tracking-wider text-slate-400">
+                                  {Number(item.id_estado_ciudadano) === 2
+                                    ? "Verificado"
+                                    : "No verificado"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        {esOficial ? (
+                          <>
+                            <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+                              <div className="flex flex-col">
+                                <span className="text-[11px] font-extrabold tracking-wider text-slate-500 mb-0.5">
+                                  {item.numero_escalafon || "—"}
+                                </span>
+                                <span className="text-[11.5px] font-medium text-slate-500 uppercase tracking-wider">
+                                  {item.rol || "—"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="hidden md:table-cell border-b border-slate-200/60 py-5 md:py-6 text-[11px] uppercase font-medium tracking-wider text-slate-600 align-middle">
+                              {item.cargo || "—"}
+                            </td>
+
+                            <td className="border-b border-slate-200/60 py-5 md:py-6 text-[11px] uppercase font-medium tracking-wider text-slate-600 align-middle">
+                              {item.celular ? (
+                                <a
+                                  href={getWhatsappLink(item.celular)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="hover:text-[#474b29] hover:underline transition-colors"
+                                  title="Abrir en WhatsApp"
+                                >
+                                  {item.celular}
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+                              <div className="flex flex-col items-start gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className={`inline-flex items-center text-white justify-center gap-1.5 py-1.5 uppercase rounded-md text-[11px] font-medium tracking-wider ${
+                                      estaConectado
+                                        ? "px-5 bg-[#007942]"
+                                        : "px-2 bg-gray-500/60"
+                                    }`}
+                                  >
+                                    {estaConectado
+                                      ? "Conectado"
+                                      : "Desconectado"}
+                                  </span>
+                                  {item.acceso === "FUERA DE SERVICIO" && (
+                                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#C90A0A] text-[#C90A0A]">
+                                      <FaPowerOff size={10} />
+                                    </div>
+                                  )}
+                                  {item.acceso === "DE BAJA" && (
+                                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-slate-600/80 text-slate-600">
+                                      <FaUserSlash size={10} />
+                                    </div>
+                                  )}
+                                  {item.acceso === "PENDIENTE" && (
+                                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#EBB615] text-[#EBB615]">
+                                      <FaClock size={10} />
+                                    </div>
+                                  )}
+                                </div>
                                 {item.acceso === "FUERA DE SERVICIO" && (
-                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-slate-500/80 text-slate-500/80">
-                                    <FaPowerOff size={10} />
-                                  </div>
+                                  <span className="text-[9px] font-medium uppercase tracking-wider text-[#C90A0A] leading-none mt-0.5">
+                                    FUERA DE SERVICIO
+                                  </span>
                                 )}
                                 {item.acceso === "DE BAJA" && (
-                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#C90A0A] text-[#C90A0A]">
-                                    <FaUserSlash size={10} />
-                                  </div>
+                                  <span className="text-[9px] font-medium uppercase tracking-wider text-slate-600/90 leading-none mt-0.5">
+                                    DADO DE BAJA
+                                  </span>
                                 )}
                                 {item.acceso === "PENDIENTE" && (
-                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-amber-500 text-amber-500">
-                                    <FaClock size={10} />
-                                  </div>
+                                  <span className="text-[9px] font-medium uppercase tracking-wider text-[#EBB615] leading-none mt-0.5">
+                                    PENDIENTE DE ACTIVACIÓN
+                                  </span>
                                 )}
                               </div>
-                              {item.acceso === "FUERA DE SERVICIO" && (
-                                <span className="text-[9px] font-medium uppercase tracking-wider text-slate-500/80 leading-none mt-0.5">
-                                  FUERA DE SERVICIO
-                                </span>
-                              )}
-                              {item.acceso === "DE BAJA" && (
-                                <span className="text-[9px] font-medium uppercase tracking-wider text-[#C90A0A] leading-none mt-0.5">
-                                  DADO DE BAJA
-                                </span>
-                              )}
-                              {item.acceso === "PENDIENTE" && (
-                                <span className="text-[9px] font-medium uppercase tracking-wider text-amber-500 leading-none mt-0.5">
-                                  PENDIENTE DE ACTIVACIÓN
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="py-5 border-b border-slate-200/60 md:py-6 text-[11px] uppercase font-medium tracking-wider text-slate-500 align-middle">
-                            {item.ci || "—"}
-                          </td>
-                          <td className="border-b border-slate-200/60 py-5 md:py-6 text-[12px] font-bold text-slate-500 align-middle">
-                            {item.celular || "—"}
-                          </td>
-                          <td className="py-5 md:py-6 border-b border-slate-200/60 align-middle">
-                            <div className="flex flex-col items-start justify-center gap-1">
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className={`inline-flex items-center justify-center gap-1.5 py-1.5 uppercase rounded-md text-[11px] font-medium tracking-wider text-white ${
-                                    estadoDisplay === "VERIFICADO"
-                                      ? "bg-[#0172e3]"
-                                      : estadoDisplay === "NO VERIFICADO"
-                                        ? "bg-[#9da1a3]"
-                                        : estadoDisplay === "ADVERTIDO"
-                                          ? "bg-[#c64114]"
-                                          : estadoDisplay === "SUSPENDIDO"
-                                            ? "bg-[#C90A0A]"
-                                            : "bg-[#9da1a3]"
-                                  }`}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="py-5 md:py-6 text-[11px] font-medium text-slate-500 align-middle border-b border-slate-200/60 tracking-wider">
+                              {item.ci || "—"}
+                            </td>
+                            <td className="border-b border-slate-200/60 py-5 md:py-6 text-[11px] uppercase font-medium tracking-wider text-slate-600 align-middle">
+                              {item.celular ? (
+                                <a
+                                  href={getWhatsappLink(item.celular)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="hover:text-[#474b29] hover:underline transition-colors"
+                                  title="Abrir en WhatsApp"
                                 >
-                                  {estadoDisplay}
-                                </span>
-                                {mostrarContador && (
-                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#e67402] text-[#e67402] text-[10px] font-black shadow-sm">
-                                    {advertencias}
-                                  </div>
+                                  {item.celular}
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="py-5 md:py-6 border-b border-slate-200/60 align-middle">
+                              <div className="flex flex-col items-start justify-center gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className={`inline-flex items-center justify-center gap-1.5 py-1.5 uppercase rounded-md text-[11px] font-medium tracking-wider ${
+                                      estadoDisplay === "VERIFICADO"
+                                        ? "px-[18px] bg-[#0974e0] text-white"
+                                        : estadoDisplay === "NO VERIFICADO"
+                                          ? "px-[6px] bg-gray-500/60 text-white"
+                                          : estadoDisplay === "ADVERTIDO"
+                                            ? "px-[18px] bg-[#d7650d] text-white"
+                                            : estadoDisplay === "SUSPENDIDO"
+                                              ? "px-[14.5px] bg-[#C90A0A] text-white"
+                                              : "px-[14.5px] bg-[#EBB615] text-white"
+                                    }`}
+                                  >
+                                    {estadoDisplay}
+                                  </span>
+                                  {mostrarContador && (
+                                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2 border-[#e67402] text-[#e67402] text-[10px] font-black shadow-sm">
+                                      {advertencias}
+                                    </div>
+                                  )}
+                                </div>
+                                {estadoDisplay === "ADVERTIDO" && (
+                                  <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wider text-orange-600/90 leading-none">
+                                    ALERTAS DESESTIMADAS
+                                  </span>
+                                )}
+                                {estadoDisplay === "SUSPENDIDO" && (
+                                  <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wider text-[#C90A0A] leading-none">
+                                    LÍMITE DE ADVERTENCIAS
+                                  </span>
                                 )}
                               </div>
-                              {estadoDisplay === "ADVERTIDO" && (
-                                <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-[#e67402] leading-none">
-                                  ALERTAS DESESTIMADAS
-                                </span>
-                              )}
-                              {estadoDisplay === "SUSPENDIDO" && (
-                                <span className="mt-0.5 text-[9px] font-bold uppercase tracking-tighter text-[#C90A0A] leading-none">
-                                  LÍMITE DE ADVERTENCIAS
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </>
-                      )}
-                      <td className="px-4 py-5 md:py-6 border-b border-slate-200/60 align-middle">
-                        <div className="flex items-center gap-3">
-                          {esOficial ? (
-                            <>
+                            </td>
+                          </>
+                        )}
+                        <td className="px-4 py-5 md:py-6 border-b border-slate-200/60 align-middle">
+                          <div className="flex items-center gap-3">
+                            {esOficial ? (
+                              <>
+                                <button
+                                  onClick={() => setOficialSeleccionado(item)}
+                                  className="p-2 md:p-2.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                  title="Ver perfil"
+                                >
+                                  <FiEye size={14} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditandoPolicia(item);
+                                    setMostrarModalPolicia(true);
+                                  }}
+                                  className="p-2 md:p-2.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                  title="Editar"
+                                >
+                                  <FiEdit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    eliminarOficial(item.id_oficial)
+                                  }
+                                  className="p-2 md:p-2.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#C90A0A] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                  title="Eliminar"
+                                >
+                                  <FiTrash2 size={14} />
+                                </button>
+                              </>
+                            ) : (
                               <button
-                                onClick={() => setOficialSeleccionado(item)}
-                                className="p-2 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                onClick={() =>
+                                  setCiudadanoSeleccionado({
+                                    nombre: item.nombre_completo,
+                                    id: item.id_usuario,
+                                    ci: item.ci,
+                                    celular: item.celular,
+                                    email: item.email,
+                                    foto_ci: item.foto_ci,
+                                    selfie: item.selfie,
+                                    id_estado_ciudadano:
+                                      item.id_estado_ciudadano,
+                                    fecha_registro: item.fecha_registro,
+                                    advertencias: item.advertencias,
+                                    motivo_rechazo: item.motivo_rechazo,
+                                  })
+                                }
+                                className="p-1.5 md:p-2.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
                                 title="Ver perfil"
                               >
                                 <FiEye size={14} />
                               </button>
-                              <button
-                                onClick={() => {
-                                  setEditandoPolicia(item);
-                                  setMostrarModalPolicia(true);
-                                }}
-                                className="p-2 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
-                                title="Editar"
-                              >
-                                <FiEdit2 size={14} />
-                              </button>
-                              <button
-                                onClick={() => eliminarOficial(item.id_oficial)}
-                                className="p-2 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#C90A0A] hover:text-white transition-all duration-200 flex items-center justify-center"
-                                title="Eliminar"
-                              >
-                                <FiTrash2 size={14} />
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() =>
-                                setCiudadanoSeleccionado({
-                                  nombre: item.nombre_completo,
-                                  id: item.id_usuario,
-                                  ci: item.ci,
-                                  celular: item.celular,
-                                  email: item.email,
-                                  foto_ci: item.foto_ci,
-                                  selfie: item.selfie,
-                                  id_estado_ciudadano: item.id_estado_ciudadano,
-                                  fecha_registro: item.fecha_registro,
-                                  advertencias: item.advertencias,
-                                  motivo_rechazo: item.motivo_rechazo,
-                                })
-                              }
-                              className="p-1.5 md:p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474B29] hover:text-white transition-all duration-200 flex items-center justify-center"
-                              title="Ver perfil"
-                            >
-                              <FiEye size={14} />
-                            </button>
-                          )}
-                        </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {datosFiltrados.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={tabActiva === "oficiales" ? 7 : 6}
+                        className="border-b border-slate-200/60 text-center py-12 text-gray-400 font-medium"
+                      >
+                        No hay registros
                       </td>
                     </tr>
-                  );
-                })}
-                {datosFiltrados.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={tabActiva === "oficiales" ? 7 : 6}
-                      className="border-b border-slate-200/60 text-center py-12 text-gray-400 font-medium"
-                    >
-                      No hay registros
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -1042,49 +1314,75 @@ function Usuarios() {
         onClose={() => setOficialSeleccionado(null)}
       />
 
-      {/* MODAL CONFIRMAR ELIMINAR */}
+      {/* MODAL CONFIRMAR ELIMINAR — compacto, centrado, sin rojo, tema verde */}
       {confirmarEliminar && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-2xl shadow-2xl min-w-[500px] max-w-sm overflow-hidden min-h-[360px] flex flex-col justify-between">
-            <div className="bg-[#474b29] px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FaTrashAlt className="text-white" size={16} />
-                <h2 className="text-white font-extrabold text-[15px] uppercase tracking-wider">
-                  Eliminar Oficial
-                </h2>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm " />
+<div className="relative bg-white rounded-2xl shadow-2xl w-full h-auto sm:h-[412px] max-w-[90%] sm:max-w-[400px] mx-auto overflow-hidden flex flex-col animate-fadeIn">
+            {/* Barra verde — mismo estilo que NuevoPolicia.jsx */}
+            <div className="bg-[#474b29] py-4 px-5 sm:px-6 text-white shrink-0">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/10 p-2 rounded-md flex items-center justify-center shrink-0">
+                    <FaUserShield className="text-white" size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-bold uppercase tracking-wider leading-none">
+                      Eliminar Oficial
+                    </h2>
+                    <p className="text-[11px] font-medium text-white/70 mt-1.5 tracking-wider uppercase">
+                      ROF-
+                      {String(confirmarEliminar.id_oficial).padStart(4, "0")} -{" "}
+                      {confirmarEliminar.rol || "—"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmarEliminar(null)}
+                  className="hover:bg-white/20 p-1.5 rounded-md transition-colors shrink-0"
+                >
+                  <FaTimes size={15} />
+                </button>
               </div>
+            </div>
+
+            <div className="flex-1 px-7 py-6 flex flex-col items-center justify-center text-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-[#474b29]/10 flex items-center justify-center">
+                <FaTrashAlt className="text-[#474b29]" size={22} />
+              </div>
+
+              <div className="flex flex-col gap-1.5 mb-2">
+                <h2 className="text-[16px] font-semibold text-slate-700 uppercase tracking-wider">
+                  ¿Eliminar oficial?
+                </h2>
+                <p className="text-[12px] text-slate-400 font-medium leading-snug max-w-[340px] tracking-wider mt-1">
+                  El registro del oficial será eliminado del sistema de forma
+                  permanente. Esta acción no se puede deshacer.
+                </p>
+              </div>
+
+              <div className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mt-1">
+                <p className="text-[13px] font-semibold uppercase text-slate-700 tracking-wider">
+                  {confirmarEliminar.nombre_completo}
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 pb-6 flex justify-end gap-4 sm:px-6 py-4 border-t border-slate-200 bg-slate-50 shrink-0 -mb-2">
               <button
                 onClick={() => setConfirmarEliminar(null)}
-                className="hover:bg-white/20 p-1.5 rounded-md transition-colors text-white"
+                className="px-4 py-2.5 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FaTimes size={14} />
+                Cancelar
               </button>
-            </div>
-            <div className="p-6 space-y-4" style={{ paddingBottom: "115px" }}>
-              <p className="text-slate-500 text-[15px] tracking-wide font-bold text-center pb-2">
-                ¿Está seguro que desea eliminar al oficial?
-              </p>
-              <div className="w-full mt-6 px-2 py-4 bg-slate-50 uppercase border border-slate-200 rounded-xl text-center font-extrabold text-[14px] text-[#113e27]">
-                {confirmarEliminar.nombre_completo}
-              </div>
-              <p className="text-[11px] text-slate-400 text-center font-bold uppercase tracking-wider">
-                Esta acción no se puede deshacer
-              </p>
-              <div className="flex justify-center bg-slate-100/80 -mx-6 gap-6 px-3 py-4 absolute bottom-0 left-0 right-0">
-                <button
-                  onClick={() => setConfirmarEliminar(null)}
-                  className="w-40 px-6 py-3 bg-slate-200 hover:bg-slate-300 rounded-full font-bold text-[11px] uppercase tracking-wider text-slate-600 border-b border-slate-300 transition-all shadow-sm"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmarEliminarOficial}
-                  className="w-64 px-12 py-3 bg-[#474b29] hover:bg-[#3a3e21] rounded-full font-bold text-[11px] uppercase tracking-wider text-white transition-all shadow-md"
-                >
-                  Sí, eliminar
-                </button>
-              </div>
+              <button
+                onClick={confirmarEliminarOficial}
+                className="px-4 py-2.5 rounded-lg font-medium text-[11.5px] bg-[#474b29] uppercase hover:bg-[#3a3e21] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed tracking-wider flex items-center justify-center gap-2"
+              >
+                Eliminar cuenta
+              </button>
             </div>
           </div>
         </div>

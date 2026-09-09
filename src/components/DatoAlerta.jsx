@@ -34,12 +34,13 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose, onExitComplete
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.4, ease: "easeInOut" }}
+          transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
           style={{ overflow: "visible" }}
+          layout
         >
-          <div className="relative z-20 pt-1 mb-1.5">
-            <div className="bg-white p-5 py-4 rounded-2xl border border-slate-200 shadow-md">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-5">
+          <div className="relative z-20 pt-1 mb-3 mt-1">
+            <div className="relative bg-white p-5 py-4 rounded-2xl border border-slate-200 shadow-md max-h-[450px] overflow-y-auto scroll-hover">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-2">
                 <div>
                   <div className="flex items-center gap-3 flex-wrap">
                     <h2 className="text-xl font-extrabold text-[#1e293b] uppercase tracking-wider">
@@ -53,7 +54,7 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose, onExitComplete
                 </div>
                 <button 
                   onClick={onClose} 
-                  className="text-slate-400 hover:text-slate-600 text-[10px] font-bold uppercase tracking-wider transition-colors"
+                  className="text-slate-400 hover:text-slate-600 text-[11px] font-medium uppercase tracking-widest transition-colors"
                 >
                   Cerrar
                 </button>
@@ -61,7 +62,7 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose, onExitComplete
 
               <div className="flex flex-col md:flex-row gap-6 -mt-2">
                 {/* Columna izquierda */}
-                <div className="flex-1 flex flex-col gap-4">
+                <div className="flex-1 flex flex-col gap-4 mt-4">
                   <div>
                     <p className="text-[11px] font-medium text-slate-400 uppercase mb-2 tracking-wider">
                       {tipoClasificacion}
@@ -73,7 +74,7 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose, onExitComplete
                       </span>
                     </div>
                   </div>
-                  <div className="flex gap-4">
+                  <div className="flex gap-5 mt-2 mb-1">
                     <div className="flex-1">
                       <p className="text-[11px] font-medium text-slate-400 uppercase mb-2 tracking-wider">Coordenadas</p>
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
@@ -94,12 +95,12 @@ export const DatoAlerta = forwardRef(({ alerta, visible, onClose, onExitComplete
                 </div>
 
                 {/* Separador vertical */}
-                <div className="hidden md:block w-px bg-slate-200 self-stretch"></div>
+                <div className="hidden md:block w-px h-36 bg-slate-200 self-stretch mt-6"></div>
 
                 {/* Columna derecha */}
-                <div className="w-full md:w-[640px] shrink-0">
+                <div className="w-full md:w-[630px] shrink-0 mt-4">
                   <p className="text-[11px] font-medium text-slate-400 uppercase mb-2 tracking-wider">Descripción</p>
-                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-sm h-[130px] overflow-y-auto">
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-sm h-[140px] overflow-y-auto">
                     <p className="text-sm text-slate-800 leading-relaxed">{alerta.relato || "—"}</p>
                   </div>
                 </div>

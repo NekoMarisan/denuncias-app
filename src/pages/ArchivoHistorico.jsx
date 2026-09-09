@@ -9,6 +9,8 @@ import {
   FaClipboardCheck,
   FaBan,
   FaSpinner,
+  FaCalendarAlt,
+  FaBroom,
 } from "react-icons/fa";
 import { supabase } from "../services/supabase";
 import {
@@ -21,6 +23,7 @@ import FormularioTabulacion from "../components/modals/FormularioTabulacion";
 import { exportPDFArchivoHis } from "../utils/exports/exportPDFArchivoHis";
 import { exportExcelArchivoHis } from "../utils/exports/exportExcelArchivoHis";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 const ArchivoHistorico = ({
   alertasTabuladas,
   tabuladasCompletas = [],
@@ -28,10 +31,13 @@ const ArchivoHistorico = ({
   onBack,
 }) => {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [busqueda, setBusqueda] = useState("");
   const [tabActiva, setTabActiva] = useState("TABULADO");
-  const [tabCargando, setTabCargando] = useState(false); // ✅ loading al cambiar de tab
-  const [filtroTiempo, setFiltroTiempo] = useState("TODO");
+  const [tabCargando, setTabCargando] = useState(false);
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+  const hoyISO = new Date().toISOString().slice(0, 10);
   const [desestimadas, setDesestimadas] = useState([]);
   const [cargandoDesestimadas, setCargandoDesestimadas] = useState(true);
   const [selectedDesestimada, setSelectedDesestimada] = useState(null);
@@ -41,11 +47,14 @@ const ArchivoHistorico = ({
   const [clasificacionTabuladorModal, setClasificacionTabuladorModal] =
     useState(null);
   const [derivacionModal, setDerivacionModal] = useState(null);
-
-  // ✅ Estados de carga para acciones puntuales
-  const [modalLoadingId, setModalLoadingId] = useState(null); // id de la tarjeta cuyo modal "Ver" está abriendo
-  const [pdfLoadingId, setPdfLoadingId] = useState(null); // id de la tarjeta cuyo PDF se está generando
-  const [exportLoading, setExportLoading] = useState(null); // null | 'excel' | 'pdf'
+  const [hoverTarjetas, setHoverTarjetas] = useState(false);
+  const [modalLoadingId, setModalLoadingId] = useState(null);
+  const [pdfLoadingId, setPdfLoadingId] = useState(null);
+  const [exportLoading, setExportLoading] = useState(null);
+  const [busquedaMovilAbierta, setBusquedaMovilAbierta] = useState(false);
+  const [menuAccionesAbierto, setMenuAccionesAbierto] = useState(false);
+  const [desdeMovilAbierto, setDesdeMovilAbierto] = useState(false);
+  const [hastaMovilAbierto, setHastaMovilAbierto] = useState(false);
 
   useEffect(() => {
     const cargarDesestimadas = async () => {
@@ -172,7 +181,7 @@ const ArchivoHistorico = ({
     const cumpleBusqueda =
       ciudadano.includes(busquedaLower) || idAlerta.includes(busquedaLower);
 
-    if (filtroTiempo !== "TODO") {
+    if (fechaDesde || fechaHasta) {
       let fechaComparar;
       if (a.estado === "DESESTIMADO") {
         // fecha_desestimo es ISO string
@@ -182,26 +191,24 @@ const ArchivoHistorico = ({
         fechaComparar = a.fecha ? new Date(a.fecha + "T00:00:00") : null;
       }
       if (!fechaComparar || isNaN(fechaComparar.getTime())) return true; // si no hay fecha válida, lo incluye
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      if (filtroTiempo === "HOY") {
-        const inicioHoy = new Date(hoy);
-        const finHoy = new Date(hoy);
-        finHoy.setDate(finHoy.getDate() + 1);
-        if (fechaComparar < inicioHoy || fechaComparar >= finHoy) return false;
-      } else if (filtroTiempo === "ESTE MES") {
-        if (
-          fechaComparar.getMonth() !== hoy.getMonth() ||
-          fechaComparar.getFullYear() !== hoy.getFullYear()
-        )
-          return false;
+      if (fechaDesde) {
+        const desde = new Date(`${fechaDesde}T00:00:00`);
+        if (fechaComparar < desde) return false;
+      }
+      if (fechaHasta) {
+        const hasta = new Date(`${fechaHasta}T23:59:59`);
+        if (fechaComparar > hasta) return false;
       }
     }
     return cumpleEstado && cumpleBusqueda;
   });
 
-  // ✅ Cambiar de tab mostrando una pequeña carga (skeleton) para dar sensación
-  // de que el contenido se está refrescando, en vez de un salto brusco.
+  const limpiarFiltros = () => {
+    setBusqueda("");
+    setFechaDesde("");
+    setFechaHasta("");
+  };
+
   const handleCambiarTab = (tab) => {
     if (tab === tabActiva || tabCargando) return;
     setTabCargando(true);
@@ -354,7 +361,7 @@ const ArchivoHistorico = ({
       descripcion: alerta.alerta_completa?.descripcion,
       contravenciones: alerta.alerta_completa?.contravenciones,
       delitos: alerta.alerta_completa?.delitos,
-      prioridad: alerta.alerta_completa?.prioridad, // ✅ ahora sí viaja hasta el modal
+      prioridad: alerta.alerta_completa?.prioridad,
       motivo_desestimo: alerta.motivoDesestimacion,
       justificacion: alerta.justificacion,
       fecha_desestimo: new Date(alerta.fecha_desestimo).toLocaleString("es-BO"),
@@ -390,6 +397,13 @@ const ArchivoHistorico = ({
   };
 
   const exportarExcel = async () => {
+    if (!fechaDesde || !fechaHasta) {
+      showToast(
+        "Selecciona un rango de fechas (Desde y Hasta) antes de exportar",
+        "warning",
+      );
+      return;
+    }
     try {
       await exportExcelArchivoHis(alertasFiltradas, tabActiva, {
         nombreAdmin: user?.nombre_completo || "ADMINISTRADOR DE TURNO",
@@ -400,6 +414,14 @@ const ArchivoHistorico = ({
   };
 
   const exportarPDF = async () => {
+    if (!fechaDesde || !fechaHasta) {
+      showToast(
+        "Selecciona un rango de fechas (Desde y Hasta) antes de exportar",
+        "warning",
+      );
+      return;
+    }
+
     let logoBase64 = null;
     try {
       const res = await fetch("/logo_of.png");
@@ -477,112 +499,422 @@ const ArchivoHistorico = ({
 
   return (
     <div className="w-full h-full flex flex-col animate-fadeIn bg-gray-50/30 overflow-hidden px-0 py-1">
-      {/* SELECTOR DE TABS */}
-      <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4 flex-shrink-0 -mt-1.5">
-        <div className="flex items-center gap-4 flex-1 min-w-[200px] shrink-0">
-          <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
-            <button
-              onClick={() => handleCambiarTab("TABULADO")}
-              disabled={tabCargando}
-              className={`flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-lg font-medium text-[12.5px] transition-all tracking-widest ${
-                tabActiva === "TABULADO"
-                  ? "bg-[#474b29] text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-600"
-              }`}
-            >
-              {tabCargando && tabActiva === "TABULADO" && (
-                <FaSpinner className="animate-spin" size={10} />
-              )}
-              TABULADOS
-            </button>
-            <button
-              onClick={() => handleCambiarTab("DESESTIMADO")}
-              disabled={tabCargando}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-[12px] transition-all tracking-widest disabled:opacity-70 disabled:cursor-wait ${
-                tabActiva === "DESESTIMADO"
-                  ? "bg-[#474b29] text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-600"
-              }`}
-            >
-              {tabCargando && tabActiva === "DESESTIMADO" && (
-                <FaSpinner className="animate-spin" size={10} />
-              )}
-              DESESTIMADOS
-            </button>
-          </div>
-
-          <div className="relative flex-1">
-            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[13px] text-slate-400" />
-            <input
-              type="text"
-              placeholder={`Buscar en ${tabActiva === "TABULADO" ? "archivados" : "desestimados"}...`}
-              className="w-full h-11 pl-10 pr-3 md:pr-5 bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-[12px] font-medium text-slate-700 transition-all focus:bg-white focus:border-[#474b29]"
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-            />
-          </div>
+      {/* SELECTOR DE TABS / TOOLBAR RESPONSIVE */}
+      <div className="w-full bg-white p-2 sm:p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-2 sm:gap-3 xl:gap-4 flex-shrink-0 -mt-1.5">
+        {/* Tabs */}
+        <div className="flex bg-gray-50 p-1 sm:p-1.5 rounded-xl border border-gray-200 shrink-0">
+          <button
+            onClick={() => handleCambiarTab("TABULADO")}
+            disabled={tabCargando}
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-5 py-2 md:py-3 rounded-lg font-medium text-[10.5px] sm:text-[12px] md:text-[12.5px] transition-all tracking-widest whitespace-nowrap ${
+              tabActiva === "TABULADO"
+                ? "bg-[#474b29] text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            {tabCargando && tabActiva === "TABULADO" && (
+              <FaSpinner className="animate-spin" size={10} />
+            )}
+            <span className="hidden xs:inline sm:inline">TABULADOS</span>
+            <span className="xs:hidden sm:hidden">TAB.</span>
+          </button>
+          <button
+            onClick={() => handleCambiarTab("DESESTIMADO")}
+            disabled={tabCargando}
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 md:py-2.5 rounded-lg font-medium text-[10.5px] sm:text-[12px] transition-all tracking-widest disabled:opacity-70 disabled:cursor-wait whitespace-nowrap ${
+              tabActiva === "DESESTIMADO"
+                ? "bg-[#474b29] text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            {tabCargando && tabActiva === "DESESTIMADO" && (
+              <FaSpinner className="animate-spin" size={10} />
+            )}
+            <span className="hidden sm:inline">DESESTIMADOS</span>
+            <span className="sm:hidden">DES.</span>
+          </button>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex bg-gray-50 p-1.5 rounded-lg border border-gray-200">
-            {["TODO", "ESTE MES", "HOY"].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFiltroTiempo(f)}
-                className={`flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-lg font-medium text-[12px] transition-all tracking-widest ${
-                  filtroTiempo === f
-                    ? "bg-[#474b29] text-white shadow-sm"
-                    : "text-gray-400 hover:text-gray-600"
+        {/* Búsqueda compacta (colapsable) — hasta xl */}
+        <div className="relative flex items-center xl:hidden shrink-0">
+          {busquedaMovilAbierta ? (
+            <div className="relative w-[130px] sm:w-[180px]">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400" />
+              <input
+                autoFocus
+                type="text"
+                placeholder={`Buscar en ${tabActiva === "TABULADO" ? "archivados" : "desestimados"}...`}
+                className="w-full h-9 sm:h-11 pl-9 pr-3 py-1.5 bg-gray-50/50 border border-gray-200 rounded-lg outline-none text-[11px] sm:text-[12px] font-medium text-slate-700 transition-all focus:bg-white focus:border-[#474b29]"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                onBlur={() => {
+                  if (!busqueda) setBusquedaMovilAbierta(false);
+                }}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setBusquedaMovilAbierta(true)}
+              className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-lg border border-gray-200 bg-gray-50/50 text-slate-400 hover:text-slate-600 hover:border-slate-300 transition-all shrink-0"
+              title="Buscar"
+            >
+              <FaSearch size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Búsqueda completa — desde xl */}
+        <div className="hidden xl:block relative flex-1 min-w-[160px]">
+          <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[13px] text-slate-400" />
+          <input
+            type="text"
+            placeholder={`Buscar en ${tabActiva === "TABULADO" ? "archivados" : "desestimados"}...`}
+            className="w-full h-11 pl-10 pr-3 md:pr-5 bg-gray-50/50 border border-gray-200 rounded-lg outline-none text-[12px] font-medium text-slate-700 transition-all focus:bg-white focus:border-[#474b29]"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </div>
+
+        {/* Fechas compactas (íconos) — hasta sm */}
+        {!busquedaMovilAbierta && (
+          <div className="sm:hidden flex items-center gap-1.5 shrink-0">
+            <div className="relative">
+              <div
+                className={`flex items-center justify-center w-9 h-9 rounded-lg border transition-all shrink-0 pointer-events-none ${
+                  fechaDesde
+                    ? "bg-[#474b29] text-white border-[#474b29] shadow-md"
+                    : "bg-gray-50/50 border-gray-200 text-slate-400"
                 }`}
+                title="Fecha desde"
               >
-                {f}
-              </button>
-            ))}
+                <FaCalendarAlt size={13} />
+              </div>
+              <input
+                type="date"
+                value={fechaDesde}
+                max={fechaHasta || hoyISO}
+                onChange={(e) => {
+                  const nuevaFecha = e.target.value;
+                  if (nuevaFecha && fechaHasta && nuevaFecha > fechaHasta) {
+                    showToast(
+                      "La fecha 'Desde' no puede ser posterior a 'Hasta'",
+                      "warning",
+                    );
+                    return;
+                  }
+                  if (nuevaFecha && nuevaFecha > hoyISO) {
+                    showToast(
+                      "No puedes seleccionar una fecha futura",
+                      "warning",
+                    );
+                    return;
+                  }
+                  setFechaDesde(nuevaFecha);
+                }}
+                className="absolute inset-0 w-9 h-9 opacity-0 cursor-pointer"
+              />
+            </div>
+            <span className="text-slate-300 text-xs font-bold">–</span>
+            <div className="relative">
+              <div
+                className={`flex items-center justify-center w-9 h-9 rounded-lg border transition-all shrink-0 pointer-events-none ${
+                  fechaHasta
+                    ? "bg-[#474b29] text-white border-[#474b29] shadow-md"
+                    : "bg-gray-50/50 border-gray-200 text-slate-400"
+                }`}
+                title="Fecha hasta"
+              >
+                <FaCalendarAlt size={13} />
+              </div>
+              <input
+                type="date"
+                value={fechaHasta}
+                min={fechaDesde || undefined}
+                max={hoyISO}
+                onChange={(e) => {
+                  const nuevaFecha = e.target.value;
+                  if (nuevaFecha && fechaDesde && nuevaFecha < fechaDesde) {
+                    showToast(
+                      "La fecha 'Hasta' no puede ser anterior a 'Desde'",
+                      "warning",
+                    );
+                    return;
+                  }
+                  if (nuevaFecha && nuevaFecha > hoyISO) {
+                    showToast(
+                      "No puedes seleccionar una fecha futura",
+                      "warning",
+                    );
+                    return;
+                  }
+                  setFechaHasta(nuevaFecha);
+                }}
+                className="absolute inset-0 w-9 h-9 opacity-0 cursor-pointer"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Fechas compactas (con input visible) — sm a lg */}
+        <div className="hidden sm:flex lg:hidden items-center gap-1.5 shrink-0">
+          <input
+            type="date"
+            value={fechaDesde}
+            max={fechaHasta || hoyISO}
+            onChange={(e) => {
+              const nuevaFecha = e.target.value;
+              if (nuevaFecha && fechaHasta && nuevaFecha > fechaHasta) {
+                showToast(
+                  "La fecha 'Desde' no puede ser posterior a 'Hasta'",
+                  "warning",
+                );
+                return;
+              }
+              if (nuevaFecha && nuevaFecha > hoyISO) {
+                showToast("No puedes seleccionar una fecha futura", "warning");
+                return;
+              }
+              setFechaDesde(nuevaFecha);
+            }}
+            className={`h-10 md:h-11 px-2.5 md:px-4 bg-gray-50/50 border rounded-lg text-[11px] md:text-[12px] font-medium outline-none focus:bg-white transition-all tracking-wider w-[110px] md:w-auto ${
+              fechaDesde
+                ? "border-[#474b29] text-[#474b29]"
+                : "border-gray-200 text-slate-700 hover:border-slate-300"
+            }`}
+          />
+          <span className="text-slate-300 text-xs font-bold">–</span>
+          <input
+            type="date"
+            value={fechaHasta}
+            min={fechaDesde || undefined}
+            max={hoyISO}
+            onChange={(e) => {
+              const nuevaFecha = e.target.value;
+              if (nuevaFecha && fechaDesde && nuevaFecha < fechaDesde) {
+                showToast(
+                  "La fecha 'Hasta' no puede ser anterior a 'Desde'",
+                  "warning",
+                );
+                return;
+              }
+              if (nuevaFecha && nuevaFecha > hoyISO) {
+                showToast("No puedes seleccionar una fecha futura", "warning");
+                return;
+              }
+              setFechaHasta(nuevaFecha);
+            }}
+            className={`h-10 md:h-11 px-2.5 md:px-4 bg-gray-50/50 border rounded-lg text-[11px] md:text-[12px] font-medium outline-none focus:bg-white transition-all tracking-wider w-[110px] md:w-auto ${
+              fechaHasta
+                ? "border-[#474b29] text-[#474b29]"
+                : "border-gray-200 text-slate-700 hover:border-slate-300"
+            }`}
+          />
+        </div>
+
+        {/* Fechas completas — desde lg */}
+        <div className="hidden lg:flex items-center gap-1.5 shrink-0">
+          <input
+            type="date"
+            value={fechaDesde}
+            max={fechaHasta || hoyISO}
+            onChange={(e) => {
+              const nuevaFecha = e.target.value;
+              if (nuevaFecha && fechaHasta && nuevaFecha > fechaHasta) {
+                showToast(
+                  "La fecha 'Desde' no puede ser posterior a 'Hasta'",
+                  "warning",
+                );
+                return;
+              }
+              if (nuevaFecha && nuevaFecha > hoyISO) {
+                showToast("No puedes seleccionar una fecha futura", "warning");
+                return;
+              }
+              setFechaDesde(nuevaFecha);
+            }}
+            className={`h-11 px-5 md:px-6 bg-gray-50/50 border rounded-lg text-[13px] font-medium outline-none focus:bg-white transition-all tracking-wider ${
+              fechaDesde
+                ? "border-[#474b29] text-[#474b29]"
+                : "border-gray-200 text-slate-700 hover:border-slate-300"
+            }`}
+          />
+          <span className="text-slate-300 text-xs font-bold">–</span>
+          <input
+            type="date"
+            value={fechaHasta}
+            min={fechaDesde || undefined}
+            max={hoyISO}
+            onChange={(e) => {
+              const nuevaFecha = e.target.value;
+              if (nuevaFecha && fechaDesde && nuevaFecha < fechaDesde) {
+                showToast(
+                  "La fecha 'Hasta' no puede ser anterior a 'Desde'",
+                  "warning",
+                );
+                return;
+              }
+              if (nuevaFecha && nuevaFecha > hoyISO) {
+                showToast("No puedes seleccionar una fecha futura", "warning");
+                return;
+              }
+              setFechaHasta(nuevaFecha);
+            }}
+            className={`h-11 px-5 md:px-6 bg-gray-50/50 border rounded-lg text-[13px] font-medium outline-none focus:bg-white transition-all tracking-wider ${
+              fechaHasta
+                ? "border-[#474b29] text-[#474b29]"
+                : "border-gray-200 text-slate-700 hover:border-slate-300"
+            }`}
+          />
+        </div>
+
+        {/* Limpiar — icono en móvil, texto desde sm */}
+        {!busquedaMovilAbierta && (
+          <>
+            <button
+              onClick={limpiarFiltros}
+              title="Limpiar filtros"
+              className="sm:hidden flex items-center justify-center w-9 h-9 rounded-lg text-white bg-[#474b29] hover:bg-[#3a3e21] transition-all shrink-0"
+            >
+              <FaBroom size={13} />
+            </button>
+            <button
+              onClick={limpiarFiltros}
+              className="hidden sm:flex items-center justify-center h-10 md:h-11 px-3 md:px-5 rounded-lg tracking-widest font-medium text-[11px] md:text-[12px] uppercase shadow text-white bg-[#474b29] hover:bg-[#3a3e21] transition-all shrink-0"
+            >
+              Limpiar
+            </button>
+          </>
+        )}
+
+        {/* Exportar — menú clic en móvil/tablet, hover desde lg */}
+        <div className="ml-auto flex items-center shrink-0">
+          {/* Móvil/tablet: botón + menú por click */}
+          <div className="relative lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMenuAccionesAbierto((v) => !v)}
+              className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-lg border-2 border-gray-200 bg-white text-slate-700 hover:border-slate-300 transition-all shrink-0"
+              title="Exportar"
+            >
+              <FaFileDownload size={13} />
+            </button>
+            {menuAccionesAbierto && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setMenuAccionesAbierto(false)}
+                />
+                <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-2 px-1 z-50">
+                  <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    Exportar
+                  </p>
+                  <button
+                    onClick={() => {
+                      handleExportarExcelClick();
+                      setMenuAccionesAbierto(false);
+                    }}
+                    disabled={exportLoading === "excel"}
+                    title={
+                      !fechaDesde || !fechaHasta
+                        ? "Selecciona un rango de fechas primero"
+                        : ""
+                    }
+                    className={`w-full px-2 py-2 text-left font-medium text-[12px] flex items-center gap-2 rounded-lg ${
+                      !fechaDesde || !fechaHasta
+                        ? "opacity-40 text-slate-500 cursor-not-allowed"
+                        : "hover:bg-green-50 text-slate-600 cursor-pointer"
+                    } disabled:opacity-60 disabled:cursor-wait`}
+                  >
+                    {exportLoading === "excel" ? (
+                      <FaSpinner
+                        className="animate-spin text-green-800"
+                        size={11}
+                      />
+                    ) : (
+                      <FaFileExcel className="text-green-800" size={11} />
+                    )}
+                    Excel (.xls)
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleExportarPDFClick();
+                      setMenuAccionesAbierto(false);
+                    }}
+                    disabled={exportLoading === "pdf"}
+                    title={
+                      !fechaDesde || !fechaHasta
+                        ? "Selecciona un rango de fechas primero"
+                        : ""
+                    }
+                    className={`w-full px-2 py-2 text-left font-medium text-[12px] flex items-center gap-2 rounded-lg ${
+                      !fechaDesde || !fechaHasta
+                        ? "opacity-40 text-slate-500 cursor-not-allowed"
+                        : "hover:bg-red-50 text-slate-700 cursor-pointer"
+                    } disabled:opacity-60 disabled:cursor-wait`}
+                  >
+                    {exportLoading === "pdf" ? (
+                      <FaSpinner
+                        className="animate-spin text-red-700"
+                        size={11}
+                      />
+                    ) : (
+                      <FaFilePdf className="text-red-700" size={11} />
+                    )}
+                    PDF
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
-          <div className="relative group">
-            <button
-              disabled={!!exportLoading}
-              className="flex items-center gap-2 px-1 md:px-5 py-2 md:py-3 bg-white border-2 border-gray-200 text-slate-700 rounded-lg font-medium uppercase text-[12px] hover:border-slate-300 transition-all disabled:opacity-70 disabled:cursor-wait tracking-wider"
-            >
-              {exportLoading ? (
-                <>
-                  <FaSpinner className="animate-spin" size={11} />
-                  <span>Generando...</span>
-                </>
-              ) : (
-                <>
-                  <FaFileDownload size={11} /> <span>Exportar</span>
-                </>
-              )}
+          {/* Desde lg: hover */}
+          <div className="hidden lg:block relative group shrink-0">
+            <button className="flex items-center gap-2 px-3 h-11 py-2.5 bg-white border-2 border-gray-200 text-slate-700 rounded-lg font-medium uppercase text-[12px] hover:border-slate-300 transition-all disabled:opacity-70 disabled:cursor-wait tracking-widest">
+              <FaFileDownload size={11} /> <span>Exportar</span>
             </button>
             <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
               <button
                 onClick={handleExportarExcelClick}
-                disabled={!!exportLoading}
-                className="w-full px-3 py-2 text-left hover:bg-green-50 text-slate-600 font-bold text-[10px] flex items-center gap-2 disabled:opacity-50 disabled:cursor-wait"
+                disabled={exportLoading === "excel"}
+                title={
+                  !fechaDesde || !fechaHasta
+                    ? "Selecciona un rango de fechas primero"
+                    : ""
+                }
+                className={`w-full px-3 py-2 text-left font-medium text-[12px] flex items-center gap-2 transition-opacity ${
+                  !fechaDesde || !fechaHasta
+                    ? "opacity-40 text-slate-500 cursor-not-allowed hover:bg-transparent"
+                    : "hover:bg-green-50 text-slate-600 cursor-pointer"
+                } disabled:opacity-60 disabled:cursor-wait`}
               >
                 {exportLoading === "excel" ? (
-                  <FaSpinner
-                    className="animate-spin text-green-600"
-                    size={12}
-                  />
+                  <FaSpinner className="animate-spin text-green-800" size={11} />
                 ) : (
-                  <FaFileExcel className="text-green-600" size={12} />
+                  <FaFileExcel className="text-green-800" size={11} />
                 )}
-                {exportLoading === "excel" ? "Generando..." : "Excel (.xls)"}
+                Excel (.xls)
               </button>
               <button
                 onClick={handleExportarPDFClick}
-                disabled={!!exportLoading}
-                className="w-full px-3 py-2 text-left hover:bg-red-50 text-slate-700 font-bold text-[10px] flex items-center gap-2 disabled:opacity-50 disabled:cursor-wait"
+                disabled={exportLoading === "pdf"}
+                title={
+                  !fechaDesde || !fechaHasta
+                    ? "Selecciona un rango de fechas primero"
+                    : ""
+                }
+                className={`w-full px-3 py-2 text-left font-medium text-[12px] flex items-center gap-2 transition-opacity ${
+                  !fechaDesde || !fechaHasta
+                    ? "opacity-40 text-slate-500 cursor-not-allowed hover:bg-transparent"
+                    : "hover:bg-red-50 text-slate-700 cursor-pointer"
+                } disabled:opacity-60 disabled:cursor-wait`}
               >
                 {exportLoading === "pdf" ? (
-                  <FaSpinner className="animate-spin text-red-700" size={12} />
+                  <FaSpinner className="animate-spin text-red-700" size={11} />
                 ) : (
-                  <FaFilePdf className="text-red-700" size={12} />
+                  <FaFilePdf className="text-red-700" size={11} />
                 )}
-                {exportLoading === "pdf" ? "Generando..." : "Guardar PDF"}
+                PDF
               </button>
             </div>
           </div>
@@ -590,7 +922,13 @@ const ArchivoHistorico = ({
       </div>
 
       {/* Cuadrícula de tarjetas */}
-      <div className="overflow-y-auto scroll-hover flex-1 min-h-0 mt-6 pb-6 pr-1.5">
+      <div
+        onMouseEnter={() => setHoverTarjetas(true)}
+        onMouseLeave={() => setHoverTarjetas(false)}
+        className={`overflow-y-auto flex-1 min-h-0 mt-6 pb-6 pr-1.5 ${
+          hoverTarjetas ? "scroll-visible" : "scroll-hover"
+        }`}
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-3.5 gap-x-6">
           {tabCargando ? (
             // Skeleton mientras se "carga" el cambio de tab
@@ -626,7 +964,7 @@ const ArchivoHistorico = ({
                       if (!accionesDeshabilitadas)
                         handleVerClick(alerta, esDesestimado, idMostrar);
                     }}
-                    className="p-2 h-[14svh] bg-white rounded-xl border border-slate-200 relative transition-all duration-200 hover:scale-[1.01] hover:z-10 shadow-sm hover:shadow-md group overflow-hidden flex flex-col cursor-pointer"
+                   className="p-2 h-auto min-h-[15.5svh] sm:h-[16.5svh] bg-white rounded-xl border border-slate-200 relative transition-all duration-200 hover:scale-[1.01] hover:z-10 shadow-sm hover:shadow-md group overflow-hidden flex flex-col cursor-pointer"
                   >
                     <div className="absolute left-0 top-0 bottom-0 w-2 bg-[#474b29] rounded-l-2xl" />
                     <div className="pl-5 pr-3 py-3 flex-1 flex flex-col justify-center -mt-1">

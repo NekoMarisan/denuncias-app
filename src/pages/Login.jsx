@@ -242,9 +242,8 @@ const result = await login(escalafon, pass);
         }
       `}</style>
 
-      {/* Card: mobile-first. Base = franja de marca arriba + formulario debajo.
-          Desde md: layout de dos columnas (marca a la izquierda, formulario a la derecha). */}
-      <div className="relative z-10 flex w-full max-w-[400px] flex-col overflow-hidden rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.55)] sm:max-w-[460px] md:max-w-2xl md:min-h-[440px] md:flex-row md:rounded-[28px] lg:max-w-4xl lg:min-h-[410px]">
+      {/* Card */}
+      <div className="relative z-10 flex w-full max-w-[360px] flex-col overflow-hidden rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.55)] sm:max-w-[420px] md:max-w-xl md:min-h-[440px] md:flex-row md:rounded-[28px] lg:max-w-3xl lg:min-h-[410px]">
         {/* Panel de marca: franja superior en móvil, columna lateral desde md */}
         <div
   className="relative flex flex-col items-center justify-center gap-1.5 overflow-hidden px-6 py-3 text-center sm:gap-2 sm:py-6 md:w-[42%] md:justify-between md:gap-0 md:px-8 md:py-10"
@@ -274,57 +273,56 @@ const result = await login(escalafon, pass);
         </div>
 
         {/* Panel de formulario */}
-        <div className="flex flex-1 flex-col justify-center bg-[#fbfaf9] px-6 py-7 sm:px-8 sm:py-9 md:p-10 lg:p-12">
-          <h2 className="mb-5 text-center text-lg font-bold uppercase tracking-[0.15em] text-[#474b29] sm:mb-6 sm:text-xl">
+        <div className="flex flex-1 flex-col justify-center bg-[#fbfaf9] px-5 py-5  sm:px-10 sm:py-9 md:p-10 lg:p-12">
+          <h2 className="mb-5 text-center text-[18px] font-bold uppercase tracking-widest text-[#474b29] sm:mb-6 sm:text-xl">
             Ingreso al Sistema
           </h2>
 
-          <form onSubmit={handleLogin} className="mt-2 space-y-3.5">
+          <form onSubmit={handleLogin} className="mt-6 space-y-3.5 -px-2">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#474b29]">
-                <FaUser className="mr-1.5 inline text-xs" /> Número de Escalafón
+              <label className="mb-1.5 block text-[11px] font-medium text-[#474b29] uppercase pl-1">
+                <FaUser className="mr-1.5 -mt-1 inline text-xs" /> Número de Escalafón
               </label>
               <div className="relative">
                 <input
                   type="text"
                   value={username}
                   onChange={handleUsernameChange}
-                  className="min-h-[46px] w-full rounded-lg border border-[#ddd8ca] bg-white pl-10 pr-3 text-sm text-[#16241c] outline-none transition-all duration-200 focus:border-[#474b29] focus:ring-2 focus:ring-[#474b29]/15"
+                  className="min-h-[46px] w-full rounded-xl border border-[#474b29]/50 bg-white pl-6 pr-3 text-sm text-[#16241c] outline-none transition-all duration-200 focus:border-[#474b29] focus:ring-2 focus:ring-[#474b29]/15 font-medium tracking-wider mb-2"
                   required
                 />
-                <FaUser className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-gray-400" />
+
               </div>
               <div
                 className={`overflow-hidden transition-all duration-500 ${
                   showUserWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"
                 }`}
               >
-                <p className="mt-1 text-[10px] font-medium tracking-wide text-[#8a6d1f]">
+                <p className="mt-1 text-[10px] font-medium tracking-wider text-[#8a6d1f]">
                   {userWarningMessage}
                 </p>
               </div>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#474b29]">
-                <FaLock className="mr-1.5 inline text-xs" /> Contraseña
+              <label className="mb-1.5 block text-[11px] font-medium text-[#474b29] uppercase pl-1">
+                <FaLock className="mr-1.5 -mt-1 inline text-xs" /> Contraseña
               </label>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={handlePasswordChange}
-                  className="min-h-[46px] w-full rounded-lg border border-[#ddd8ca] bg-white pl-10 pr-11 text-sm text-[#16241c] outline-none transition-all duration-200 focus:border-[#474b29] focus:ring-2 focus:ring-[#474b29]/15"
+                  className="min-h-[46px] w-full rounded-xl border border-[#474b29]/50 bg-white pl-6 pr-11 text-sm text-[#16241c] outline-none transition-all duration-200 focus:border-[#474b29] focus:ring-2 focus:ring-[#474b29]/15 font-medium tracking-wider"
                   required
                 />
-                <FaLock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-gray-400" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center text-gray-400 transition-colors hover:text-[#474b29]"
                   aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 >
-                  {showPassword ? <FaEyeSlash /> : <FaEye size={14} />}
+                  {showPassword ? <FaEyeSlash /> : <FaEye size={14} className="text-[#474b29]"/>}
                 </button>
               </div>
             </div>
@@ -345,7 +343,7 @@ const result = await login(escalafon, pass);
               <button
                 type="submit"
                 disabled={loading}
-                className={`min-h-[46px] w-full transform rounded-lg text-sm font-bold uppercase -tracking-tighter text-white shadow-md transition-all duration-300 active:scale-[0.98] ${
+                className={`min-h-[46px] w-full transform rounded-xl text-[12px] font-medium uppercase tracking-wider text-white shadow-md transition-all duration-300 active:scale-[0.98] -mt-2 ${
                   loading
                     ? "cursor-not-allowed bg-gray-400"
                     : "bg-[#474b29] hover:bg-[#474b29]"

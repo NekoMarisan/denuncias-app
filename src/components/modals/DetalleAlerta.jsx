@@ -51,6 +51,35 @@
     const [justificacionDesestimo, setJustificacionDesestimo] = useState("");
 
     const debounceTimeout = useRef(null);
+    const scrollContenedorRef = useRef(null); // referencia al contenedor scrollable del modal
+    const wrapperPanelRef = useRef(null); // referencia al wrapper con la transición grid-rows
+
+    // Sigue el crecimiento REAL del panel (via ResizeObserver) y mueve el scroll
+    // exactamente lo mismo, frame a frame — así nunca hay desfase ni salto.
+    const sincronizarScrollConPanel = (abriendo) => {
+      const contenedor = scrollContenedorRef.current;
+      const wrapper = wrapperPanelRef.current;
+      if (!contenedor || !wrapper) return;
+
+      let altoAnterior = wrapper.offsetHeight;
+      const observer = new ResizeObserver(() => {
+        const altoActual = wrapper.offsetHeight;
+        const delta = altoActual - altoAnterior;
+        if (delta !== 0) {
+          contenedor.scrollTop += delta;
+          altoAnterior = altoActual;
+        }
+      });
+      observer.observe(wrapper);
+
+      // Se desconecta solo cuando termina la transición CSS (500ms + margen)
+      setTimeout(() => {
+        observer.disconnect();
+        if (abriendo) {
+          contenedor.scrollTop = contenedor.scrollHeight;
+        }
+      }, 600);
+    };
 
     // Solo guarda la descripción automáticamente
     const guardarDescripcion = async (texto) => {
@@ -124,6 +153,21 @@
         return;
       }
       await confirmarDesestimo(motivoDesestimo, justificacionDesestimo);
+    };
+
+    const handleAbrirDesestimo = () => {
+      setShowDesestimoPanel((prev) => {
+        const abriendo = !prev;
+        requestAnimationFrame(() => sincronizarScrollConPanel(abriendo));
+        return abriendo;
+      });
+    };
+
+    const handleCancelarDesestimo = () => {
+      requestAnimationFrame(() => sincronizarScrollConPanel(false));
+      setShowDesestimoPanel(false);
+      setMotivoDesestimo("");
+      setJustificacionDesestimo("");
     };
 
     useEffect(() => {
@@ -376,11 +420,19 @@
               height: 0;
               opacity: 0;
             }
+            @keyframes overlayFadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes modalPopIn {
+              from { opacity: 0; transform: scale(0.94) translateY(16px); }
+              to { opacity: 1; transform: scale(1) translateY(0); }
+            }
           `}
         </style>
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" />
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm animate-[overlayFadeIn_0.25s_ease-out]" />
 
-        <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[92vh]">
+        <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[92vh] animate-[modalPopIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
           {/* BARRA SUPERIOR */}
           <div className="bg-[#474b29] py-4 px-5 sm:px-6 text-white shrink-0">
             <div className="flex items-start justify-between gap-4">
@@ -413,7 +465,7 @@
         {cargando ? (
             <DetalleAlertaSkeleton />
           ) : (
-            <div className="px-5 sm:px-6 py-5 overflow-y-auto">
+            <div ref={scrollContenedorRef} className="overflow-y-auto scroll-hover max-h-[650px] px-5 sm:px-6 py-5 bg-white">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 items-start">
                 {/* COLUMNA IZQUIERDA */}
                 <div className="flex flex-col gap-5">
@@ -698,14 +750,15 @@
 
               {/* PANEL DE DESESTIMO — acordeón debajo del grid */}
 <div
-                className={`grid transition-all duration-300 ease-in-out ${
+                ref={wrapperPanelRef}
+                className={`grid transition-all duration-500 ease-in-out ${
                   showDesestimoPanel
-                    ? "grid-rows-[1fr] opacity-100 mt-5"
-                    : "grid-rows-[0fr] opacity-0 mt-0"
+                    ? "grid-rows-[1fr] opacity-100"
+                    : "grid-rows-[0fr] opacity-0"
                 }`}
               >
 <div className="overflow-hidden">
-                  <div>
+                  <div className="mt-5">
                     <DesestimarAlerta
                       motivo={motivoDesestimo}
                       onMotivoChange={setMotivoDesestimo}
@@ -725,11 +778,7 @@
               <>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowDesestimoPanel(false);
-                    setMotivoDesestimo("");
-                    setJustificacionDesestimo("");
-                  }}
+                  onClick={handleCancelarDesestimo}
                   disabled={desestimando}
                   className="px-6 py-2.5 rounded-lg font-medium text-[11.5px] border uppercase tracking-wider border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-40"
                 >
@@ -748,7 +797,7 @@
               <>
                 <button
                   type="button"
-                  onClick={() => setShowDesestimoPanel(true)}
+                  onClick={handleAbrirDesestimo}
                   className="px-4 py-2.5 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider"
                 >
                   Desestimar alerta

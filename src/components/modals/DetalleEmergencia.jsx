@@ -379,12 +379,19 @@ const DetalleEmergencia = ({
             height: 0;
             opacity: 0;
           }
+          @keyframes overlayFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes modalPopIn {
+            from { opacity: 0; transform: scale(0.94) translateY(16px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+          }
         `}
       </style>
-      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" />
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm animate-[overlayFadeIn_0.25s_ease-out]" />
 
-      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[92vh]">
-        {/* BARRA SUPERIOR — con icono e info, como la original */}
+      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[92vh] animate-[modalPopIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
         <div className="bg-[#474b29] py-4 px-5 sm:px-6 text-white shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">

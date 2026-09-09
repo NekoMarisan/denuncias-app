@@ -147,7 +147,7 @@ function GestionAlertas() {
   const [filaResaltada, setFilaResaltada] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(null);
-
+  const [hoverTabla, setHoverTabla] = useState(false);
   const [alertasPanico, setAlertasPanico] = useState([]);
   const [alertasCiudadanas, setAlertasCiudadanas] = useState([]);
 
@@ -521,7 +521,7 @@ function GestionAlertas() {
   }
 
   return (
-<div className="w-full h-full flex flex-col animate-fadeIn bg-gray-50/30 overflow-hidden px-0 py-1">
+<div className="w-full h-full flex flex-col animate-fadeIn bg-gray-50/30 overflow-hidden p-1">
       {/* SELECTOR DE TABS */}
 <div className="w-full bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4 flex-shrink-0 -mt-1.5">
         <div className="flex bg-gray-50 p-1.5 rounded-xl border border-gray-200 shrink-0">
@@ -548,40 +548,47 @@ function GestionAlertas() {
             <span className="sm:hidden">CIUDADANAS</span>
           </button>
         </div>
-        <div className="bg-gray-50 text-slate-500 px-4 py-3 rounded-lg text-[11px] font-bold uppercase tracking-widest border border-gray-200">
-          {dataActual.length} Registros activos
+        <div className="bg-gray-50 text-slate-500 px-4 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border border-gray-200">
+          <span className="md:hidden">{dataActual.length} Reg.</span>
+          <span className="hidden md:inline">{dataActual.length} Registros activos</span>
         </div>
       </div>
 
       {/* TABLA */}
-<div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0 max-h-[79svh] overflow-hidden mt-6">
+<div className="relative top-1 w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col flex-1 min-h-0 max-h-[76svh] mt-3 sm:mt-6">
         <h2 className="text-[18px] font-bold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wider flex-shrink-0">
           {tabActiva === "emergencia"
             ? "Bandeja de Emergencias"
             : "Reportes Ciudadanos"}
         </h2>
 
-        <div className="relative flex-1 min-h-0">
-          <div className="h-full overflow-auto -mx-4 md:mx-0 px-4 md:px-0 pb-3 scroll-hover">
-            <table className="min-w-full border-separate border-spacing-0 table-fixed">
-              <thead>
+        <div className="relative flex-1 min-h-0 overflow-hidden rounded-xl mt-6">
+          <div
+            onMouseEnter={() => setHoverTabla(true)}
+            onMouseLeave={() => setHoverTabla(false)}
+            className={`h-full overflow-y-auto overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-3 pr-1.5 ${
+              hoverTabla ? "scroll-visible" : "scroll-hover"
+            }`}
+          >
+            <table className="min-w-full border-collapse table-fixed">
+                            <thead>
                 <tr className="text-slate-400 text-[11px] font-medium uppercase tracking-widest">
-                  <th className="sticky top-0 z-10 bg-white pl-3 border-b border-slate-200 md:pl-4 pr-1 md:pr-2 pb-2 pt-1 w-[14%] text-left">
+                  <th className="sticky top-0 z-10 bg-white pl-3 border-b border-slate-200 md:pl-4 pr-2 md:pr-2 pb-2 pt-1 w-[14%] text-left">
                     ID
                   </th>
-                  <th className="sticky top-0 z-10 bg-white pb-2 pt-1 border-b border-slate-200 w-[28%] text-left">
+                  <th className="sticky top-0 z-10 bg-white px-2 md:px-2 lg:px-0 pb-2 pt-1 border-b border-slate-200 w-[28%] text-left">
                     Ciudadano
                   </th>
-                  <th className="sticky top-0 z-10 bg-white pb-2 pt-1 border-b border-slate-200 w-[13%] hidden sm:table-cell text-left">
+                  <th className="sticky top-0 z-10 bg-white px-2 md:px-2 lg:px-0 pb-2 pt-1 border-b border-slate-200 w-[13%] hidden sm:table-cell text-left">
                     Duración del audio
                   </th>
-                  <th className="sticky top-0 z-10 bg-white pb-2 pt-1 border-b border-slate-200 w-[12%] text-left">
+                  <th className="sticky top-0 z-10 bg-white px-2 md:px-2 lg:px-0 pb-2 pt-1 border-b border-slate-200 w-[12%] text-left">
                     Tiempo
                   </th>
-                  <th className="sticky top-0 z-10 bg-white pb-2 pt-1 border-b border-slate-200 w-[12%] text-left">
+                  <th className="sticky top-0 z-10 bg-white px-2 md:px-2 lg:px-0 pb-2 pt-1 border-b border-slate-200 w-[20%] text-left">
                     Estado
                   </th>
-                  <th className="sticky top-0 z-10 bg-white px-3 pb-2 pt-1 border-b border-slate-200 w-[8%] text-left">
+                  <th className="sticky top-0 z-10 bg-white pl-2 pr-3 md:px-3 pb-2 pt-1 border-b border-slate-200 w-[8%] text-left">
                     Acciones
                   </th>
                 </tr>
@@ -602,35 +609,49 @@ function GestionAlertas() {
                             : "hover:shadow-lg hover:-translate-y-0.5"
                       }`}
                     >
-                      <td className="pl-3 md:pl-4 pr-1 md:pr-2 py-6 md:py-7 text-[11px] font-medium text-slate-500/90 uppercase tracking-wider align-middle border-b border-slate-200/60">
+                      <td className="pl-3 md:pl-4 pr-2 md:pr-2 py-6 md:py-7 text-[11px] font-medium text-slate-500/90 uppercase tracking-wider align-middle border-b border-slate-200/60">
                         {item.codigo || item.id}
                       </td>
-                      <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+                      <td className="px-2 md:px-2 lg:px-0 py-5 md:py-6 align-middle border-b border-slate-200/60">
                         <div className="flex items-center gap-2 md:gap-3">
                           <div className="w-6 h-8 rounded-md flex items-center justify-center font-black text-xs shadow-inner shrink-0 bg-blue-50 text-[#270cb2]">
                             {item.ciudadano.charAt(0)}
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-[12.5px] font-medium text-[#1e293b] truncate max-w-[120px] md:max-w-none">
-                              {item.ciudadano}
-                            </span>
+                            {(() => {
+                              const partes = item.ciudadano.trim().split(/\s+/);
+                              const nombres = partes.slice(0, 2).join(" ");
+                              const apellidos = partes.slice(2).join(" ");
+                              return (
+                                <>
+                                  <span className="text-[12.5px] font-medium text-[#1e293b] truncate max-w-[120px] md:max-w-none">
+                                    {nombres}
+                                  </span>
+                                  {apellidos && (
+                                    <span className="text-[12.5px] font-medium text-[#1e293b] truncate max-w-[120px] md:max-w-none">
+                                      {apellidos}
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
                             <span className="mt-0.5 text-[8.5px] font-medium uppercase tracking-wider text-slate-400">
                               {item.verificado ? "Verificado" : "No verificado"}
                             </span>
                           </div>
                         </div>
                       </td>
-                      <td className="py-5 md:py-6 align-middle hidden sm:table-cell border-b border-slate-200/60">
+                      <td className="px-2 md:px-2 lg:px-0 py-5 md:py-6 align-middle hidden sm:table-cell border-b border-slate-200/60">
                         <span className="text-[10px] font-mono tracking-wider">
                           <AudioDuration audioUrl={item.audio_30s} />
                         </span>
                       </td>
-                      <td className="py-5 md:py-6 text-[11px] font-medium text-slate-500 align-middle border-b border-slate-200/60 tracking-wider">
+                      <td className="px-2 md:px-2 lg:px-0 py-5 md:py-6 text-[11px] font-medium text-slate-500 align-middle border-b border-slate-200/60 tracking-wider">
                         {calcularTiempoTranscurrido(item.fecha_hora)}
                       </td>
-                      <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
+                      <td className="px-2 md:px-2 lg:px-0 py-5 md:py-6 align-middle border-b border-slate-200/60">
                         <span
-                          className={`inline-flex items-center justify-center gap-1.5 w-16 md:w-24 py-1.5 px-2 rounded-md text-[11px] font-medium tracking-wider text-white ${
+                          className={`inline-flex items-center justify-center gap-1.5 w-fit min-w-[76px] md:min-w-[110px] whitespace-nowrap py-1.5 px-3 rounded-md text-[11px] font-medium tracking-wider text-white ${
                             item.estado.toUpperCase() === "EMERGENCIA"
                               ? "bg-[#C90A0A]"
                               : "bg-[#e9b301]"
@@ -639,7 +660,7 @@ function GestionAlertas() {
                           {item.estado.toUpperCase()}
                         </span>
                       </td>
-                      <td className="px-3 md:px-4 py-5 md:py-6 align-middle text-left border-b border-slate-200/60">
+                      <td className="pl-2 pr-3 md:px-4 py-5 md:py-6 align-middle text-left border-b border-slate-200/60">
                         <div className="flex justify-start">
                           {bloqueadaPorOtro ? (
                             <button

@@ -1,5 +1,6 @@
 ﻿import React, { createContext, useState, useContext, useEffect, useRef } from "react";
 import { supabase, setOficialHeader } from "../services/supabase";
+import bcrypt from "bcryptjs";
 
 const AuthContext = createContext();
 
@@ -133,14 +134,34 @@ let yaExpiro = false;
       .from("oficial")
       .select("*")
       .eq("numero_escalafon", numero_escalafon)
-      .eq("contrasena", contrasena)
       .maybeSingle();
 
-if (error || !data) {
+    if (error || !data) {
       console.error("Error login:", error);
       return { success: false, error: "Credenciales incorrectas" };
     }
 
+    const esHash = typeof data.contrasena === "string" && /^\$2[aby]\$/.test(data.contrasena);
+    let credencialesValidas = false;
+
+    if (esHash) {
+      credencialesValidas = bcrypt.compareSync(contrasena, data.contrasena);
+    } else {
+      credencialesValidas = contrasena === data.contrasena;
+      if (credencialesValidas) {
+        // Migración silenciosa: la próxima vez ya entra por bcrypt.
+        const nuevoHash = bcrypt.hashSync(contrasena, 10);
+        await supabase
+          .from("oficial")
+          .update({ contrasena: nuevoHash })
+          .eq("id_oficial", data.id_oficial);
+      }
+    }
+
+    if (!credencialesValidas) {
+      return { success: false, error: "Credenciales incorrectas" };
+    }
+    
 if (data.acceso === "PENDIENTE") {
       return { success: false, error: "CUENTA PENDIENTE - Su cuenta está a la espera de ser activada por el administrador." };
     }

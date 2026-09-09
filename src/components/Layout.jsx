@@ -10,9 +10,11 @@ import {
   FaChevronLeft,
   FaHistory,
   FaBars,
+  FaTimes,
 } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { supabase } from "../services/supabase";
 
 const Layout = ({ children }) => {
   const navigate = useNavigate();
@@ -21,10 +23,29 @@ const Layout = ({ children }) => {
   const { showToast } = useToast();
   const [verTodoState, setVerTodoState] = React.useState(false);
   const [menuAbierto, setMenuAbierto] = React.useState(false);
+  const [pendientesCount, setPendientesCount] = React.useState(0);
+  const [confirmarLogout, setConfirmarLogout] = React.useState(false);
 
   useEffect(() => {
     setMenuAbierto(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const esAdminUser = user?.rol === "admin";
+    if (!esAdminUser) return;
+
+    const cargarPendientes = async () => {
+      const { count, error } = await supabase
+        .from("oficial")
+        .select("id_oficial", { count: "exact", head: true })
+        .eq("acceso", "PENDIENTE");
+      if (!error) setPendientesCount(count || 0);
+    };
+
+    cargarPendientes();
+    const interval = setInterval(cargarPendientes, 10000);
+    return () => clearInterval(interval);
+  }, [user?.rol]);
 
   useEffect(() => {
     const handler = () => setVerTodoState(!!window.__tabulacionVerTodo);
@@ -55,10 +76,17 @@ const Layout = ({ children }) => {
   // Determinar si el usuario es administrador
   const esAdmin = user?.rol === "admin";
 
+  const activeKey =
+    location.pathname === "/tabulacion"
+      ? verTodoState
+        ? "/archivo-historico"
+        : "/tabulacion"
+      : location.pathname;
+
   // Helper para clases de los ítems de navegación (acento dorado en el activo)
   const navItemClass = (path) =>
     `group relative flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-r-lg transition-all text-[13px] tracking-wide ${
-      location.pathname === path
+      activeKey === path
         ? "bg-white/[0.08] text-white"
         : "text-white/60 hover:text-white hover:bg-white/[0.05]"
     }`;
@@ -66,7 +94,7 @@ const Layout = ({ children }) => {
   const activeBar = (path) => (
     <span
       className={`absolute left-0 top-1/2 -translate-y-1/2 h-8 w-[1px] rounded-full bg-[#ceaa43] transition-opacity ${
-        location.pathname === path ? "opacity-100" : "opacity-0"
+        activeKey === path ? "opacity-100" : "opacity-0"
       }`}
     />
   );
@@ -134,19 +162,45 @@ return (
           )}
 
           {!esAdmin && user?.rol === "tabulador" && (
-            <Link to="/tabulacion" className={navItemClass("/tabulacion")}>
-              {activeBar("/tabulacion")}
-              <FaFileAlt size={13} />
-              <span className="font-medium">Tabulación</span>
-            </Link>
+            <>
+              <Link
+                to="/tabulacion"
+                onClick={(e) => {
+                  if (
+                    location.pathname === "/tabulacion" &&
+                    window.__tabulacionVerTodo
+                  ) {
+                    e.preventDefault();
+                    window.__tabulacionOnBack();
+                  }
+                }}
+                className={navItemClass("/tabulacion")}
+              >
+                {activeBar("/tabulacion")}
+                <FaFileAlt size={13} />
+                <span className="font-medium">Tabulación</span>
+              </Link>
+              <Link to="/tabulacion" state={{ verTodo: true }} className={navItemClass("/archivo-historico")}>
+                {activeBar("/archivo-historico")}
+                <FaHistory size={13} />
+                <span className="font-medium">Archivo Histórico</span>
+              </Link>
+            </>
           )}
 
-          {esAdmin && (
+{esAdmin && (
             <>
               <Link to="/usuarios" className={navItemClass("/usuarios")}>
                 {activeBar("/usuarios")}
                 <FaUsers size={13} />
                 <span className="font-medium">Usuarios</span>
+                {pendientesCount > 0 && (
+<span className="ml-auto flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-[#EBB615] shrink-0">
+  <span className="-mt-0.5 text-white text-[10px] font-bold">
+    {pendientesCount}
+  </span>
+</span>
+                )}
               </Link>
               <Link to="/actividad-log" className={navItemClass("/actividad-log")}>
                 {activeBar("/actividad-log")}
@@ -158,20 +212,22 @@ return (
         </nav>
 
         {/* Usuario + logout */}
-        <div className="px-4 py-4 border-t border-white/10">
+<div className="px-4 py-4 border-t border-white/10">
           <div className="flex items-center gap-2.5 px-2 py-2 mb-2 rounded-lg bg-white/[0.04]">
             <div className="w-8 h-8 rounded-full bg-[#c9a227]/90 flex items-center justify-center text-[#1b1d13] font-black text-sm shrink-0">
               {user?.nombre_completo?.charAt(0) || "U"}
             </div>
-            <span className="text-[11px] font-semibold text-white/60 uppercase tracking-wider">
-              {{ admin: "Administrador", operador: "Operador", despachador: "Despachador", tabulador: "Tabulador" }[user?.rol] || "Sin Rol"}
-            </span>
+            <div className="min-w-0 flex flex-col">
+              <span className="text-[11.5px] font-semibold text-white truncate leading-tight">
+                {user?.nombre_completo || "Cargando..."}
+              </span>
+              <span className="text-[9.5px] font-semibold text-white/50 uppercase tracking-wider leading-tight mt-0.5">
+                {{ admin: "Administrador", operador: "Operador", despachador: "Despachador", tabulador: "Tabulador" }[user?.rol] || "Sin Rol"}
+              </span>
+            </div>
           </div>
-          <button
-            onClick={() => {
-              logout();
-              navigate("/");
-            }}
+<button
+            onClick={() => setConfirmarLogout(true)}
             className="w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-orange/60 hover:text-white hover:bg-white/[0.06] transition-all text-[13px] tracking-wide"
           >
             <FaSignOutAlt size={13} />
@@ -226,7 +282,7 @@ return (
                 {user?.nombre_completo || "Cargando..."}
               </p>
               <p className="text-[7px] sm:text-[9px] text-[#474b29] font-bold uppercase mt-1 tracking-wider">
-                {user?.rol || "Sin Rol"}
+                {{ admin: "Administrador", operador: "Operador", despachador: "Despachador", tabulador: "Tabulador" }[user?.rol] || "Sin Rol"}
               </p>
             </div>
             <div className="w-8 h-8 bg-[#474b29] rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
@@ -238,6 +294,82 @@ return (
 {/* CONTENIDO */}
         <main className="p-6 flex-1 min-h-0 overflow-hidden">{children}</main>
       </div>
+
+      {/* MODAL CONFIRMAR CIERRE DE SESIÓN — mismo estilo que el modal de eliminar en Usuarios.jsx */}
+      {confirmarLogout && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <style>
+            {`
+              @keyframes overlayFadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+              }
+              @keyframes modalPopIn {
+                from { opacity: 0; transform: scale(0.94) translateY(16px); }
+                to { opacity: 1; transform: scale(1) translateY(0); }
+              }
+            `}
+          </style>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm animate-[overlayFadeIn_0.25s_ease-out]" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-[380px] mx-auto overflow-hidden flex flex-col animate-[modalPopIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
+            {/* Barra verde */}
+            <div className="bg-[#474b29] py-4 px-5 sm:px-6 text-white shrink-0">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/10 p-2 rounded-md flex items-center justify-center shrink-0">
+                    <FaSignOutAlt className="text-white" size={18} />
+                  </div>
+                  <h2 className="text-[15px] font-bold uppercase tracking-wider leading-none">
+                    Cerrar Sesión
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmarLogout(false)}
+                  className="hover:bg-white/20 p-1.5 rounded-md transition-colors shrink-0"
+                >
+                  <FaTimes size={15} />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-7 py-7 flex flex-col items-center justify-center text-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-[#474b29]/10 flex items-center justify-center">
+                <FaSignOutAlt className="text-[#474b29]" size={22} />
+              </div>
+
+              <div className="flex flex-col gap-1.5 mb-2">
+                <h2 className="text-[16px] font-semibold text-slate-700 uppercase tracking-wider">
+                  ¿Cerrar sesión?
+                </h2>
+<p className="text-[12px] text-slate-400 font-medium leading-snug max-w-[340px] tracking-wider mt-1">
+  Deberá ingresar nuevamente su número de escalafón y contraseña para acceder al sistema.
+</p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 pb-6 flex justify-end gap-4 sm:px-6 py-4 border-t border-slate-200 bg-slate-50 shrink-0 -mb-2">
+              <button
+                onClick={() => setConfirmarLogout(false)}
+                className="px-4 py-2.5 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmarLogout(false);
+                  logout();
+                  navigate("/");
+                }}
+                className="px-4 py-2.5 rounded-lg font-medium text-[11.5px] bg-[#474b29] uppercase hover:bg-[#3a3e21] text-white transition-colors tracking-wider flex items-center justify-center gap-2"
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

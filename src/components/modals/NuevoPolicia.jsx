@@ -1,6 +1,8 @@
   import React, { useState, useRef, useEffect } from "react";
   import { FaTimes, FaEye, FaEyeSlash, FaUserShield, FaSpinner, FaChevronDown } from "react-icons/fa";
-  import { supabase } from "../../services/supabase";
+import { supabase } from "../../services/supabase";
+import bcrypt from "bcryptjs";
+  import { NuevoPoliciaSkeleton } from "../ui/Skeleton";
 
   const NuevoPolicia = ({ isOpen, onClose, onGuardado, editandoPolicia = null, onToast, usuarioActual = null }) => {
     const [formData, setFormData] = useState({
@@ -19,6 +21,7 @@
     const [guardando, setGuardando] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [disabledAccess, setDisabledAccess] = useState(false);
+    const [cargandoDatos, setCargandoDatos] = useState(false);
 
     // Estados de advertencia
     const [nombreWarning, setNombreWarning] = useState(false);
@@ -157,6 +160,9 @@ const handlePasswordChange = (e) => {
 
     useEffect(() => {
       const loadPoliciaData = async () => {
+        const inicioCarga = Date.now();
+        const MIN_SKELETON_MS = 400;
+        setCargandoDatos(!!editandoPolicia);
         if (editandoPolicia) {
           setFormData({
             nombre_completo:  editandoPolicia.nombre_completo  || "",
@@ -171,16 +177,6 @@ const handlePasswordChange = (e) => {
             epi:              ""
           });
           setDisabledAccess(false);
-
-          const { data: passData, error: passError } = await supabase
-            .from("oficial")
-            .select("contrasena")
-            .eq("id_oficial", editandoPolicia.id_oficial)
-            .maybeSingle();
-
-          if (!passError && passData && passData.contrasena) {
-            setFormData(prev => ({ ...prev, contrasena: passData.contrasena }));
-          }
 
           if (editandoPolicia.rol === "Patrullero") {
             const { data, error } = await supabase
@@ -211,6 +207,13 @@ const handlePasswordChange = (e) => {
         setCelularWarning(false);
         setEscalafonWarning(false);
         setShowPassword(false);
+
+        if (editandoPolicia) {
+          const transcurrido = Date.now() - inicioCarga;
+          const restante = MIN_SKELETON_MS - transcurrido;
+          if (restante > 0) await new Promise((r) => setTimeout(r, restante));
+        }
+        setCargandoDatos(false);
       };
 
       if (isOpen) {
@@ -250,6 +253,15 @@ const handlePasswordChange = (e) => {
       return null;
     };
 
+    const validarPasswordSegura = (pass) => {
+      if (pass.length < 8) return "La contraseña debe tener mínimo 8 caracteres";
+      if (!/[A-Z]/.test(pass)) return "Debe incluir al menos una mayúscula";
+      if (!/[a-z]/.test(pass)) return "Debe incluir al menos una minúscula";
+      if (!/[0-9]/.test(pass)) return "Debe incluir al menos un número";
+      if (!/[^A-Za-z0-9]/.test(pass)) return "Debe incluir al menos un símbolo (ej: !@#$%)";
+      return null;
+    };
+
     const handleSubmit = async (e) => {
       e.preventDefault();
 
@@ -260,7 +272,13 @@ const handlePasswordChange = (e) => {
       if (!formData.rol) return alert("Seleccione un rol");
       if (!formData.numero_escalafon) return alert("Número de escalafón obligatorio");
       if (!editandoPolicia && !formData.contrasena) return alert("Contraseña obligatoria");
-
+      if (formData.contrasena) {
+        const errorPassword = validarPasswordSegura(formData.contrasena);
+        if (errorPassword) {
+          onToast?.(errorPassword, "error");
+          return;
+        }
+      }
       if (esPatrullero) {
         if (!formData.placa) return alert("Placa obligatoria");
         if (!formData.epi) return alert("EPI obligatorio");
@@ -295,7 +313,7 @@ const nuevoAcceso = editandoPolicia ? formData.acceso : "PENDIENTE";
         estado:           nuevoAcceso === "EN SERVICIO" ? (editandoPolicia?.estado ?? false) : false,
       };
       if (formData.contrasena && formData.contrasena.trim() !== "") {
-        datosOficial.contrasena = formData.contrasena;
+        datosOficial.contrasena = bcrypt.hashSync(formData.contrasena, 10);
       }
 
       try {
@@ -412,17 +430,28 @@ const nuevoAcceso = editandoPolicia ? formData.acceso : "PENDIENTE";
 
     if (!isOpen) return null;
 
-    // Mismas clases que FormularioTabulacion.jsx: label + input editable + select
-    const labelClass = "block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1";
-    const inputEditableClass = "w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-[12px] font-medium text-slate-600 outline-none focus:border-slate-300 transition-colors";
-    const selectClass = "w-full h-11 pl-3 pr-7 border border-slate-200 rounded-xl text-[12px] text-slate-600 outline-none appearance-none focus:border-slate-400 transition-colors disabled:opacity-60 disabled:bg-slate-50 disabled:border-slate-100";
+    // Mismas clases que DetalleEmergencia.jsx: label + input editable + select
+    const labelClass = "block text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2 min-h-[14px] leading-tight";
+    const inputEditableClass = "w-full bg-white border border-slate-200 rounded-xl px-3.5 py-3 text-[12px] font-medium text-slate-500 outline-none focus:border-slate-300 transition-colors tracking-wider";
+    const selectClass = "w-full h-11 pl-3 pr-7 border border-slate-200 rounded-xl text-[12px] text-slate-500 outline-none appearance-none focus:border-[#474b29] transition-colors font-medium tracking-wider disabled:opacity-60 disabled:bg-slate-50 disabled:border-slate-100";
 
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
         {/* Fondo oscuro con blur */}
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
-
-        <div className="relative w-full max-w-[42rem] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[85vh]">
+        <style>
+          {`
+            @keyframes overlayFadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes modalPopIn {
+              from { opacity: 0; transform: scale(0.94) translateY(16px); }
+              to { opacity: 1; transform: scale(1) translateY(0); }
+            }
+          `}
+        </style>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm animate-[overlayFadeIn_0.25s_ease-out]" />
+        <div className="relative w-full max-w-[42rem] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[85vh] animate-[modalPopIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
           {/* BARRA SUPERIOR — estilo unificado con Usuarios.jsx / FormularioTabulacion.jsx */}
           <div className="bg-[#474b29] py-4 px-5 sm:px-6 text-white shrink-0">
             <div className="flex items-start justify-between gap-4">
@@ -432,7 +461,7 @@ const nuevoAcceso = editandoPolicia ? formData.acceso : "PENDIENTE";
                 </div>
                 <div>
                   <h2 className="text-[17px] font-bold uppercase tracking-wider leading-none">
-                    {editandoPolicia ? "Editar Oficial" : "Nuevo Oficial"}
+                    {editandoPolicia ? "Editar datos del Oficial" : " Registro de nuevo Oficial"}
                   </h2>
                   {editandoPolicia && (
                     <p className="text-[11px] font-medium text-white/70 mt-1.5">
@@ -444,7 +473,8 @@ const nuevoAcceso = editandoPolicia ? formData.acceso : "PENDIENTE";
               <button
                 type="button"
                 onClick={onClose}
-                className="hover:bg-white/20 p-1.5 rounded-md transition-colors shrink-0"
+                disabled={guardando}
+                className="hover:bg-white/20 p-1.5 rounded-md transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <FaTimes size={15} />
               </button>
@@ -454,7 +484,10 @@ const nuevoAcceso = editandoPolicia ? formData.acceso : "PENDIENTE";
           {/* FORMULARIO — el <form> envuelve el scroll Y el footer; el footer queda afuera del scroll */}
           <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
             <div className="overflow-y-auto p-6 bg-white">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+{cargandoDatos ? (
+              <NuevoPoliciaSkeleton />
+            ) : (
+<div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Nombre Completo */}
                 <div className="md:col-span-2">
                   <label className={labelClass}>Nombre Completo</label>
@@ -547,7 +580,7 @@ const nuevoAcceso = editandoPolicia ? formData.acceso : "PENDIENTE";
 
                 {/* Separador credenciales */}
                 <div className="md:col-span-2 mt-2 pt-2 border-t border-slate-200">
-                  <h4 className="text-[12px] font-bold uppercase text-slate-500 tracking-wider">Credenciales a Asignar</h4>
+                  <h4 className="text-[14px] font-medium uppercase text-slate-600 tracking-wider">Credenciales a Asignar</h4>
                 </div>
 
                 {/* Número de Escalafón */}
@@ -575,7 +608,7 @@ const nuevoAcceso = editandoPolicia ? formData.acceso : "PENDIENTE";
                       className={`${inputEditableClass} pr-10`}
                       value={formData.contrasena}
                       onChange={handlePasswordChange}
-                      placeholder={editandoPolicia ? "Nueva contraseña (dejar vacío si no se cambia)" : "Mínimo 4 caracteres"}
+                      placeholder={editandoPolicia ? "Nueva contraseña (dejar vacío si no se cambia)" : "Mín. 8 caracteres, mayúscula, número y símbolo"}
                     />
                     <button
                       type="button"
@@ -590,52 +623,48 @@ const nuevoAcceso = editandoPolicia ? formData.acceso : "PENDIENTE";
                   )}
                 </div>
 
-             {/* Campos de Patrullero (siempre montados, se despliegan con transición suave) */}
-                <div
-                  className={`overflow-hidden transition-all duration-700 ease-in-out ${
-                    esPatrullero ? "max-h-28 opacity-100" : "max-h-0 opacity-0"
-                  }`}
-                >
-                  <label className={labelClass}>Placa</label>
-                  <input
-                    type="text"
-                    required={esPatrullero}
-                    className={inputEditableClass}
-                    value={formData.placa}
-                    onChange={handlePlacaChange}
-                  />
-                  <div className={`overflow-hidden transition-all duration-500 ${placaWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
-                    <p className="text-[10px] text-slate-400 font-medium">{placaWarningMsg}</p>
-                  </div>
-                </div>
+{/* Campos de Patrullero (solo se montan cuando el rol es Patrullero) */}
+{esPatrullero && (
+  <>
+    <div>
+      <label className={labelClass}>Placa</label>
+      <input
+        type="text"
+        required={esPatrullero}
+        className={inputEditableClass}
+        value={formData.placa}
+        onChange={handlePlacaChange}
+      />
+      <div className={`overflow-hidden transition-all duration-500 ${placaWarning ? "max-h-8 opacity-100" : "max-h-0 opacity-0"}`}>
+        <p className="text-[10px] text-slate-400 font-medium">{placaWarningMsg}</p>
+      </div>
+    </div>
 
-                <div
-                  className={`overflow-hidden transition-all duration-700 ease-in-out ${
-                    esPatrullero ? "max-h-28 opacity-100" : "max-h-0 opacity-0"
-                  }`}
-                >
-                  <label className={labelClass}>EPI</label>
-                  <div className="relative">
-                    <select
-                      required={esPatrullero}
-                      className={selectClass}
-                      value={formData.epi}
-                      onChange={e => setFormData({...formData, epi: e.target.value})}
-                    >
-                      <option value="">Seleccionar EPI</option>
-                      <option value="EPI 2 - NORTE">EPI 2 - NORTE</option>
-                      <option value="EPI 3 - JAIHUAYCO">EPI 3 - JAIHUAYCO</option>
-                      <option value="EPI 4 - COÑA COÑA">EPI 4 - COÑA COÑA</option>
-                      <option value="EPI 5 - ALALAY">EPI 5 - ALALAY</option>
-                      <option value="EPI 6 - CENTRAL">EPI 6 - CENTRAL</option>
-                    </select>
-                    <FaChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" size={11} />
-                  </div>
-                </div>
+    <div>
+      <label className={labelClass}>EPI</label>
+      <div className="relative">
+        <select
+          required={esPatrullero}
+          className={selectClass}
+          value={formData.epi}
+          onChange={e => setFormData({...formData, epi: e.target.value})}
+        >
+          <option value="">Seleccionar EPI</option>
+          <option value="EPI 2 - NORTE">EPI 2 - NORTE</option>
+          <option value="EPI 3 - JAIHUAYCO">EPI 3 - JAIHUAYCO</option>
+          <option value="EPI 4 - COÑA COÑA">EPI 4 - COÑA COÑA</option>
+          <option value="EPI 5 - ALALAY">EPI 5 - ALALAY</option>
+          <option value="EPI 6 - CENTRAL">EPI 6 - CENTRAL</option>
+        </select>
+        <FaChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" size={11} />
+      </div>
+    </div>
+  </>
+)}
 
                 {/* Separador control de acceso */}
                 <div className="md:col-span-2 mt-2 pt-2 border-t border-slate-200">
-                  <h4 className="text-[12px] font-bold uppercase text-slate-500 tracking-wider">Control de Acceso</h4>
+                  <h4 className="text-[14px] font-medium uppercase text-slate-600 tracking-wider">Control de Acceso</h4>
                 </div>
 
                 {/* Control de Acceso */}
@@ -664,6 +693,7 @@ const nuevoAcceso = editandoPolicia ? formData.acceso : "PENDIENTE";
                   </div>
                 </div>
               </div>
+            )}
             </div>
 
             {/* BOTONES — mismo footer que Usuarios.jsx / FormularioTabulacion.jsx, ahora fuera del scroll */}
@@ -671,7 +701,8 @@ const nuevoAcceso = editandoPolicia ? formData.acceso : "PENDIENTE";
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider"
+                disabled={guardando}
+                className="px-4 py-2.5 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Cancelar
               </button>

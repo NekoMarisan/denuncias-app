@@ -9,6 +9,7 @@ import {
   FaSpinner,
   FaLock,
 } from "react-icons/fa";
+import { useLocation } from "react-router-dom";
 import FormularioTabulacion from "../components/modals/FormularioTabulacion";
 import { contravenciones, delitos } from "../constants/CategoriasDelitos";
 import ArchivoHistorico from "./ArchivoHistorico";
@@ -42,17 +43,20 @@ const getColorByCategoria = (categoria) => {
 function Tabulacion() {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const location = useLocation();
   const [renderKey] = useState(Date.now());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [alertaSeleccionada, setAlertaSeleccionada] = useState(null);
   const [alertaVista, setAlertaVista] = useState(null);
   const [tabVistaCompleta, setTabVistaCompleta] = useState(null);
-  const [verTodo, setVerTodo] = useState(false);
+  const [verTodo, setVerTodo] = useState(!!location.state?.verTodo);
   const [cargando, setCargando] = useState(true);
-
+  const [hoverPagina, setHoverPagina] = useState(false);
+  const [hoverTabla, setHoverTabla] = useState(false);
   const [alertasPendientes, setAlertasPendientes] = useState([]);
   const [tabuladas, setTabuladas] = useState([]);
+  const [abriendoId, setAbriendoId] = useState(null);
 
   const fechaHoy = new Date().toISOString().split("T")[0];
 
@@ -61,6 +65,14 @@ function Tabulacion() {
     window.__tabulacionOnBack = () => setVerTodo(false);
     window.dispatchEvent(new Event("tabulacion_view_change"));
   }, [verTodo]);
+
+  // Reacciona cuando navegan aquí con state.verTodo (ej. desde el sidebar),
+  // incluso si el componente ya estaba montado en /tabulacion.
+  useEffect(() => {
+    if (location.state?.verTodo) {
+      setVerTodo(true);
+    }
+  }, [location.state]);
 
   const cargarDatos = useCallback(
     async (silencioso = false) => {
@@ -376,44 +388,49 @@ function Tabulacion() {
   }, [cargarDatos, alertaSeleccionada, user]);
 
   const abrirTabulacion = async (alerta) => {
-    const idOficial = user?.id_oficial;
+    if (abriendoId) return;
+    setAbriendoId(alerta.id_asignacion);
+    try {
+      const idOficial = user?.id_oficial;
 
-    const { data: alertaDb } = await supabase
-      .from("alerta")
-      .select(
-        "bloqueado_por, oficial_bloqueador:bloqueado_por ( nombre_completo )",
-      )
-      .eq("id_alerta", alerta.id_alerta)
-      .maybeSingle();
+      const { data: alertaDb } = await supabase
+        .from("alerta")
+        .select(
+          "bloqueado_por, oficial_bloqueador:bloqueado_por ( nombre_completo )",
+        )
+        .eq("id_alerta", alerta.id_alerta)
+        .maybeSingle();
 
-    if (alertaDb?.bloqueado_por && alertaDb.bloqueado_por !== idOficial) {
-      const nombreOtro =
-        alertaDb.oficial_bloqueador?.nombre_completo || "otro tabulador";
-      showToast(
-        `Esta alerta ya está siendo tabulada por ${nombreOtro}`,
-        "error",
-      );
-      return;
+      if (alertaDb?.bloqueado_por && alertaDb.bloqueado_por !== idOficial) {
+        const nombreOtro =
+          alertaDb.oficial_bloqueador?.nombre_completo || "otro tabulador";
+        showToast(
+          `Esta alerta ya está siendo tabulada por ${nombreOtro}`,
+          "error",
+        );
+        return;
+      }
+
+      const { error } = await supabase
+        .from("alerta")
+        .update({
+          bloqueado_por: idOficial,
+          bloqueado_en: new Date().toISOString(),
+          bloqueado_rol: "tabulador",
+        })
+        .eq("id_alerta", alerta.id_alerta);
+
+      if (error) {
+        showToast("No se pudo bloquear la alerta", "error");
+        return;
+      }
+
+      setAlertaSeleccionada({ ...alerta, id_tabulador: idOficial });
+      setIsModalOpen(true);
+    } finally {
+      setAbriendoId(null);
     }
-
-    const { error } = await supabase
-      .from("alerta")
-      .update({
-        bloqueado_por: idOficial,
-        bloqueado_en: new Date().toISOString(),
-        bloqueado_rol: "tabulador",
-      })
-      .eq("id_alerta", alerta.id_alerta);
-
-    if (error) {
-      showToast("No se pudo bloquear la alerta", "error");
-      return;
-    }
-
-    setAlertaSeleccionada({ ...alerta, id_tabulador: idOficial });
-    setIsModalOpen(true);
   };
-
   const ultimasTabuladas = useMemo(() => tabuladas.slice(0, 4), [tabuladas]);
 
   const handleGenerarPDF = async (tab) => {
@@ -587,44 +604,63 @@ function Tabulacion() {
   return (
     <div
       key={renderKey}
-      className="-mt-1 h-full overflow-y-auto scroll-hover font-sans pr-0.5"
+      onMouseEnter={() => setHoverPagina(true)}
+      onMouseLeave={() => setHoverPagina(false)}
+      className={`-mt-1 h-full overflow-y-auto font-sans pr-0.5 ${
+        hoverPagina ? "scroll-visible" : "scroll-hover"
+      }`}
     >
       <div className="space-y-6 animate-fadeIn p-1">
         {cargando ? (
           <TabulacionPageSkeleton />
         ) : (
           <>
-            <div className="flex flex-col lg:flex-row gap-6">
+             <div className="flex flex-col gap-6 lg:flex-row lg:gap-6">
               <div className="lg:w-4/5 flex flex-col gap-6">
-                <div className="relative w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col h-[729px]">
+                <div className="relative w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md flex flex-col h-[70svh] lg:h-[729px]">
                   <h2 className="text-[18px] font-bold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wider flex-shrink-0">
                     Tabulación de Alertas
                   </h2>
 
-                  <div className="overflow-auto flex-1 min-h-0 -mx-4 md:mx-0 px-4 md:px-0 scroll-hover pr-1.5">
-                    <table className="min-w-full border-collapse text-left">
-                    <thead>
-                      <tr className="text-slate-400 text-[11px] font-medium uppercase tracking-widest">
-                        <th className="sticky top-0 z-10 bg-white pl-3 border-b border-slate-200 md:pl-4 pr-1 md:pr-2 py-2 w-[10%]">
-                          ID
-                        </th>
-                        <th className="sticky top-0 z-10 bg-white py-2 border-b border-slate-200 w-[17%]">
-                          Ciudadano
-                        </th>
-                        <th className="sticky top-0 z-10 bg-white pl-0 pr-1 border-b border-slate-200 w-[16%] py-2 text-left">
-                          Incidente
-                        </th>
-                        <th className="sticky top-0 z-10 bg-white py-2 border-b border-slate-200 w-[9%]">
-                          Patrulla
-                        </th>
-                        <th className="sticky top-0 z-10 bg-white py-2 border-b border-slate-200 w-[10%]">
-                          Estado
-                        </th>
-                        <th className="sticky top-0 z-10 bg-white px-3 border-b border-slate-200 py-2 w-[4%]">
-                          Acciones
-                        </th>
-                      </tr>
-                    </thead>
+                  <div className="relative flex-1 min-h-0 overflow-hidden rounded-xl">
+                  <div
+                    onMouseEnter={() => setHoverTabla(true)}
+                    onMouseLeave={() => setHoverTabla(false)}
+                    className={`h-full overflow-y-auto overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-3 pr-1.5 ${
+                      hoverTabla ? "scroll-visible" : "scroll-hover"
+                    }`}
+                  >
+                    <table className="min-w-full table-fixed border-collapse text-left">
+                      <colgroup>
+                        <col className="w-[90px]" />
+                        <col className="w-[170px]" />
+                        <col className="w-[150px]" />
+                        <col className="hidden sm:table-column w-[100px]" />
+                        <col className="w-[120px]" />
+                        <col className="w-[80px]" />
+                      </colgroup>
+                      <thead>
+                        <tr className="text-slate-400 text-[11px] font-medium uppercase tracking-widest">
+                          <th className="sticky top-0 z-10 bg-white pl-3 border-b border-slate-200 md:pl-4 pr-2 md:pr-2 py-2">
+                            ID
+                          </th>
+                          <th className="sticky top-0 z-10 bg-white px-2 md:px-0 py-2 border-b border-slate-200">
+                            Ciudadano
+                          </th>
+                          <th className="sticky top-0 z-10 bg-white px-2 md:pl-0 md:pr-1 border-b border-slate-200 py-2 text-left">
+                            Incidente
+                          </th>
+                          <th className="hidden sm:table-cell sticky top-0 z-10 bg-white px-2 md:px-0 py-2 border-b border-slate-200">
+                            Patrulla
+                          </th>
+                          <th className="sticky top-0 z-10 bg-white px-2 md:px-0 py-2 border-b border-slate-200">
+                            Estado
+                          </th>
+                          <th className="sticky top-0 z-10 bg-white pl-2 pr-3 md:px-3 border-b border-slate-200 py-2">
+                            Acciones
+                          </th>
+                        </tr>
+                      </thead>
                       <tbody>
                         {alertasPendientes.length === 0 ? (
                           <tr>
@@ -658,23 +694,25 @@ function Tabulacion() {
                                       {alerta.ciudadano.charAt(0)}
                                     </div>
                                     <div className="flex flex-col min-w-0">
-                                      <span className="text-[12.5px] font-medium text-[#1e293b] truncate max-w-[110px] md:max-w-none">
-                                        {alerta.ciudadano}
-                                      </span>
+                                     <span className="text-[12.5px] font-medium text-[#1e293b] line-clamp-2 break-words leading-tight max-w-[110px] sm:max-w-[150px] md:max-w-[200px] lg:max-w-[240px]">
+  {alerta.ciudadano}
+</span>
                                       <span className="mt-0.5 text-[8.5px] font-medium uppercase tracking-wider text-slate-400">
-                                        {alerta.verificado ? "Verificado" : "No verificado"}
+                                        {alerta.verificado
+                                          ? "Verificado"
+                                          : "No verificado"}
                                       </span>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="py-5 md:py-6 align-middle border-b border-slate-200/60">
                                   <div className="pl-0 pr-1 md:pr-2">
-                                    <span className="truncate block max-w-[110px] md:max-w-none text-[11.5px] font-medium text-slate-700 tracking-wider uppercase">
+                                    <span className="truncate block max-w-[110px] sm:max-w-[140px] md:max-w-[180px] lg:max-w-[220px] text-[11.5px] font-medium text-slate-700 tracking-wider uppercase">
                                       {alerta.incidente}
                                     </span>
                                   </div>
                                 </td>
-                                <td className="py-5 md:py-6 align-middle text-left border-b border-slate-200/60">
+                                <td className="hidden sm:table-cell py-5 md:py-6 align-middle text-left border-b border-slate-200/60">
                                   <span className="font-medium text-[11px] tracking-wider text-slate-500 uppercase">
                                     {alerta.patrulla}
                                   </span>
@@ -706,9 +744,17 @@ function Tabulacion() {
                                   ) : (
                                     <button
                                       onClick={() => abrirTabulacion(alerta)}
-                                      className="p-2 md:p-2.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474b29] hover:text-white transition-all duration-200 flex items-center justify-center"
+                                      disabled={!!abriendoId}
+                                      className="p-2 md:p-2.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-[#474b29] hover:text-white transition-all duration-200 flex items-center justify-center disabled:opacity-60 disabled:cursor-wait"
                                     >
-                                      <FaClipboardList size={14} />
+                                      {abriendoId === alerta.id_asignacion ? (
+                                        <FaSpinner
+                                          className="animate-spin"
+                                          size={14}
+                                        />
+                                      ) : (
+                                        <FaClipboardList size={14} />
+                                      )}
                                     </button>
                                   )}
                                 </td>
@@ -719,11 +765,14 @@ function Tabulacion() {
                       </tbody>
                     </table>
                   </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="lg:w-1/5 bg-white p-5 rounded-2xl shadow-md border border-gray-100 flex flex-col h-[729px]
-                              relative w-full px-4 md:px-7 py-4 md:py-6">
+              <div
+                className="order-last lg:order-none lg:w-1/5 bg-white p-5 rounded-2xl shadow-md border border-gray-100 flex flex-col h-auto lg:h-[729px]
+                              relative w-full px-4 md:px-7 py-4 md:py-6"
+              >
                 <div className="mb-3">
                   <h2 className="text-[18px] font-bold uppercase text-[#1e293b] mb-4 md:mb-6 tracking-wider flex-shrink-0">
                     Alertas Comunes
@@ -736,9 +785,7 @@ function Tabulacion() {
                 ) : (
                   <div className="space-y-4 -mt-2">
                     {metricas.ranking.slice(0, 10).map((item, idx) => {
-                      const coloresVivos = [
-                        "bg-slate-400",
-                      ];
+                      const coloresVivos = ["bg-slate-400"];
                       const colorClass =
                         coloresVivos[idx % coloresVivos.length];
                       return (
@@ -765,7 +812,7 @@ function Tabulacion() {
               </div>
             </div>
 
-            <div className="w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md border border-gray-50 relative flex flex-col">
+            <div className="w-full bg-white px-4 md:px-7 py-4 md:py-6 rounded-2xl shadow-md border border-gray-50 relative flex flex-col mt-4 sm:mt-6 lg:mt-0">
               <button
                 onClick={() => setVerTodo(true)}
                 className="absolute top-4 md:top-6 right-4 md:right-7 font-bold flex items-center gap-1.5 uppercase text-slate-400 hover:text-slate-500 text-[10px] tracking-wider transition-colors mt-1.5"
@@ -777,102 +824,103 @@ function Tabulacion() {
                 Alertas Tabuladas
               </h2>
               <div className="mt-3">
-              {ultimasTabuladas.length === 0 ? (
-                <div className="flex h-40 flex-col items-center justify-center py-10 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/30">
-                  <div className="w-10 bg-white rounded-xl flex items-center justify-center text-slate-200 shadow-sm mb-2">
-                    <FaClipboardList size={20} />
+                {ultimasTabuladas.length === 0 ? (
+                  <div className="flex h-40 flex-col items-center justify-center py-10 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/30">
+                    <div className="w-10 bg-white rounded-xl flex items-center justify-center text-slate-200 shadow-sm mb-2">
+                      <FaClipboardList size={20} />
+                    </div>
+                    <h3 className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">
+                      Sin alertas tabuladas
+                    </h3>
                   </div>
-                  <h3 className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">
-                    Sin alertas tabuladas
-                  </h3>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fadeIn pb-0">
-                  {ultimasTabuladas.map((tab) => {
-                    const ciudadano =
-                      tab.alerta?.usuario_ciudadano?.nombre_completo ||
-                      "Ciudadano";
-                    const codigo =
-                      tab.alerta?.codigo_alerta ||
-                      `ALT-${String(tab.id_alerta).padStart(4, "0")}`;
-                    let clasificacion =
-                      tab.resultado_final ||
-                      tab.alerta?.contravenciones ||
-                      tab.alerta?.delitos ||
-                      "Sin clasificar";
-                    const fecha = tab.fecha_tabulacion?.split("T")[0] || "—";
-                    return (
-                      <div
-                        key={tab.id_tabulacion}
-                        onClick={() => {
-                          setAlertaVista({
-                            id_alerta: tab.id_alerta,
-                            codigo_alerta: tab.alerta?.codigo_alerta,
-                            ciudadano: ciudadano,
-                            ci: tab.alerta?.usuario_ciudadano?.ci,
-                            celular: tab.alerta?.usuario_ciudadano?.celular,
-                            incidente: clasificacion,
-                            descripcion: tab.alerta?.descripcion,
-                            ubicacion: tab.alerta?.ubicacion,
-                            prioridad: tab.alerta?.prioridad,
-                            contravenciones: tab.alerta?.contravenciones,
-                            delitos: tab.alerta?.delitos,
-                            resultado_final: tab.resultado_final,
-                            id_patrullero: tab.id_patrullero,
-                            id_despachador: tab.id_despachador,
-                            id_operador_receptor: tab.id_operador_receptor,
-                            placa: tab.placa,
-                            epi: tab.epi,
-                            numero_escalafon: tab.numero_escalafon,
-                            comuna: tab.comuna,
-                            distrito: tab.distrito,
-                            subdistrito: tab.subdistrito,
-                            area_urbana: tab.area_urbana,
-                            area_rural: tab.area_rural,
-                            protagonistas: tab.protagonistas,
-                            remision_caso: tab.remision_caso,
-                            resumen_administrativo: tab.resumen_administrativo,
-                          });
-                          setTabVistaCompleta(tab);
-                          setIsViewModalOpen(true);
-                        }}
-                        className="h-[14.5svh] mb-1 bg-white rounded-xl p-3 border border-slate-200 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md group overflow-hidden cursor-pointer"
-                      >
-                        <div className="absolute left-0 top-0 bottom-0 w-2 bg-[#474b29] rounded-l-2xl" />
-                        <div className="flex justify-between items-center mb-3 pl-3">
-                          <span className="text-[10px] font-medium text-slate-500/80 uppercase tracking-widest">
-                            {codigo}
-                          </span>
-                          <span className="bg-slate-200/60 tracking-wider text-[#474b29] px-2 py-0.5 rounded-md text-[9px] font-medium uppercase border border-green-100">
-                            Archivado
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 mb-3 pl-3">
-                          <div className="w-6 h-8 rounded-md bg-blue-50 text-[#270cb2] flex items-center justify-center font-black text-[12px] border border-gray-50 group-hover:text-[#270cb2] group-hover:bg-blue-50 transition-colors shrink-0 shadow-inner mt-0.5">
-                            {ciudadano.charAt(0)}
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fadeIn pb-0">
+                    {ultimasTabuladas.map((tab) => {
+                      const ciudadano =
+                        tab.alerta?.usuario_ciudadano?.nombre_completo ||
+                        "Ciudadano";
+                      const codigo =
+                        tab.alerta?.codigo_alerta ||
+                        `ALT-${String(tab.id_alerta).padStart(4, "0")}`;
+                      let clasificacion =
+                        tab.resultado_final ||
+                        tab.alerta?.contravenciones ||
+                        tab.alerta?.delitos ||
+                        "Sin clasificar";
+                      const fecha = tab.fecha_tabulacion?.split("T")[0] || "—";
+                      return (
+                        <div
+                          key={tab.id_tabulacion}
+                          onClick={() => {
+                            setAlertaVista({
+                              id_alerta: tab.id_alerta,
+                              codigo_alerta: tab.alerta?.codigo_alerta,
+                              ciudadano: ciudadano,
+                              ci: tab.alerta?.usuario_ciudadano?.ci,
+                              celular: tab.alerta?.usuario_ciudadano?.celular,
+                              incidente: clasificacion,
+                              descripcion: tab.alerta?.descripcion,
+                              ubicacion: tab.alerta?.ubicacion,
+                              prioridad: tab.alerta?.prioridad,
+                              contravenciones: tab.alerta?.contravenciones,
+                              delitos: tab.alerta?.delitos,
+                              resultado_final: tab.resultado_final,
+                              id_patrullero: tab.id_patrullero,
+                              id_despachador: tab.id_despachador,
+                              id_operador_receptor: tab.id_operador_receptor,
+                              placa: tab.placa,
+                              epi: tab.epi,
+                              numero_escalafon: tab.numero_escalafon,
+                              comuna: tab.comuna,
+                              distrito: tab.distrito,
+                              subdistrito: tab.subdistrito,
+                              area_urbana: tab.area_urbana,
+                              area_rural: tab.area_rural,
+                              protagonistas: tab.protagonistas,
+                              remision_caso: tab.remision_caso,
+                              resumen_administrativo:
+                                tab.resumen_administrativo,
+                            });
+                            setTabVistaCompleta(tab);
+                            setIsViewModalOpen(true);
+                          }}
+                          className="h-auto min-h-[14.5svh] sm:h-[14.5svh] mb-1 bg-white rounded-xl p-3 border border-slate-200 relative transition-all duration-200 hover:scale-[1.01] shadow-sm hover:shadow-md group overflow-hidden cursor-pointer"
+                        >
+                          <div className="absolute left-0 top-0 bottom-0 w-2 bg-[#474b29] rounded-l-2xl" />
+                          <div className="flex justify-between items-center mb-3 pl-3">
+                            <span className="text-[10px] font-medium text-slate-500/80 uppercase tracking-widest">
+                              {codigo}
+                            </span>
+                            <span className="bg-slate-200/60 tracking-wider text-[#474b29] px-2 py-0.5 rounded-md text-[9px] font-medium uppercase border border-green-100">
+                              Archivado
+                            </span>
                           </div>
-                          <div className="flex flex-col min-w-0">
-                            <h3 className="text-[12px] font-medium text-slate-600 leading-tight mb-0.5 truncate block max-w-[200px] tracking-wider">
-                              {ciudadano}
-                            </h3>
-                            <p className="text-[10px] font-medium text-slate-400 mt-0.5 tracking-wider">
-                              {fecha}
+                          <div className="flex items-center gap-3 mb-3 pl-3">
+                            <div className="w-6 h-8 rounded-md bg-blue-50 text-[#270cb2] flex items-center justify-center font-black text-[12px] border border-gray-50 group-hover:text-[#270cb2] group-hover:bg-blue-50 transition-colors shrink-0 shadow-inner mt-0.5">
+                              {ciudadano.charAt(0)}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <h3 className="text-[12px] font-medium text-slate-600 leading-tight mb-0.5 line-clamp-2 break-words block max-w-[200px] tracking-wider">
+                                {ciudadano}
+                              </h3>
+                              <p className="text-[10px] font-medium text-slate-400 mt-0.5 tracking-wider">
+                                {fecha}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mb-5 p-1.5 bg-[#474b29]/5 border-[#474b29]/20 rounded-lg border border-slate-100 ml-3 mt-4">
+                            <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">
+                              Clasificación
+                            </p>
+                            <p className="text-[10px] font-medium tracking-wider text-slate-500 uppercase leading-relaxed">
+                              {clasificacion}
                             </p>
                           </div>
                         </div>
-                        <div className="mb-5 p-1.5 bg-[#474b29]/5 border-[#474b29]/20 rounded-lg border border-slate-100 ml-3 mt-4">
-                          <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">
-                            Clasificación
-                          </p>
-                          <p className="text-[10px] font-medium tracking-wider text-slate-500 uppercase leading-relaxed">
-                            {clasificacion}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </>

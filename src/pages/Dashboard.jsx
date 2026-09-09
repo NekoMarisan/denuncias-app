@@ -30,7 +30,7 @@ import {
 } from "recharts";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
-import { StatCardSkeleton, PanelSkeleton, SkeletonBlock, SkeletonLine } from "../components/ui/Skeleton";
+import { StatCardSkeleton, PanelSkeleton, SkeletonBlock, SkeletonLine, SkeletonCircle } from "../components/ui/Skeleton";
 
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
@@ -64,6 +64,7 @@ function Dashboard() {
     totalPatrullas: 0,
     totalOficiales: 0,
   });
+  const [hoverDashboard, setHoverDashboard] = useState(false);
 
   const [alertasPanico, setAlertasPanico] = useState([]);
   const [alertasCiudadanas, setAlertasCiudadanas] = useState([]);
@@ -80,6 +81,8 @@ function Dashboard() {
   const [datosDespacho, setDatosDespacho] = useState({
     sinAsignar: 0,
     enIntervencion: 0,
+    emergencias: 0,
+    ciudadanas: 0,
     patrullasPorEstado: {
       disponible: 0,
       notificado: 0,
@@ -88,6 +91,7 @@ function Dashboard() {
       revision: 0,
     },
   });
+
   const [cargandoDespacho, setCargandoDespacho] = useState(true);
   const primeraCargaDespacho = useRef(true);
 
@@ -305,11 +309,13 @@ function Dashboard() {
       // Alertas activas (id_estado_actual = 2, mismo filtro que usa Centro de Despacho)
       const { data: alertasActivas, error: errAlertas } = await supabase
         .from("alerta")
-        .select("id_alerta")
+        .select("id_alerta, categoria")
         .eq("id_estado_actual", 2);
       if (errAlertas) throw errAlertas;
 
       const idsAlertas = (alertasActivas || []).map((a) => a.id_alerta);
+      const emergenciasDespacho = (alertasActivas || []).filter((a) => a.categoria === "Panico").length;
+      const ciudadanasDespacho = (alertasActivas || []).filter((a) => a.categoria === "Alerta Ciudadana").length;
 
       let idsConAsignacion = new Set();
       if (idsAlertas.length > 0) {
@@ -325,10 +331,10 @@ function Dashboard() {
       const enIntervencion = idsConAsignacion.size;
       const sinAsignar = idsAlertas.length - enIntervencion;
 
-      // Patrullas por cada uno de los 5 estados operativos
+      // Patrullas por cada uno de los 5 estados operativos (solo con oficial EN SERVICIO, igual que Centro de Despacho)
       const { data: patrullerosData, error: errPat } = await supabase
         .from("patrullero")
-        .select("id_estado_patrullero");
+        .select("id_estado_patrullero, oficial:oficial!fk_patrullero_oficial ( estado )");
       if (errPat) throw errPat;
 
       const conteoEstados = {
@@ -338,17 +344,21 @@ function Dashboard() {
         enLugar: 0,
         revision: 0,
       };
-      (patrullerosData || []).forEach((p) => {
-        if (p.id_estado_patrullero === 1) conteoEstados.disponible += 1;
-        else if (p.id_estado_patrullero === 2) conteoEstados.notificado += 1;
-        else if (p.id_estado_patrullero === 3) conteoEstados.enCamino += 1;
-        else if (p.id_estado_patrullero === 4) conteoEstados.enLugar += 1;
-        else if (p.id_estado_patrullero === 5) conteoEstados.revision += 1;
-      });
+      (patrullerosData || [])
+        .filter((p) => p.oficial?.estado === true)
+        .forEach((p) => {
+          if (p.id_estado_patrullero === 1) conteoEstados.disponible += 1;
+          else if (p.id_estado_patrullero === 2) conteoEstados.notificado += 1;
+          else if (p.id_estado_patrullero === 3) conteoEstados.enCamino += 1;
+          else if (p.id_estado_patrullero === 4) conteoEstados.enLugar += 1;
+          else if (p.id_estado_patrullero === 5) conteoEstados.revision += 1;
+        });
 
       setDatosDespacho({
         sinAsignar,
         enIntervencion,
+        emergencias: emergenciasDespacho,
+        ciudadanas: ciudadanasDespacho,
         patrullasPorEstado: conteoEstados,
       });
     } catch (err) {
@@ -583,9 +593,9 @@ if (cargando) {
           {[0, 1].map((i) => (
             <div key={i} className="bg-white rounded-2xl shadow-md p-5 h-[220px] flex flex-col items-center justify-center">
               <div className="self-start ml-1 mb-4">
-                <div className="h-3 w-28 bg-slate-200 rounded animate-pulse" />
+                <SkeletonLine width="w-28" height="h-3" />
               </div>
-              <div className="w-28 h-28 rounded-full bg-slate-100 animate-pulse" />
+              <SkeletonCircle size="w-28 h-28 rounded-full" />
             </div>
           ))}
         </div>
@@ -617,6 +627,12 @@ if (cargando) {
   const pctOficiales =
     stats.totalOficiales > 0
       ? Math.round((stats.oficialesConectados / stats.totalOficiales) * 100)
+      : 0;
+
+  const totalAlertasDespacho = datosDespacho.emergencias + datosDespacho.ciudadanas;
+  const pctEmergenciasDespacho =
+    totalAlertasDespacho > 0
+      ? Math.round((datosDespacho.emergencias / totalAlertasDespacho) * 100)
       : 0;
 
   const donutData = (pct) => [
@@ -690,8 +706,12 @@ if (cargando) {
   );
 
   return (
-    <div className={`-mt-1 h-full ${esTabulador ? "" : "overflow-y-auto scroll-hover"}`}>
-    <div className="space-y-6 animate-fadeIn p-2">
+<div
+  onMouseEnter={() => setHoverDashboard(true)}
+  onMouseLeave={() => setHoverDashboard(false)}
+  className={`-mt-1 h-full overflow-y-auto pr-1 ${hoverDashboard ? "scroll-visible" : "scroll-hover"}`}
+>
+<div className="space-y-6 animate-fadeIn p-1">
       {error && (
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-md shadow-sm">
           <p className="text-yellow-700 text-sm font-medium">{error}</p>
@@ -753,7 +773,7 @@ if (cargando) {
             <h2 className="text-[16px] font-bold text-slate-800 uppercase tracking-wide">
               Actividad
             </h2>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white bg-[#474b29] px-3 py-1.5 rounded-md">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#474b29] bg-[#474b29]/10 px-3 py-1.5 rounded-md">
               Últimos 7 días
             </span>
           </div>
@@ -927,13 +947,13 @@ if (cargando) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className={`grid grid-cols-1 gap-5 ${esDespachador ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
-        >
+        className={`grid grid-cols-1 gap-5 ${esDespachador ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
+      >
           <DonutCard
             titulo="Emergencias vs. Ciudadanas"
-            pct={pctEmergencias}
+            pct={esDespachador ? pctEmergenciasDespacho : pctEmergencias}
             colorFuerte="#C90A0A"
-            subtitulo="% de alertas activas que son emergencias"
+            subtitulo={esDespachador ? `${datosDespacho.emergencias} de ${totalAlertasDespacho} alertas en despacho` : "% de alertas activas que son emergencias"}
           />
           <DonutCard
             titulo="Patrullas Desplegadas"
@@ -944,14 +964,13 @@ if (cargando) {
 
           {esDespachador && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-md p-6 flex h-full flex-col justify-center">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-[15px] font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2">
-                  <FaExclamationCircle size={14} className="text-[#474b29]" />
+              <div className="flex justify-between items-center mb-7">
+                <h2 className="text-[15px] font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2 -mt-5">
                   Alertas por Atender
                 </h2>
                 <button
                   onClick={() => navigate("/despacho")}
-                  className="font-bold flex items-center gap-1.5 uppercase text-slate-400 hover:text-slate-500 text-[10px] tracking-wider transition-colors"
+                  className="font-medium flex items-center gap-1.5 uppercase text-slate-400 hover:text-slate-500 text-[11px] tracking-wider transition-colors -mt-7"
                 >
                   Ir a Despacho <FaChevronRight size={8} />
                 </button>
@@ -996,7 +1015,7 @@ if (cargando) {
         >
           {/* Emergencias */}
           <div className="bg-white p-2 rounded-2xl shadow-md">
-            <div className="flex justify-between items-start px-6 py-5 flex-col md:flex-row md:items-center mb-2">
+            <div className="flex justify-between items-center px-6 py-5 gap-2 mb-2">
               <h2 className="text-[16px] font-bold text-slate-800 uppercase tracking-wide">
                 Emergencias Recientes
               </h2>
@@ -1007,14 +1026,14 @@ if (cargando) {
                       state: { activeTab: "emergencia" },
                     })
                   }
-                  className="font-bold flex items-center gap-1.5 uppercase text-slate-400 hover:text-slate-500 text-[10px] tracking-wider transition-colors"
+                  className="font-bold flex items-center gap-1.5 uppercase text-slate-400 hover:text-slate-500 text-[10px] tracking-wider transition-colors shrink-0"
                 >
                   Ver todo <FaChevronRight size={8} />
                 </button>
               )}
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full border-separate border-spacing-0">
+              <table className="w-full min-w-[480px] border-separate border-spacing-0">
                 <tbody>
                   {alertasPanico.length > 0 ? (
                     alertasPanico.map((item) => {
@@ -1026,26 +1045,31 @@ if (cargando) {
                           key={item.id}
                           className="bg-white hover:shadow-lg transition-all"
                         >
-                          <td className="px-6 py-4 text-xs font-bold text-slate-400 border-b border-slate-200/60">
+                          <td className="pl-3 pr-2 sm:pl-6 sm:pr-3 py-4 text-xs font-bold text-slate-400 border-b border-slate-200/60 truncate max-w-[70px] sm:max-w-none">
                             {item.id}
                           </td>
-                          <td className="px-0 py-4 border-b border-slate-200/60">
+                          <td className="px-2 sm:px-2 md:px-0 py-4 border-b border-slate-200/60">
                             <div className="flex items-center gap-2">
-                              <div className="w-6 h-8 bg-blue-50 text-[#270cb2] flex items-center justify-center font-black rounded-md shadow-inner">
+                              <div className="w-6 h-8 bg-blue-50 text-[#270cb2] flex items-center justify-center font-black rounded-md shadow-inner shrink-0">
                                 {item.ciudadano.charAt(0)}
                               </div>
                               <div className="flex flex-col min-w-0">
-                                <span className="text-sm font-medium">
-                                  {nombres} {apellidos}
+                                <span className="text-sm font-medium truncate block max-w-[110px] sm:max-w-[150px] md:max-w-none">
+                                  {nombres}
                                 </span>
+                                {apellidos && (
+                                  <span className="text-sm font-medium truncate block max-w-[110px] sm:max-w-[150px] md:max-w-none">
+                                    {apellidos}
+                                  </span>
+                                )}
                                 <span className="mt-0.5 text-[8px] text-gray-400 font-semibold uppercase tracking-wider">
                                   {item.verificado ? "Verificado" : "No verificado"}
                                 </span>
                               </div>
                             </div>
                           </td>
-                          <td className="px-0 border-b border-slate-200/60">
-                            <span className="inline-flex tracking-wider px-2 py-1.5 rounded-lg text-[10px] font-bold text-white bg-[#C90A0A] uppercase">
+                          <td className="pl-2 pr-3 sm:px-2 md:px-0 py-4 border-b border-slate-200/60">
+                            <span className="inline-flex tracking-wider px-2 py-1.5 rounded-lg text-[10px] font-bold text-white bg-[#C90A0A] uppercase whitespace-nowrap">
                               {item.estado}
                             </span>
                           </td>
@@ -1069,7 +1093,7 @@ if (cargando) {
 
           {/* Alertas Ciudadanas */}
           <div className="bg-white p-2 rounded-2xl shadow-md">
-            <div className="flex justify-between items-start px-6 py-5 flex-col md:flex-row md:items-center mb-2">
+            <div className="flex justify-between items-center px-6 py-5 gap-2 mb-2">
               <h2 className="text-[16px] font-bold text-slate-800 uppercase tracking-wide">
                 Alertas Recibidas
               </h2>
@@ -1080,14 +1104,14 @@ if (cargando) {
                       state: { activeTab: "ciudadana" },
                     })
                   }
-                  className="font-bold flex items-center gap-1.5 uppercase text-slate-400 hover:text-slate-500 text-[10px] tracking-wider transition-colors"
+                  className="font-bold flex items-center gap-1.5 uppercase text-slate-400 hover:text-slate-500 text-[10px] tracking-wider transition-colors shrink-0"
                 >
                   Ver todo <FaChevronRight size={8} />
                 </button>
               )}
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full border-separate border-spacing-0">
+              <table className="w-full min-w-[480px] border-separate border-spacing-0">
                 <tbody>
                   {alertasCiudadanas.length > 0 ? (
                     alertasCiudadanas.map((item) => {
@@ -1099,26 +1123,31 @@ if (cargando) {
                           key={item.id}
                           className="bg-white hover:shadow-lg transition-all"
                         >
-                          <td className="px-6 py-4 text-xs font-bold text-slate-400 border-b border-slate-200/60">
+                          <td className="pl-3 pr-2 sm:pl-6 sm:pr-3 py-4 text-xs font-bold text-slate-400 border-b border-slate-200/60 truncate max-w-[70px] sm:max-w-none">
                             {item.id}
                           </td>
-                          <td className="px-0 py-4 border-b border-slate-200/60">
+                          <td className="px-2 sm:px-2 md:px-0 py-4 border-b border-slate-200/60">
                             <div className="flex items-center gap-2">
-                              <div className="w-6 h-8 bg-blue-50 text-[#270cb2] flex items-center justify-center font-black rounded-md shadow-inner">
+                              <div className="w-6 h-8 bg-blue-50 text-[#270cb2] flex items-center justify-center font-black rounded-md shadow-inner shrink-0">
                                 {item.ciudadano.charAt(0)}
                               </div>
                               <div className="flex flex-col min-w-0">
-                                <span className="text-sm font-medium text-[16px]">
-                                  {nombres} {apellidos}
+                                <span className="text-sm font-medium text-[16px] truncate block max-w-[110px] sm:max-w-[150px] md:max-w-none">
+                                  {nombres}
                                 </span>
+                                {apellidos && (
+                                  <span className="text-sm font-medium text-[16px] truncate block max-w-[110px] sm:max-w-[150px] md:max-w-none">
+                                    {apellidos}
+                                  </span>
+                                )}
                                 <span className="mt-0.5 text-[8px] text-gray-400 font-semibold uppercase tracking-wider">
                                   {item.verificado ? "Verificado" : "No verificado"}
                                 </span>
                               </div>
                             </div>
                           </td>
-                          <td className="px-0 border-b border-slate-200/60">
-                            <span className="inline-flex tracking-wider px-2 py-1.5 rounded-lg text-[10px] font-bold text-white bg-[#EBB615] uppercase">
+                          <td className="pl-2 pr-3 sm:px-2 md:px-0 py-4 border-b border-slate-200/60">
+                            <span className="inline-flex tracking-wider px-2 py-1.5 rounded-lg text-[10px] font-bold text-white bg-[#EBB615] uppercase whitespace-nowrap">
                               {item.estado}
                             </span>
                           </td>
@@ -1218,7 +1247,6 @@ if (cargando) {
           className="bg-white rounded-2xl border border-gray-100 shadow-md p-6"
         >
           <h2 className="text-[15px] font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2 mb-4">
-            <FaCarSide size={14} className="text-[#474b29]" />
             Patrullas por Estado
           </h2>
         {cargandoDespacho ? (
@@ -1296,9 +1324,9 @@ if (cargando) {
               <h2 className="text-[16px] font-bold uppercase tracking-wider text-slate-800">
                 Alertas Pendientes de Tabular
               </h2>
-              <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
+              <p className="text-[11px] font-medium text-slate-500 mt-0.5">
                {cargandoTabulador
-                  ? <span className="inline-block w-40 h-2.5 bg-slate-200 rounded animate-pulse align-middle" />
+                  ? <SkeletonLine width="w-40" height="h-2.5" />
                   : `${pendientesTabular} ${pendientesTabular === 1 ? "caso" : "casos"} esperando tabulación`}
               </p>
             </div>
@@ -1309,7 +1337,7 @@ if (cargando) {
                     {pendientesTabular}
                   </span>
                 )}
-                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1 block">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400 mt-1 block">
                   Pendientes
                 </span>
               </div>

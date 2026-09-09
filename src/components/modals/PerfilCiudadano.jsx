@@ -11,37 +11,44 @@ import {
 } from "react-icons/fa";
 import { supabase } from "../../services/supabase";
 import { useToast } from "../../context/ToastContext";
+import { PerfilCiudadanoSkeleton } from "../ui/Skeleton";
 
 // Campo tipo "ficha de reporte" — mismo componente que usa PerfilOficial
 const Fila = ({ label, value }) => (
   <div className="space-y-1">
-    <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+    <label className="block text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2 min-h-[14px] leading-tight">
       {label}
     </label>
-    <div className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[12px] font-medium text-slate-600">
+    <div className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-3 text-[12px] font-medium text-slate-500 tracking-wider">
       {value || "—"}
     </div>
   </div>
 );
 
-const PerfilCiudadano = ({ ciudadano, onClose, onActualizar, usuarioActual = null }) => {
+  const PerfilCiudadano = ({ ciudadano, onClose, onActualizar, usuarioActual = null }) => {
   const { showToast } = useToast();
   const [estadoActual, setEstadoActual] = useState(ciudadano?.id_estado_ciudadano || 1);
   const [advertencias, setAdvertencias] = useState(ciudadano?.advertencias || 0);
   const [guardando, setGuardando] = useState(false);
+  const [cargandoPerfil, setCargandoPerfil] = useState(true);
   const [fotoAmpliada, setFotoAmpliada] = useState(null);
   const [mostrarPanelMotivo, setMostrarPanelMotivo] = useState(false);
   const [motivoCorreccion, setMotivoCorreccion] = useState("");
   const [motivoPersonalizado, setMotivoPersonalizado] = useState("");
-
-  const MOTIVOS_CORRECCION = [
-    "La selfie no es clara o está borrosa",
-    "La foto del carnet (CI) no es legible",
-    "La selfie y la foto del carnet no coinciden",
-    "Los datos personales no coinciden con el carnet",
-    "El carnet está vencido o no es válido",
-    "Otro motivo",
-  ];
+  // 🧪 SIMULACIÓN TEMPORAL — fija el alto de las cuadrículas de fotos en h-36. QUITAR AL TERMINAR.
+  const alturaFotoSim = "h-36";
+  const panelMotivoRef = React.useRef(null);
+  const scrollContenedorRef = React.useRef(null); // NUEVO: referencia al contenedor scrollable del modal
+  const mensajeEstadoRef = React.useRef(null); // NUEVO: referencia al mensaje de estado (debajo del panel)
+  const wrapperPanelRef = React.useRef(null); // NUEVO: referencia al wrapper con la transición grid-rows
+const MOTIVOS_CORRECCION = [
+  "Selfie borrosa",
+  "Selfie no coincide",
+  "Carnet ilegible",
+  "Carnet vencido",
+  "Datos no coinciden",
+  "Foto incompleta",
+];
 
   const cargarAdvertenciasReales = async () => {
     if (!ciudadano?.id) return;
@@ -82,8 +89,9 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar, usuarioActual = nul
 
   useEffect(() => {
     if (ciudadano) {
+      setCargandoPerfil(true);
       setEstadoActual(ciudadano.id_estado_ciudadano || 1);
-      cargarAdvertenciasReales();
+      cargarAdvertenciasReales().finally(() => setCargandoPerfil(false));
     }
   }, [ciudadano]);
 
@@ -124,11 +132,11 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar, usuarioActual = nul
   // conectado/desconectado en PerfilOficial)
   const estadoColorHex = () => {
     switch (estadoActual) {
-      case 2: return "#0172e3"; // verificado
+      case 2: return "#0974e0"; // verificado
       case 1: return "#9da1a3"; // no verificado
-      case 3: return "#c64114"; // advertido
+      case 3: return "#d7650d"; // advertido
       case 4: return "#C90A0A"; // suspendido
-      case 5: return "#d97706"; // corrección
+      case 5: return "#EBB615"; // corrección
       default: return "#94a3b8";
     }
   };
@@ -182,27 +190,59 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar, usuarioActual = nul
     }
   };
 
+  const sincronizarScrollConPanel = (abriendo) => {
+    const contenedor = scrollContenedorRef.current;
+    const wrapper = wrapperPanelRef.current;
+    if (!contenedor || !wrapper) return;
+
+    let altoAnterior = wrapper.offsetHeight;
+    const observer = new ResizeObserver(() => {
+      const altoActual = wrapper.offsetHeight;
+      const delta = altoActual - altoAnterior;
+      if (delta !== 0) {
+        contenedor.scrollTop += delta;
+        altoAnterior = altoActual;
+      }
+    });
+    observer.observe(wrapper);
+
+    // Se desconecta solo cuando termina la transición CSS (500ms + margen)
+    setTimeout(() => {
+      observer.disconnect();
+      // Ajuste instantáneo (sin "smooth") por si quedó un resto de píxeles,
+      // así no compite con el scroll que ya venía moviéndose y no genera salto.
+      if (abriendo) {
+        contenedor.scrollTop = contenedor.scrollHeight;
+      }
+    }, 600);
+  };
+
   const handleCorregir = () => {
-    if (estadoActual === 5) {
-      showToast("El ciudadano ya está en estado 'Corrección'", "error");
-      return;
-    }
     setMotivoCorreccion("");
     setMotivoPersonalizado("");
-    setMostrarPanelMotivo((prev) => !prev);
+    setMostrarPanelMotivo((prev) => {
+      const abriendo = !prev;
+      requestAnimationFrame(() => sincronizarScrollConPanel(abriendo));
+      return abriendo;
+    });
+  };
+
+  const handleCancelarCorreccion = () => {
+    requestAnimationFrame(sincronizarScrollConPanel);
+    setMostrarPanelMotivo(false);
   };
 
   const handleConfirmarCorreccion = async () => {
-    const motivoFinal =
-      motivoCorreccion === "Otro motivo"
-        ? motivoPersonalizado.trim()
-        : motivoCorreccion;
-
-    if (!motivoFinal) {
-      showToast("Selecciona o escribe un motivo", "error");
+    if (!motivoCorreccion) {
+      showToast("Selecciona un motivo de corrección", "error");
+      return;
+    }
+    if (!motivoPersonalizado.trim()) {
+      showToast("Completa la justificación adicional", "error");
       return;
     }
 
+    const motivoFinal = `${motivoCorreccion} — ${motivoPersonalizado.trim()}`;
     setGuardando(true);
     setMostrarPanelMotivo(false);
     try {
@@ -289,9 +329,21 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar, usuarioActual = nul
   return (
     <>
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+<style>
+  {`
+    @keyframes overlayFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes modalPopIn {
+      from { opacity: 0; transform: scale(0.94) translateY(16px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+  `}
+</style>
+<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm animate-[overlayFadeIn_0.25s_ease-out]" />
 
-        <div className="relative bg-white rounded-lg shadow-2xl w-full max-w-lg mx-auto overflow-hidden flex flex-col h-fit max-h-[92vh] animate-fadeIn">
+<div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-auto overflow-hidden flex flex-col h-fit max-h-[92vh] animate-[modalPopIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
           {/* Barra verde */}
           <div className="relative bg-[#474b29] py-4 shrink-0 flex items-center pl-24 pr-4">
             <div>
@@ -312,9 +364,9 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar, usuarioActual = nul
           </div>
 
           {/* Ícono cuadrado, sobresaliendo de la barra */}
-          <div className="relative pl-4 pt-2 pb-4 shrink-0">
+          <div className="relative pl-4 pt-2 pb-6 shrink-0">
             <div className="relative w-16 h-16 -mt-12 ml-2">
-              <div className="w-16 h-16 rounded-2xl bg-[#474b29] border-[3px] border-white shadow-lg flex items-center justify-center">
+              <div className="w-16 h-16 rounded-xl bg-[#474b29] border-[3px] border-white shadow-lg flex items-center justify-center">
                 <FaUsers className="text-white" size={26} />
               </div>
               <span
@@ -324,10 +376,13 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar, usuarioActual = nul
             </div>
           </div>
 
-          {/* Contenido scrolleable */}
-          <div className="px-6 pb-4 overflow-y-auto">
+          <div ref={scrollContenedorRef} className="overflow-y-auto scroll-hover max-h-[650px] px-6 pb-4 pt-1 bg-white">
+            {cargandoPerfil ? (
+              <PerfilCiudadanoSkeleton />
+            ) : (
+              <>
             {/* Datos en formato de tarjetas tipo "textbox" */}
-            <div className="mt-1 grid grid-cols-2 gap-x-7 gap-y-4">
+            <div className="mt-1 grid grid-cols-2 gap-x-7 gap-y-5">
               <div className="col-span-2">
                 <Fila label="Nombre completo" value={ciudadano.nombre} />
               </div>
@@ -341,234 +396,276 @@ const PerfilCiudadano = ({ ciudadano, onClose, onActualizar, usuarioActual = nul
                 </div>
               )}
             </div>
-{/* Contador de advertencias */}
-<div className="mt-5 flex items-center justify-between bg-orange-50 border border-orange-600/20 border-l-4 border-l-orange-600 rounded-xl px-4 py-3.5">
-  <div className="flex items-center gap-3">
-    <div> 
-      <p className="text-[11px] font-bold uppercase text-orange-700 tracking-wider leading-none">Advertencias</p>
-      <p className="text-[10px] font-medium text-slate-500 tracking-wide mt-1">Alertas desestimadas</p>
-    </div>
-  </div>
-  <div className="text-right">
-    <span className="text-[18px] tracking-wider font-bold text-orange-600 leading-none">{advertencias}</span>
-    <span className="text-[11px] font-medium text-orange-400">/3</span>
-  </div>
-</div>
+
+            {/* Contador de advertencias — solo relevante si el estado fue causado por advertencias */}
+            {(estadoActual === 3 || estadoActual === 4) && (
+              <div className="mt-7 flex items-center justify-between bg-orange-50/70 border border-orange-500/10 rounded-xl px-4 py-3.5">
+                <div className="flex items-center gap-3">
+                  <div>
+                    <p className="text-[14px] font-semibold uppercase text-[#e78e1a] tracking-wider leading-none">Advertencias</p>
+                    <p className="text-[11px] font-medium text-slate-600/60 tracking-wide mt-1">Alertas desestimadas</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[19px] tracking-widest font-medium text-orange-600 leading-none">{advertencias}</span>
+                  <span className="text-[13px] mt-1 tracking-widest font-medium text-[#e78e1a]">/3</span>
+                </div>
+              </div>
+            )}
 
             {/* Documentos de Verificación */}
-            <div className="md:col-span-2 mt-5 pt-2 border-t border-slate-200">
-              <p className="text-[12px] font-bold uppercase text-slate-500 tracking-wider mb-3">
+            <div className="md:col-span-2 mt-7 pt-2 border-t border-slate-200 ">
+              <h4 className="text-[14px] font-medium uppercase text-slate-600 tracking-wider">
                 Documentos de Verificación
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <p className="text-[11px] text-slate-400 font-semibold tracking-wideR">Selfie</p>
+              </h4>
+              <div className="grid grid-cols-2 gap-5 mt-2 uppercase">
+                <div className="space-y-1 mt-2">
+                  <p className="text-[11px] text-slate-400 font-medium tracking-wider mb-1.5">Selfie</p>
                   {urlSelfie ? (
-                    <div className="group relative overflow-hidden rounded-xl border border-slate-200 w-full h-32 shadow-md hover:shadow-lg transition-shadow duration-200">
+                    <div
+                      onClick={() => setFotoAmpliada(urlSelfie)}
+                      className={`relative w-full ${alturaFotoSim} rounded-lg border border-slate-200 overflow-hidden transition-colors cursor-pointer`}
+                      onMouseEnter={(e) => {
+                        const img = e.currentTarget.querySelector("img");
+                        if (img) img.style.transform = "scale(1.08)";
+                      }}
+                      onMouseLeave={(e) => {
+                        const img = e.currentTarget.querySelector("img");
+                        if (img) img.style.transform = "scale(1)";
+                      }}
+                    >
                       <img
                         src={urlSelfie}
                         alt="Selfie"
-                        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                        style={{ transition: "transform 0.2s ease" }}
+                        className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                        <button
-                          onClick={() => setFotoAmpliada(urlSelfie)}
-                          className="bg-gray-200 hover:bg-slate-50 text-gray-800 py-1.5 px-2 rounded-md text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-md hover:shadow-lg"
-                        >
-                          <FaEye size={12} /> Ver imagen
-                        </button>
-                      </div>
                     </div>
                   ) : (
-                    <div className="w-full h-32 rounded-xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400 font-bold uppercase">
+                    <div className={`flex items-center justify-center w-full ${alturaFotoSim} border border-dashed border-slate-200 rounded-xl text-[11px] text-slate-400 text-center`}>
                       Sin foto
                     </div>
                   )}
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] text-slate-400 font-semibold tracking-wideR">Foto Carnet (CI)</p>
+                <div className="space-y-1 mt-2">
+                  <p className="text-[11px] text-slate-400 font-medium tracking-wider mb-1.5">Foto Carnet (CI)</p>
                   {urlFotoCi ? (
-                    <div className="group relative overflow-hidden rounded-xl border border-slate-200 w-full h-32 shadow-md">
+                    <div
+                      onClick={() => setFotoAmpliada(urlFotoCi)}
+                      className={`relative w-full ${alturaFotoSim} rounded-lg border border-slate-200 overflow-hidden transition-colors cursor-pointer`}
+                      onMouseEnter={(e) => {
+                        const img = e.currentTarget.querySelector("img");
+                        if (img) img.style.transform = "scale(1.08)";
+                      }}
+                      onMouseLeave={(e) => {
+                        const img = e.currentTarget.querySelector("img");
+                        if (img) img.style.transform = "scale(1)";
+                      }}
+                    >
                       <img
                         src={urlFotoCi}
                         alt="Foto CI"
-                        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                        style={{ transition: "transform 0.2s ease" }}
+                        className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                        <button
-                          onClick={() => setFotoAmpliada(urlFotoCi)}
-                          className="bg-gray-200 hover:bg-slate-50 text-gray-800 py-1.5 px-2 rounded-md text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-md hover:shadow-lg"
-                        >
-                          <FaEye size={12} /> Ver imagen
-                        </button>
-                      </div>
                     </div>
                   ) : (
-                    <div className="w-full h-32 rounded-xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400 font-bold uppercase">
+                    <div className={`flex items-center justify-center w-full ${alturaFotoSim} border border-dashed border-slate-200 rounded-xl text-[11px] text-slate-400 text-center`}>
                       Sin foto
                     </div>
                   )}
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Panel compartido para estado 1 y 5 */}
-          {(estadoActual === 1 || estadoActual === 5) && (
-            <div className="border-t border-slate-200 shrink-0">
-              {/* Botones principales */}
-              <div className="p-4 bg-slate-50 flex gap-3 w-full">
-                <button
-                  onClick={handleVerificar}
-                  disabled={guardando}
-                  className="flex-1 py-3.5 rounded-xl font-bold uppercase text-[11px] tracking-wider shadow-md hover:shadow-lg flex items-center justify-center gap-2 transition-all duration-200 bg-[#474b29] hover:bg-[#3a3e21] text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <FaCheckCircle size={10} /> Verificar
-                </button>
-                <button
-                  onClick={handleCorregir}
-                  disabled={guardando}
-                  className={`flex-1 py-3.5 rounded-xl font-bold uppercase text-[11px] tracking-wider flex items-center justify-center gap-2 transition-all ${
-                    mostrarPanelMotivo
-                      ? "bg-yellow-600 text-white hover:bg-slate-200 hover:text-slate-700"
-                      : "bg-slate-200 text-slate-600 hover:bg-yellow-600 hover:text-white"
-                  }`}
-                >
-                  <FaEdit size={12} />
-                  {estadoActual === 5 ? "Pedir corrección" : "Corregir"}
-                </button>
-              </div>
-
-              {/* Panel desplegable de motivo */}
+            {/* Panel de motivo de corrección (estados 1 y 5) — ancla arriba, se despliega hacia abajo */}
+            {(estadoActual === 1 || estadoActual === 5) && (
               <div
-                className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                  mostrarPanelMotivo ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+                ref={wrapperPanelRef}
+                className={`grid transition-all duration-500 ease-in-out ${
+                  mostrarPanelMotivo
+                    ? "grid-rows-[1fr] opacity-100"
+                    : "grid-rows-[0fr] opacity-0"
                 }`}
               >
-                <div className="px-4 pb-4 bg-slate-100 border-t border-slate-200 space-y-3 pt-3 rounded-xl p-4 shadow-md">
-                  <p className="border-l-4 border-[#474b29] pl-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">
-                    Motivo que verá el ciudadano en la app
-                  </p>
-
-                  {/* Opciones radio */}
-                  <div className="space-y-1.5">
-                    {MOTIVOS_CORRECCION.map((motivo) => (
-                      <label
-                        key={motivo}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-all p-2 text-[11px] font-semibold ${
-                          motivoCorreccion === motivo
-                            ? "bg-white border-slate-300 text-slate-700 shadow-sm"
-                            : "text-slate-600 hover:bg-white hover:border-white"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="motivoCorreccion"
-                          value={motivo}
-                          checked={motivoCorreccion === motivo}
-                          onChange={() => {
-                            setMotivoCorreccion(motivo);
-                            setMotivoPersonalizado("");
-                          }}
-                          className="accent-[#474b29] w-3.5 h-3.5 cursor-pointer"
-                        />
-                        <span className="text-[11px] font-bold text-slate-400">{motivo}</span>
-                      </label>
-                    ))}
-                  </div>
-
-                  {/* Textarea si elige "Otro motivo" */}
-                  {motivoCorreccion === "Otro motivo" && (
-                    <textarea
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg font-bold text-[11px] text-slate-600 outline-none focus:border-slate-300 resize-none transition-all"
-                      placeholder="Describe el motivo de corrección..."
-                      value={motivoPersonalizado}
-                      onChange={(e) => setMotivoPersonalizado(e.target.value)}
-                      maxLength={200}
-                    />
-                  )}
-
-                  {/* Botón confirmar */}
-                  <button
-                    onClick={handleConfirmarCorreccion}
-                    disabled={
-                      guardando ||
-                      !motivoCorreccion ||
-                      (motivoCorreccion === "Otro motivo" && !motivoPersonalizado.trim())
-                    }
-                    className="w-full py-3 rounded-xl font-bold uppercase text-[11px] tracking-wider bg-[#474b29] hover:bg-[#3a3e21] text-white shadow-md transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                <div className="overflow-hidden">
+                  <div
+                    ref={panelMotivoRef}
+                    className="pt-2 mt-7 border-t border-slate-200 flex flex-col gap-5 w-full"
                   >
-                    <FaEdit size={10} /> Confirmar corrección
-                  </button>
+                    <div>
+                      <h4 className="text-[14px] font-medium uppercase text-slate-600 tracking-wider mt-2">
+                        Motivo de corrección
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+                        {MOTIVOS_CORRECCION.map((motivo) => (
+                          <label
+                            key={motivo}
+                            className={`flex items-center gap-2 px-3 py-3 rounded-xl border text-[12px] text-slate-500 cursor-pointer transition-colors font-medium tracking-wider ${
+                              motivoCorreccion === motivo
+                                ? "border-[#474b29] bg-[#474b29]/5"
+                                : "border-slate-200 hover:bg-slate-50"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="motivoCorreccion"
+                              className="accent-[#474b29] w-3.5 h-3.5 cursor-pointer shrink-0"
+                              checked={motivoCorreccion === motivo}
+                              onChange={() => setMotivoCorreccion(motivo)}
+                            />
+                            <span className="leading-tight">{motivo}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Justificación — siempre visible y obligatoria, mismo estilo que DetalleAlerta */}
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2 min-h-[14px] leading-tight">
+                        Justificación adicional
+                      </label>
+                      <div className="relative border border-slate-200 rounded-xl px-3.5 py-3 focus-within:border-slate-300">
+                        <textarea
+                          className="block w-full min-h-[44px] text-[12px] text-slate-500 font-medium bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 resize-y tracking-wider"
+                          placeholder="Agregue el detalle de la corrección (obligatorio)"
+                          value={motivoPersonalizado}
+                          onChange={(e) => setMotivoPersonalizado(e.target.value)}
+                          required
+                        />
+                        {motivoPersonalizado && (
+                          <button
+                            type="button"
+                            onClick={() => setMotivoPersonalizado("")}
+                            className="absolute top-2.5 sm:top-3 right-3 text-slate-400 hover:text-slate-500 transition-colors"
+                            title="Limpiar justificación"
+                          >
+                            <FaTimes size={11} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {estadoActual === 4 && (
-            <div className="px-6 pb-4 pt-1 bg-white shrink-0">
-              <button
-                onClick={handleHabilitarSuspension}
-                disabled={guardando}
-                className="w-full py-3.5 rounded-lg font-bold uppercase text-[11px] tracking-wider shadow-md flex items-center justify-center gap-2 transition-all bg-[#0C3DC2] hover:bg-blue-700 text-white"
-              >
-                <FaBan size={12} /> Habilitar suspensión
-              </button>
-            </div>
-          )}
+            {/* Mensaje de estado — DENTRO del contenedor scrollable, justo debajo del panel de motivo */}
+            {(estadoActual === 1 || estadoActual === 2 || estadoActual === 3 || estadoActual === 4 || estadoActual === 5) && (
+              <div className="mt-7 space-y-2 -mb-2.5">
+                {estadoActual === 2 && (
+                  <div className="flex items-center gap-3 bg-blue-100/20 border-l-4 border-[#0172e3] rounded-xl px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-medium text-[#0066cc] tracking-wider uppercase leading-snug">
+                      Cuenta verificada correctamente
+                    </p>
+                  </div>
+                )}
+                {estadoActual === 3 && (
+                  <div className="flex items-center gap-3 bg-orange-50/50 border-l-4 border-orange-500 rounded-xl px-4 py-3 shadow-sm">
 
-{/* Mensajes de estado adicionales */}
-<div className="px-6 pb-4 bg-white space-y-2 shrink-0">
-{estadoActual === 3 && (
-    <div className="flex items-center gap-3 bg-orange-50 border-l-4 border-orange-400 rounded-xl px-4 py-3 shadow-sm">
-      <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0">
-        <FaExclamationTriangle size={13} />
-      </div>
-      <p className="text-[10.5px] font-bold text-orange-700 tracking-wide uppercase leading-snug">
-        Ciudadano con reportes malintencionados
-      </p>
-    </div>
-  )}
-  {estadoActual === 4 && (
-    <div className="flex items-center gap-3 bg-red-50 border-l-4 border-[#C90A0A] rounded-xl px-4 py-3 shadow-sm">
-      <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-[#C90A0A] shrink-0">
-        <FaBan size={13} />
-      </div>
-      <p className="text-[10.5px] font-bold text-[#C90A0A] tracking-wide uppercase leading-snug">
-        Suspendido por acumulación de advertencias
-      </p>
-    </div>
-  )}
-  {estadoActual === 1 && (
-    <div className="flex items-center gap-3 bg-slate-50 border-l-4 border-slate-400 rounded-xl px-4 py-3 shadow-sm">
-      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 shrink-0">
-        <FaClock size={13} />
-      </div>
-      <p className="text-[10.5px] font-bold text-slate-600 tracking-wide uppercase leading-snug">
-        Cuenta pendiente de verificación
-      </p>
-    </div>
-  )}
-  {estadoActual === 5 && (
-    <div className="flex items-center gap-3 bg-yellow-50 border-l-4 border-yellow-500 rounded-xl px-4 py-3 shadow-sm">
-      <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 shrink-0">
-        <FaEdit size={13} />
-      </div>
-      <p className="text-[10.5px] font-bold text-yellow-700 tracking-wide uppercase leading-snug">
-        Requiere corrección de datos (fotos o información)
-      </p>
-    </div>
-  )}
-</div>
+                    <p className="text-[11px] font-medium text-[#e78e1a] tracking-wider uppercase leading-snug">
+                      Ciudadano con reportes malintencionados
+                    </p>
+                  </div>
+                )}
+                {estadoActual === 4 && (
+                  <div className="flex items-center gap-3 bg-red-50/40 border-l-4 border-[#C90A0A] rounded-xl px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-medium text-[#C90A0A] tracking-wider uppercase leading-snug">
+                      Suspendido por acumulación de advertencias
+                    </p>
+                  </div>
+                )}
+                {estadoActual === 1 && (
+                  <div className="flex items-center gap-3 bg-slate-50 border-l-4 border-slate-400 rounded-xl px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-medium text-slate-600 tracking-wider uppercase leading-snug">
+                      Cuenta pendiente de verificación
+                    </p>
+                  </div>
+                )}
+                {estadoActual === 5 && (
+                  <div className="flex items-center gap-3 bg-[#fff5d8]/20 border-l-4 border-[#EBB615] rounded-xl px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-medium text-[#EBB615] tracking-wider uppercase leading-snug">
+                      Requiere corrección de datos (fotos o información)
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+              </>
+            )}
+          </div>
 
           {/* Footer */}
-          <div className="mt-1 flex justify-end gap-4 px-5 sm:px-6 py-3 border-t border-slate-200 bg-slate-50 shrink-0">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider"
-            >
-              Cerrar
-            </button>
+          <div className="mt-4 px-5 sm:px-6 py-3 border-t border-slate-200 flex justify-end gap-3.5 shrink-0 bg-slate-50">
+            {/* Estados 1 y 5: flujo de corrección/verificación */}
+            {(estadoActual === 1 || estadoActual === 5) && (
+              <>
+                {mostrarPanelMotivo ? (
+                  <>
+                    <button
+                      onClick={handleCancelarCorreccion}
+                      disabled={guardando}
+                      className="px-4 py-2.5 rounded-lg font-medium text-[11.5px] uppercase tracking-wider transition-colors disabled:opacity-40 disabled:cursor-not-allowed border border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleConfirmarCorreccion}
+                      disabled={guardando || !motivoCorreccion || !motivoPersonalizado.trim()}
+                      className="px-8 py-2.5 rounded-lg font-medium text-[11.5px] bg-[#474b29] uppercase hover:bg-[#3a3e21] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed tracking-wider flex items-center justify-center gap-2"
+                    >
+                      Confirmar corrección
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleCorregir}
+                      disabled={guardando}
+                      className="px-4 py-2.5 rounded-lg font-medium text-[11.5px] uppercase tracking-wider transition-colors disabled:opacity-40 disabled:cursor-not-allowed border border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200"
+                    >
+                      Corregir
+                    </button>
+                    <button
+                      onClick={handleVerificar}
+                      disabled={guardando}
+                      className="px-8 py-2.5 rounded-lg font-medium text-[11.5px] bg-[#474b29] uppercase hover:bg-[#3a3e21] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed tracking-wider flex items-center justify-center gap-2"
+                    >
+                      {estadoActual === 5 ? "Verificar corrección" : "Verificar"}
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Estados 2 (Verificado) y 3 (Advertido): solo cerrar */}
+            {(estadoActual === 2 || estadoActual === 3) && (
+              <button
+                onClick={onClose}
+                className="px-4 py-2.5 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider"
+              >
+                Cerrar
+              </button>
+            )}
+
+            {/* Estado 4 (Suspendido): cerrar + reactivar cuenta */}
+            {estadoActual === 4 && (
+              <>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2.5 rounded-lg font-medium text-[11.5px] border uppercase border-slate-300 text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors tracking-wider"
+                >
+                  Cerrar
+                </button>
+                <button
+                  onClick={handleHabilitarSuspension}
+                  disabled={guardando}
+                  className="px-8 py-2.5 rounded-lg font-medium text-[11.5px] bg-[#474b29] uppercase hover:bg-[#3a3e21] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed tracking-wider flex items-center justify-center gap-2"
+                >
+                  Reactivar cuenta
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

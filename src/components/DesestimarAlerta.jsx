@@ -64,7 +64,7 @@ return (
             <button
               type="button"
               onClick={() => onJustificacionChange("")}
-              className="absolute top-2.5 sm:top-3 right-3 text-slate-500 hover:text-slate-600 transition-colors"
+              className="absolute top-2.5 sm:top-3 right-3 text-slate-400 hover:text-slate-500 transition-colors"
               title="Limpiar justificación"
             >
               <FaTimes size={12} />

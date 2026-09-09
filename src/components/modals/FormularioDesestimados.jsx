@@ -127,8 +127,6 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
     }
   };
 
-  // ✅ Mismo criterio de color que en FormularioTabulacion para que la
-  // prioridad se vea consistente en toda la app
   const prioridadUpper = (prioridad || "").toUpperCase();
   const prioridadBg =
     prioridadUpper === "ALTA"
@@ -139,9 +137,21 @@ const FormularioDesestimados = ({ alerta, onClose, onGenerarPDF }) => {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+      <style>
+        {`
+          @keyframes overlayFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes modalPopIn {
+            from { opacity: 0; transform: scale(0.94) translateY(16px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+          }
+        `}
+      </style>
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm animate-[overlayFadeIn_0.25s_ease-out]" />
 
-      <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[85vh]">
+      <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-fit max-h-[85vh] animate-[modalPopIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
         {/* BARRA SUPERIOR - mismo estilo que en tabulación */}
         <div className="bg-[#474b29] py-4 px-5 sm:px-6 text-white shrink-0">
           <div className="flex items-start justify-between gap-4">
